@@ -11,10 +11,17 @@ const ARQUIVO = path.join(pasta, "taverna.db");
 const VERSAO = 2;
 
 const globalDb = globalThis as unknown as { __tavernaDb?: DatabaseSync };
-const db = (globalDb.__tavernaDb ??= abrir());
+// Abre só no primeiro uso: o next build importa as rotas em vários processos ao mesmo tempo e não deve tocar no banco.
+const db = new Proxy({} as DatabaseSync, {
+  get(_alvo, chave) {
+    const real = (globalDb.__tavernaDb ??= abrir());
+    const valor = Reflect.get(real, chave, real);
+    return typeof valor === "function" ? valor.bind(real) : valor;
+  },
+});
 
 function abrir() {
-  let conexao = new DatabaseSync(ARQUIVO);
+  let conexao = new DatabaseSync(ARQUIVO, { timeout: 10000 });
   const versao = (conexao.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
   const temV1 = (conexao.prepare("SELECT name FROM pragma_table_info('campanhas') WHERE name = 'ficha'").all() as unknown[]).length > 0;
   if (versao < VERSAO && temV1) {
@@ -23,7 +30,7 @@ function abrir() {
     const copia = path.join(pasta, `taverna-v1-${Date.now()}.db`);
     renameSync(ARQUIVO, copia);
     for (const sufixo of ["-wal", "-shm"]) if (existsSync(ARQUIVO + sufixo)) renameSync(ARQUIVO + sufixo, copia + sufixo);
-    conexao = new DatabaseSync(ARQUIVO);
+    conexao = new DatabaseSync(ARQUIVO, { timeout: 10000 });
   }
   conexao.exec(`
     PRAGMA journal_mode = WAL;
