@@ -1,0 +1,130 @@
+@import "tailwindcss";
+
+/* Taverna à luz de vela: madeira escura, pergaminho, âmbar e sangue. */
+:root {
+  --background: #120d0a;
+  --surface: #1c1511;
+  --surface-2: #261c16;
+  --foreground: #eadfc8;
+  --muted: #a39580;
+  --border: #3a2c22;
+  --ambar: #e0a24a;
+  --ambar-forte: #b9792a;
+  --sangue: #b23a2c;
+  --musgo: #7fa35a;
+  --pergaminho: #f1e4c4;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-ambar: var(--ambar);
+  --color-ambar-forte: var(--ambar-forte);
+  --color-sangue: var(--sangue);
+  --color-musgo: var(--musgo);
+  --color-pergaminho: var(--pergaminho);
+  --font-sans: var(--font-corpo);
+  --font-titulo: var(--font-titulo);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  /* grão de madeira + brilho de lareira no canto */
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012 .5' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .6 0 0 0 0 .4 0 0 0 0 .25 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(900px 600px at 100% 100%, rgba(224, 162, 74, 0.13), transparent 60%),
+    radial-gradient(700px 500px at 0% 0%, rgba(178, 58, 44, 0.1), transparent 60%);
+  background-color: var(--background);
+  background-attachment: scroll, fixed, fixed;
+  color: var(--foreground);
+}
+
+@utility titulo {
+  font-family: var(--font-titulo);
+  letter-spacing: 0.02em;
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+@utility btn-ambar {
+  @apply btn bg-ambar text-[#1a120c] shadow-[0_0_24px_-6px_var(--ambar)] hover:bg-[#f0b762];
+}
+
+@utility btn-borda {
+  @apply btn border border-border text-foreground hover:border-ambar hover:text-ambar;
+}
+
+@utility campo {
+  @apply w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-foreground placeholder:text-muted/70 focus:border-ambar focus:outline-none;
+}
+
+@utility cartao {
+  @apply rounded-xl border border-border bg-surface/90 shadow-[0_10px_40px_-20px_black];
+}
+
+/* plaquinha pequena: sistema, papel da classe, status "pronto"... */
+@utility etiqueta {
+  @apply inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-2 py-0.5 text-xs leading-5 text-muted;
+}
+
+/* texto do mestre aparecendo */
+@keyframes surgir {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.surgir {
+  animation: surgir 0.35s ease-out both;
+}
+
+/* d20 girando antes de mostrar o número */
+@keyframes rolar {
+  0% {
+    transform: rotate(0deg) scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: rotate(540deg) scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(720deg) scale(1);
+  }
+}
+.dado-rolando {
+  animation: rolar 0.7s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+@keyframes cursor {
+  50% {
+    opacity: 0;
+  }
+}
+.cursor::after {
+  content: "▍";
+  margin-left: 2px;
+  color: var(--ambar);
+  animation: cursor 1s steps(1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surgir,
+  .dado-rolando,
+  .cursor::after {
+    animation: none;
+  }
+}
