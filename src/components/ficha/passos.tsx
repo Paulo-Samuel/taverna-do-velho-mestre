@@ -328,15 +328,45 @@ type PropsAtributos = PropsPasso & {
   /** pede ao servidor valores para o método (rola de novo nos métodos aleatórios) */
   sugerir: (metodo: string) => void;
   editar: (id: string, valor: string) => void;
+  /** últimos valores sugeridos pelo servidor para o método atual */
+  sugestao: Record<string, number> | null;
+  /** troca de método ("Livre" mantém os valores) */
+  escolherMetodo: (metodo: string) => void;
+  /** troca os valores da distribuição de lugar */
+  embaralhar: () => void;
 };
 
-export function PassoAtributos({ sistema, e, carregando, sugerir, editar }: PropsAtributos) {
+/**
+ * Como o método se comporta: "aleatorio" (rola dados no servidor), "livre" (o jogador digita o que quiser)
+ * ou "fixo" (uma distribuição do livro, matriz padrão ou compra de pontos, sugerida pela classe).
+ */
+export function tipoMetodo(m?: { id: string; nome: string }): "aleatorio" | "livre" | "fixo" {
+  if (!m) return "fixo";
+  const t = `${m.id} ${m.nome}`.toLowerCase();
+  if (/rol|\dd\d|aleat|embaralh|heroic/.test(t)) return "aleatorio";
+  if (/livre/.test(t)) return "livre";
+  return "fixo";
+}
+
+const multiconjunto = (valores: (string | number)[]) =>
+  valores
+    .map(Number)
+    .sort((a, b) => a - b)
+    .join(",");
+
+export function PassoAtributos({ sistema, e, carregando, sugerir, editar, sugestao, escolherMetodo, embaralhar }: PropsAtributos) {
   const { min, max } = sistema.limitesAtributos;
   const anc = sistema.ancestralidades.find((a) => a.id === e.ancestralidade);
   const metodo = sistema.metodosAtributos.find((m) => m.id === e.metodo);
+  const tipo = tipoMetodo(metodo);
+  const metodoLivre = sistema.metodosAtributos.find((m) => tipoMetodo(m) === "livre");
   const vazios = sistema.atributos.every((a) => !e.atributos[a.id]);
   const numeros = sistema.atributos.map((a) => Number(e.atributos[a.id]));
   const total = numeros.every(Number.isFinite) && !vazios ? numeros.reduce((s, n) => s + n, 0) : null;
+  // só avisa quando o sistema tem um modo livre para onde mandar o jogador (VtM, Fate...)
+  const esperado = sugestao ? sistema.atributos.map((a) => sugestao[a.id]).filter((v) => v !== undefined) : [];
+  const foraDaDistribuicao =
+    tipo === "fixo" && metodoLivre && !vazios && esperado.length === sistema.atributos.length && multiconjunto(numeros) !== multiconjunto(esperado);
 
   function passo(id: string, delta: number) {
     const atual = Number(e.atributos[id]);
@@ -350,7 +380,7 @@ export function PassoAtributos({ sistema, e, carregando, sugerir, editar }: Prop
       {sistema.metodosAtributos.length > 1 && (
         <div className="mb-3 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Método">
           {sistema.metodosAtributos.map((m) => (
-            <Cartao key={m.id} ativo={e.metodo === m.id} onClick={() => sugerir(m.id)}>
+            <Cartao key={m.id} ativo={e.metodo === m.id} onClick={() => escolherMetodo(m.id)}>
               <p className="pr-6 font-semibold text-pergaminho">{m.nome}</p>
               <p className="mt-0.5 text-xs text-muted">{m.descricao}</p>
             </Cartao>
@@ -363,14 +393,39 @@ export function PassoAtributos({ sistema, e, carregando, sugerir, editar }: Prop
         </p>
       )}
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <button type="button" className="btn-borda py-1.5" disabled={carregando} onClick={() => sugerir(e.metodo)}>
-          <span className={carregando ? "dado-rolando inline-block" : "inline-block"} aria-hidden>
-            🎲
-          </span>
-          {carregando ? "Rolando…" : vazios ? "Sugerir valores" : "Rolar / sugerir de novo"}
-        </button>
+        {vazios || tipo === "aleatorio" ? (
+          <button type="button" className="btn-borda py-1.5" disabled={carregando} onClick={() => sugerir(e.metodo)}>
+            <span className={carregando ? "dado-rolando inline-block" : "inline-block"} aria-hidden>
+              🎲
+            </span>
+            {carregando ? "Rolando…" : vazios ? "Sugerir valores" : "Rolar de novo"}
+          </button>
+        ) : (
+          <>
+            {tipo === "fixo" && (
+              <button type="button" className="btn-borda py-1.5" onClick={embaralhar} title="Troca os mesmos valores de lugar">
+                <span aria-hidden>🔀</span> Embaralhar
+              </button>
+            )}
+            <button type="button" className="text-sm text-ambar hover:underline disabled:opacity-50" disabled={carregando} onClick={() => sugerir(e.metodo)}>
+              {carregando ? "Buscando…" : "↺ Voltar à sugestão"}
+            </button>
+          </>
+        )}
         {total !== null && <span className="text-xs text-muted">Soma: {total}</span>}
       </div>
+      {foraDaDistribuicao && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ambar/40 bg-ambar/10 px-3 py-2 text-sm">
+          <span>
+            Fora da {metodo?.nome.toLowerCase()} (esperado: {[...esperado].sort((a, b) => b - a).join(", ")}).
+          </span>
+          {metodoLivre && (
+            <button type="button" className="text-ambar hover:underline" onClick={() => escolherMetodo(metodoLivre.id)}>
+              Usar {metodoLivre.nome.toLowerCase()}
+            </button>
+          )}
+        </div>
+      )}
       {vazios && !carregando && (
         <p className="mb-3 text-sm text-muted">Deixando em branco, o sistema distribui os valores pelo método escolhido na hora de criar.</p>
       )}

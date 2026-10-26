@@ -8,6 +8,7 @@ import {
   PassoAncestralidade,
   PassoAntecedente,
   PassoAtributos,
+  tipoMetodo,
   PassoCampanha,
   PassoClasse,
   PassoIdentidade,
@@ -98,6 +99,8 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
   // de que classe+método vieram os atributos atuais; editar à mão congela (não sobrescrevemos o que o jogador digitou)
   const [origemAtributos, setOrigemAtributos] = useState<string | null>(null);
   const [editados, setEditados] = useState(false);
+  // últimos valores que o servidor sugeriu: base do "Embaralhar" e do aviso de fora da distribuição
+  const [sugestao, setSugestao] = useState<Record<string, number> | null>(null);
   const [carregandoAtributos, iniciarAtributos] = useTransition();
   const [previa, setPrevia] = useState<PreviaFicha | null>(null);
   const [carregandoPrevia, iniciarPrevia] = useTransition();
@@ -165,9 +168,32 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
       const valores = await sugerirAtributos(sistema.id, classe, metodo);
       if (!Object.keys(valores).length) return;
       setE((v) => ({ ...v, atributos: Object.fromEntries(Object.entries(valores).map(([k, n]) => [k, String(n)])) }));
+      setSugestao(valores);
       setOrigemAtributos(`${classe}|${metodo}`);
       setEditados(false);
     });
+  }
+
+  /** Trocar de método: "Livre" só libera a edição (mantém os valores); os outros pedem valores ao servidor. */
+  function escolherMetodo(metodo: string) {
+    const m = sistema?.metodosAtributos.find((x) => x.id === metodo);
+    const temValores = sistema?.atributos.some((a) => e.atributos[a.id]);
+    if (tipoMetodo(m) === "livre" && temValores) atualizar({ metodo });
+    else sugerir(metodo);
+  }
+
+  /** Distribuições fixas: troca os mesmos valores de lugar, para a distribuição continuar válida. */
+  function embaralhar() {
+    if (!sistema) return;
+    const base = sistema.atributos.map((a) => (sugestao ? String(sugestao[a.id] ?? "") : (e.atributos[a.id] ?? "")));
+    if (base.some((v) => v === "")) return sugerir(e.metodo);
+    const sorteio = crypto.getRandomValues(new Uint32Array(base.length));
+    for (let i = base.length - 1; i > 0; i--) {
+      const j = sorteio[i] % (i + 1);
+      [base[i], base[j]] = [base[j], base[i]];
+    }
+    setEditados(true);
+    atualizar({ atributos: Object.fromEntries(sistema.atributos.map((a, i) => [a.id, base[i]])) });
   }
 
   function editarAtributo(id: string, valor: string) {
@@ -315,7 +341,17 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
               {sistema && atual === "classe" && <PassoClasse sistema={sistema} e={e} atualizar={atualizar} />}
               {sistema && atual === "antecedente" && <PassoAntecedente sistema={sistema} e={e} atualizar={atualizar} />}
               {sistema && atual === "atributos" && (
-                <PassoAtributos sistema={sistema} e={e} atualizar={atualizar} carregando={carregandoAtributos} sugerir={sugerir} editar={editarAtributo} />
+                <PassoAtributos
+                  sistema={sistema}
+                  e={e}
+                  atualizar={atualizar}
+                  carregando={carregandoAtributos}
+                  sugerir={sugerir}
+                  editar={editarAtributo}
+                  sugestao={sugestao}
+                  escolherMetodo={escolherMetodo}
+                  embaralhar={embaralhar}
+                />
               )}
               {sistema && atual === "pericias" && <PassoPericias sistema={sistema} e={e} atualizar={atualizar} />}
               {sistema && atual === "opcoes" && <PassoOpcoes sistema={sistema} e={e} atualizar={atualizar} opcoes={opcoes} />}
