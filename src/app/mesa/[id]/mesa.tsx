@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { AcoesTurno, acaoParaCampo, avisoDoDesfeito, type Desfeito } from "@/components/chat/acoes-turno";
+import { AjudaAtalhos, rolarPedido, useAtalhos } from "@/components/chat/atalhos";
 import { CartaoDado } from "@/components/chat/cartao-dado";
 import { SugestoesCompactas } from "@/components/chat/sugestoes-compactas";
+import { Anteriormente } from "@/components/historia/anteriormente";
 import { dadosDoPedido, PedidoTeste } from "@/components/historia/pedido-teste";
 import { PainelCena } from "@/components/cena/painel-cena";
 import { Diario } from "@/components/diario/diario";
@@ -15,11 +18,15 @@ import { SeletorAtivo } from "@/components/grupo/seletor-ativo";
 import { Convite } from "@/components/presenca/convite";
 import { Presenca } from "@/components/presenca/presenca";
 import { RoladorDados } from "@/components/rolador/rolador-dados";
+import { BotaoVoz, Ouvir, useLeituraAutomatica, VozNoPainel } from "@/components/voz/voz";
 import * as identidade from "@/lib/cliente/identidade";
 import { useMesa, type Mesa as EstadoVivo } from "@/lib/cliente/use-mesa";
+import { parar as pararVoz } from "@/lib/cliente/voz";
 import { INICIO } from "@/lib/constantes";
 import type { EstadoMesa } from "@/lib/mesa";
 import { AvisoDarkPack } from "@/components/aviso-dark-pack";
+import { Musica } from "@/components/historia/musica";
+import { dadosDoTema, temaDoSistema } from "@/lib/temas";
 
 // Casca da mesa de jogo: chat com o mestre, campo de ação e painéis laterais.
 // Cada painel é um componente próprio em src/components/*, que recebe o estado vivo da mesa.
@@ -58,9 +65,7 @@ export function Narracao({ texto, escrevendo = false }: { texto: string; escreve
     <div className="text-[1.06rem] leading-[1.8] text-foreground/95 sm:text-[1.12rem]">
       {paragrafos.map((p, i) =>
         /^(-{3,}|\*{3,}|_{3,})$/.test(p) ? (
-          <p key={i} className="my-5 text-center text-sm tracking-[0.6em] text-ambar/50" aria-hidden>
-            ✦✦✦
-          </p>
+          <p key={i} className="ornamento-trio my-5 text-center text-sm tracking-[0.6em] text-ambar/50" aria-hidden />
         ) : (
           <p key={i} className={`mb-4 last:mb-0 ${escrevendo && i === paragrafos.length - 1 ? "cursor" : ""}`}>
             {p.split(MARCAS).map((t, j) =>
@@ -100,7 +105,7 @@ function Pontinhos() {
 type Aba = "ficha" | "grupo" | "cena" | "diario";
 
 /** Abas Ficha/Grupo/Cena/Diário: a barra de abas fica parada e o conteúdo rola sozinho. */
-function Lateral({ mesa, acoes }: { mesa: EstadoVivo; acoes: ReturnType<typeof useMesa>[1] }) {
+function Lateral({ mesa, acoes, aoAtalhos }: { mesa: EstadoVivo; acoes: ReturnType<typeof useMesa>[1]; aoAtalhos: () => void }) {
   const [aba, setAba] = useState<Aba>("ficha");
   const ativo = mesa.personagens.find((p) => p.id === mesa.eu.personagemId) ?? mesa.personagens[0] ?? null;
   const abas: [Aba, string][] = [
@@ -135,6 +140,19 @@ function Lateral({ mesa, acoes }: { mesa: EstadoVivo; acoes: ReturnType<typeof u
           <p>
             {mesa.sistema.nomeCurto} · Mestre: {mesa.provedor}
           </p>
+          <p className="mt-1 flex flex-wrap items-center gap-x-3">
+            <Link href={`/mesa/${mesa.campanha.id}/livro`} className="inline-flex min-h-9 items-center gap-1 text-ambar underline-offset-4 hover:underline">
+              <span aria-hidden>📜</span> Livro da campanha
+            </Link>
+            {/* no celular a engrenagem sai do cabeçalho (o título precisa do espaço) e mora aqui */}
+            <Link href={`/mesa/${mesa.campanha.id}/ajustes`} className="inline-flex min-h-9 items-center gap-1 underline-offset-4 hover:text-ambar hover:underline sm:hidden">
+              <span aria-hidden>⚙</span> Ajustes da mesa
+            </Link>
+            <button type="button" onClick={aoAtalhos} className="hidden min-h-9 items-center gap-1 hover:text-ambar [@media(pointer:fine)]:inline-flex">
+              Atalhos <kbd className="rounded border border-border px-1">?</kbd>
+            </button>
+          </p>
+          <VozNoPainel className="mt-2 sm:hidden" />
           {mesa.sistema.id === "vtm5" && (
             <div className="mt-3">
               <AvisoDarkPack compacto />
@@ -176,6 +194,7 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
   const ultimoTopo = useRef(0);
   const campo = useRef<HTMLTextAreaElement>(null);
   const anterior = useRef<number | null>(null);
+  const [ajuda, setAjuda] = useState(false);
   const ativo = mesa.personagens.find((p) => p.id === mesa.eu.personagemId) ?? null;
   const minhaNaFila = mesa.fila.find((a) => a.personagemId === mesa.eu.personagemId && a.personagemId !== null);
   const rodada = mesa.campanha.modo === "rodada";
@@ -267,6 +286,9 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
     return () => clearTimeout(t);
   }, [aviso]);
 
+  // narração em voz alta: lê as narrações novas (com a leitura automática ligada) e cala ao sair da mesa
+  useLeituraAutomatica(mesa.mensagens);
+
   // painel do celular (tela cheia): Esc fecha
   useEffect(() => {
     if (!lateralAberta) return;
@@ -279,6 +301,7 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
   async function enviar(sugerida?: string) {
     const texto = (sugerida ?? acao).trim();
     if (!texto || meuPendente) return;
+    pararVoz();
     if (!(await acoes.enviarAcao(texto))) return;
     if (sugerida === undefined) setAcao("");
     irParaOFim(true);
@@ -296,6 +319,30 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
     }
   }
 
+  /** Depois de desfazer: a ação do personagem ativo volta ao campo para ser reescrita (refazer não devolve nada). */
+  function aoDesfazer(r: Desfeito, refazer: boolean) {
+    pararVoz();
+    const texto = refazer ? null : acaoParaCampo(r, mesa.eu.personagemId);
+    if (texto) {
+      setAcao(texto);
+      if (window.matchMedia("(pointer: fine)").matches) setTimeout(() => campo.current?.focus(), 50);
+    }
+    setAviso(avisoDoDesfeito(r, refazer, Boolean(texto)));
+  }
+
+  // desfazer/refazer só com o mestre quieto e nada esperando na fila
+  const ultimoMestre = mesa.mensagens.findLast((m) => m.tipo === "mestre")?.id ?? null;
+  const podeDesfazer = !mesa.ocupado && !mesa.aoVivo && mesa.fila.length === 0;
+
+  useAtalhos({
+    totalSugestoes: mostrarSugestoes ? Math.min(9, sugestoes.length) : 0,
+    escolherSugestao: (i) => sugestoes[i] && void enviar(sugestoes[i].texto),
+    rolarTeste: () => rolarPedido(meuPendente?.id),
+    focarCampo: () => campo.current?.focus(),
+    fechar: () => setAjuda(false),
+    alternarAjuda: () => setAjuda((v) => !v),
+  });
+
   const vazia = mesa.mensagens.length === 0 && !mesa.ocupado && !mesa.fila.length;
   const nomeDe = (id: number | null) => mesa.personagens.find((p) => p.id === id)?.ficha.nome;
   const personagemDe = (id: number | null) => mesa.personagens.find((p) => p.id === id) ?? null;
@@ -303,7 +350,7 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
   const caido = ativo ? ativo.ficha.pvMax > 0 && ativo.ficha.pv <= 0 : false;
 
   return (
-    <div className="fixed inset-0 z-30 flex flex-col overflow-hidden text-foreground">
+    <div data-tema={temaDoSistema(mesa.sistema.id)} className="fundo-tema fixed inset-0 z-30 flex flex-col overflow-hidden text-foreground">
       <header className="relative z-20 shrink-0 border-b border-border/70 bg-background/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-1 px-2 sm:gap-2 sm:px-4">
           <Link
@@ -317,15 +364,29 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
           <div className="min-w-0 flex-1 leading-tight">
             <h1 className="titulo truncate text-base text-pergaminho sm:text-xl" title={mesa.campanha.nome}>{mesa.campanha.nome}</h1>
             <p className="truncate text-[11px] text-muted">
-              <span aria-hidden>🍺</span> {mesa.sistema.nomeCurto}
+              <span aria-hidden>{dadosDoTema(mesa.sistema.id).ornamento}</span> {mesa.sistema.nomeCurto}
               {rodada && <span className="uppercase tracking-wider text-ambar-forte"> · modo rodada</span>}
             </p>
           </div>
           <Presenca mesa={mesa} acoes={acoes} />
           <Convite campanhaId={mesa.campanha.id} temPin={mesa.campanha.temPin} compacto />
           <Link
+            href={`/mesa/${mesa.campanha.id}/livro`}
+            className="hidden size-10 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2/60 hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar md:grid"
+            aria-label="Livro da campanha"
+            title="Livro da campanha: a história inteira, para reler, imprimir ou baixar"
+          >
+            <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z" fill="currentColor" fillOpacity={0.15} />
+              <path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3M9 7h6M9 10h4" />
+            </svg>
+          </Link>
+          {/* no celular o cabeçalho já está cheio: a leitura em voz alta mora no painel */}
+          <BotaoVoz compacto className="max-sm:hidden" />
+          <Musica musica={mesa.cena.musica} sistema={mesa.sistema.id} compacto />
+          <Link
             href={`/mesa/${mesa.campanha.id}/ajustes`}
-            className="grid size-10 shrink-0 place-items-center rounded-md text-lg text-muted hover:bg-surface-2/60 hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar"
+            className="grid size-10 shrink-0 place-items-center rounded-md text-lg text-muted hover:bg-surface-2/60 hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar max-sm:hidden"
             aria-label="Ajustes da mesa"
             title="Ajustes da mesa"
           >
@@ -364,6 +425,14 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
 
       <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 lg:gap-6 lg:px-4">
         <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <Anteriormente
+            campanhaId={mesa.campanha.id}
+            nome={mesa.campanha.nome}
+            mensagens={mesa.mensagens}
+            cena={mesa.cena}
+            diario={mesa.diario}
+            aoContinuar={() => irParaOFim(true)}
+          />
           <div ref={rolador} onScroll={aoRolar} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             <div ref={conteudo} className={`${COLUNA} px-4 pb-8 pt-6 sm:px-6`}>
               {vazia && (
@@ -428,8 +497,14 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
                 }
                 if (m.tipo === "mestre")
                   return (
-                    <div key={m.id} className="surgir my-6">
+                    <div key={m.id} className="surgir group my-6">
                       <Narracao texto={m.texto} />
+                      <div className="mt-1 flex min-h-8 flex-wrap items-center justify-end gap-1">
+                        {m.id === ultimoMestre && podeDesfazer && (
+                          <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={setAviso} className="mr-auto -ml-2.5" />
+                        )}
+                        <Ouvir id={`msg-${m.id}`} texto={m.texto} />
+                      </div>
                     </div>
                   );
                 if (m.tipo === "dado" && dadosDoPedido(m).tipo === "pedido_teste")
@@ -443,8 +518,8 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
                     </div>
                   );
                 return (
-                  <p key={m.id} className="titulo my-6 text-center text-sm text-muted">
-                    ✦ {m.texto} ✦
+                  <p key={m.id} className="titulo divisor-tema my-6 text-center text-sm text-muted">
+                    {m.texto}
                   </p>
                 );
               })}
@@ -592,16 +667,18 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
 
         <aside className="hidden w-[330px] shrink-0 py-4 lg:flex">
           <div className="cartao flex min-h-0 flex-1 flex-col overflow-hidden">
-            <Lateral mesa={mesa} acoes={acoes} />
+            <Lateral mesa={mesa} acoes={acoes} aoAtalhos={() => setAjuda(true)} />
           </div>
         </aside>
       </div>
 
       {lateralAberta && (
         <div id="painel-celular" className="surgir fixed inset-x-0 bottom-0 top-14 z-40 flex flex-col bg-background lg:hidden" role="dialog" aria-label="Painel da mesa">
-          <Lateral mesa={mesa} acoes={acoes} />
+          <Lateral mesa={mesa} acoes={acoes} aoAtalhos={() => setAjuda(true)} />
         </div>
       )}
+
+      <AjudaAtalhos aberta={ajuda} aoFechar={() => setAjuda(false)} />
     </div>
   );
 }

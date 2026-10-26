@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { listarPersonagens, obterCampanha } from "@/lib/db";
 import { acessoNaPagina, daMaquinaNaPagina } from "@/lib/rede/acesso";
 import { obterSistema } from "@/lib/sistemas";
+import { temaDoSistema } from "@/lib/temas";
+import { TemaPagina } from "@/components/tema-pagina";
 import { listarPresenca } from "@/lib/tempo-real";
 import { Entrada, type PersonagemEntrada } from "./entrada";
 
@@ -42,7 +44,9 @@ export default async function PaginaEntrar(props: PageProps<"/mesa/[id]/entrar">
     : [];
 
   return (
-    <Entrada
+    <>
+      <TemaPagina tema={temaDoSistema(campanha.sistema)} />
+      <Entrada
       campanha={{ id: campanha.id, nome: campanha.nome, cenario: campanha.cenario }}
       sistema={{ nome: sistema.nome, nomeCurto: sistema.nomeCurto }}
       temPin={Boolean(campanha.config.pin)}
@@ -50,6 +54,7 @@ export default async function PaginaEntrar(props: PageProps<"/mesa/[id]/entrar">
       local={await daMaquinaNaPagina()}
       personagens={personagens}
       presenca={liberado ? listarPresenca(campanha.id).map((j) => ({ apelido: j.apelido, personagemId: j.personagemId, local: j.local })) : []}
-    />
+      />
+    </>
   );
 }

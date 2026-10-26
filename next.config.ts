@@ -12,6 +12,8 @@ const ipsLocais = Object.values(networkInterfaces())
 const nextConfig: NextConfig = {
   // App local de um usuário só; o modelo clássico de cache basta (como na loja-3d).
   cacheComponents: false,
+  // TAVERNA_DIST permite um segundo servidor de desenvolvimento (ex.: com o mestre de teste) sem brigar pela pasta .next
+  ...(process.env.TAVERNA_DIST ? { distDir: process.env.TAVERNA_DIST } : {}),
   allowedDevOrigins: [...new Set([...ipsLocais, "192.168.*.*", "10.*.*.*", "172.*.*.*", "*.local"])],
   turbopack: {
     rules: {

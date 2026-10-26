@@ -365,7 +365,8 @@ function D10({ valor, fome, despertar, i, novo }: { valor: number; fome: boolean
           ? "text-[#e0675a]"
           : "text-sangue/70"
     : dez
-      ? "text-ambar"
+      ? // cor de crítico do tema: no Vampiro o acento é vermelho, e o 10 normal não pode parecer dado de Fome
+        "text-[var(--critico)]"
       : sucesso
         ? "text-pergaminho"
         : "text-muted/70";

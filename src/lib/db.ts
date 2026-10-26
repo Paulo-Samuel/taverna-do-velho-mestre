@@ -91,6 +91,16 @@ function abrir() {
       chave TEXT PRIMARY KEY,
       valor TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS instantaneos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campanha_id INTEGER NOT NULL REFERENCES campanhas(id) ON DELETE CASCADE,
+      turno TEXT NOT NULL,
+      entrada TEXT,
+      acoes TEXT NOT NULL DEFAULT '[]',
+      aberto INTEGER NOT NULL DEFAULT 0,
+      criado_em TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS instantaneos_campanha ON instantaneos(campanha_id, id);
     PRAGMA user_version = ${VERSAO};
   `);
   // colunas acrescentadas depois da v2 (bancos antigos não têm)
@@ -131,6 +141,14 @@ export type ConfigCampanha = {
   dados?: "jogador" | "automatico";
   /** o mestre sugere ações em botões a cada turno (padrão: sim) */
   sugestoes?: boolean;
+  /** estilo do mestre (opções em mestre/estilo.ts): quanto as falhas custam; padrão "justa" */
+  dificuldade?: "indulgente" | "justa" | "implacavel";
+  /** tamanho da narração por turno; padrão "media" (2 a 3 parágrafos) */
+  narracao?: "curta" | "media" | "longa";
+  /** o que o mestre privilegia: ids de FOCOS e, opcionalmente, um texto livre curto */
+  foco?: string[];
+  /** regras e preferências da mesa em texto livre (até ~500 caracteres) */
+  instrucoes?: string;
 };
 
 export type Campanha = {
@@ -415,6 +433,115 @@ export function salvarEntradaDiario(
 
 export function removerEntradaDiario(id: number) {
   db.prepare("DELETE FROM diario WHERE id = ?").run(id);
+}
+
+// ---------- instantâneos (desfazer o último turno) ----------
+
+/** Tudo o que um turno do mestre pode mudar: cena, resumo, fichas, diário, mensagens novas e testes pendentes. */
+export type EstadoMesa = {
+  ultimaMensagem: number;
+  cena: string;
+  resumo: string;
+  resumoAte: number;
+  fichas: { id: number; ficha: string }[];
+  diario: LinhaDiario[];
+  /** mensagens que um turno pode reescrever (pedido de teste pendente vira resolvido) */
+  editaveis: { id: number; texto: string; dados: string | null }[];
+};
+
+export type Instantaneo = {
+  id: number;
+  /** estado no começo do turno (refazer volta para cá e manda as mesmas ações) */
+  turno: EstadoMesa;
+  /** estado antes da entrada do jogador, quando ela veio antes do turno (rolar um teste pedido); desfazer volta para cá */
+  entrada: EstadoMesa | null;
+  acoes: { personagemId: number | null; autor: string; acao: string }[];
+  aberto: boolean;
+  criadoEm: string;
+};
+
+type LinhaInstantaneo = { id: number; turno: string; entrada: string | null; acoes: string; aberto: number; criado_em: string };
+const paraInstantaneo = (l: LinhaInstantaneo): Instantaneo => ({
+  id: l.id,
+  turno: JSON.parse(l.turno),
+  entrada: l.entrada ? JSON.parse(l.entrada) : null,
+  acoes: JSON.parse(l.acoes),
+  aberto: l.aberto === 1,
+  criadoEm: l.criado_em,
+});
+
+/** Quantos turnos dá para desfazer em sequência. */
+const MAX_INSTANTANEOS = 10;
+
+export function capturarEstado(campanhaId: number): EstadoMesa {
+  const c = db.prepare("SELECT cena, resumo, resumo_ate FROM campanhas WHERE id = ?").get(campanhaId) as Pick<LinhaCampanha, "cena" | "resumo" | "resumo_ate">;
+  const ultima = db.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM mensagens WHERE campanha_id = ?").get(campanhaId) as { id: number };
+  return {
+    ultimaMensagem: ultima.id,
+    cena: c.cena,
+    resumo: c.resumo,
+    resumoAte: c.resumo_ate,
+    fichas: db.prepare("SELECT id, ficha FROM personagens WHERE campanha_id = ?").all(campanhaId) as { id: number; ficha: string }[],
+    diario: db.prepare("SELECT id, tipo, titulo, texto, status, dados, atualizado_em FROM diario WHERE campanha_id = ?").all(campanhaId) as LinhaDiario[],
+    editaveis: db
+      .prepare("SELECT id, texto, dados FROM mensagens WHERE campanha_id = ? AND tipo = 'dado' AND json_extract(dados, '$.tipo') = 'pedido_teste' AND json_extract(dados, '$.status') = 'pendente'")
+      .all(campanhaId) as { id: number; texto: string; dados: string | null }[],
+  };
+}
+
+/** Volta a mesa para um estado capturado. Personagens criados depois ficam (só as fichas de quem já existia voltam). */
+export function restaurarEstado(campanhaId: number, e: EstadoMesa) {
+  db.exec("BEGIN");
+  try {
+    db.prepare("DELETE FROM mensagens WHERE campanha_id = ? AND id > ?").run(campanhaId, e.ultimaMensagem);
+    for (const m of e.editaveis) db.prepare("UPDATE mensagens SET texto = ?, dados = ? WHERE id = ? AND campanha_id = ?").run(m.texto, m.dados, m.id, campanhaId);
+    db.prepare("UPDATE campanhas SET cena = ?, resumo = ?, resumo_ate = ?, atualizada_em = datetime('now') WHERE id = ?").run(e.cena, e.resumo, e.resumoAte, campanhaId);
+    for (const p of e.fichas) db.prepare("UPDATE personagens SET ficha = ? WHERE id = ? AND campanha_id = ?").run(p.ficha, p.id, campanhaId);
+    db.prepare("DELETE FROM diario WHERE campanha_id = ?").run(campanhaId);
+    const inserir = db.prepare("INSERT INTO diario (id, campanha_id, tipo, titulo, texto, status, dados, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+    for (const d of e.diario) inserir.run(d.id, campanhaId, d.tipo, d.titulo, d.texto, d.status, d.dados, d.atualizado_em);
+    db.exec("COMMIT");
+  } catch (erro) {
+    db.exec("ROLLBACK");
+    throw erro;
+  }
+}
+
+/** Instantâneo "aberto": a entrada do jogador já foi guardada (rolou um teste) e o turno ainda não começou. */
+export function abrirInstantaneo(campanhaId: number, entrada: EstadoMesa) {
+  if (db.prepare("SELECT 1 FROM instantaneos WHERE campanha_id = ? AND aberto = 1").get(campanhaId)) return;
+  db.prepare("INSERT INTO instantaneos (campanha_id, turno, entrada, aberto) VALUES (?, ?, ?, 1)").run(campanhaId, JSON.stringify(entrada), JSON.stringify(entrada));
+}
+
+/** Guarda o começo de um turno (fecha o instantâneo aberto, se houver) e poda os antigos. */
+export function registrarInstantaneo(campanhaId: number, turno: EstadoMesa, acoes: Instantaneo["acoes"]) {
+  const aberto = db.prepare("SELECT id FROM instantaneos WHERE campanha_id = ? AND aberto = 1").get(campanhaId) as { id: number } | undefined;
+  if (aberto) db.prepare("UPDATE instantaneos SET turno = ?, acoes = ?, aberto = 0 WHERE id = ?").run(JSON.stringify(turno), JSON.stringify(acoes), aberto.id);
+  else db.prepare("INSERT INTO instantaneos (campanha_id, turno, acoes) VALUES (?, ?, ?)").run(campanhaId, JSON.stringify(turno), JSON.stringify(acoes));
+  db.prepare("DELETE FROM instantaneos WHERE campanha_id = ? AND id NOT IN (SELECT id FROM instantaneos WHERE campanha_id = ? ORDER BY id DESC LIMIT ?)").run(
+    campanhaId,
+    campanhaId,
+    MAX_INSTANTANEOS,
+  );
+}
+
+/** O último turno fechado que dá para desfazer. */
+export function ultimoInstantaneo(campanhaId: number): Instantaneo | null {
+  const l = db.prepare("SELECT * FROM instantaneos WHERE campanha_id = ? AND aberto = 0 ORDER BY id DESC LIMIT 1").get(campanhaId) as LinhaInstantaneo | undefined;
+  return l ? paraInstantaneo(l) : null;
+}
+
+export function contarInstantaneos(campanhaId: number): number {
+  return (db.prepare("SELECT COUNT(*) AS n FROM instantaneos WHERE campanha_id = ? AND aberto = 0").get(campanhaId) as { n: number }).n;
+}
+
+export function removerInstantaneo(id: number) {
+  db.prepare("DELETE FROM instantaneos WHERE id = ?").run(id);
+}
+
+/** Descarta o instantâneo aberto (o turno não chegou a acontecer). */
+export function descartarInstantaneoAberto(campanhaId: number) {
+  db.prepare("DELETE FROM instantaneos WHERE campanha_id = ? AND aberto = 1").run(campanhaId);
 }
 
 // ---------- ajustes globais (provedor, modelo...) ----------

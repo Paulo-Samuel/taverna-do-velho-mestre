@@ -114,6 +114,19 @@ Notação aceita (`src/lib/dados.ts`):
 | `!` | `1d6!` | explode no valor máximo |
 | `+K` / `-K` | `1d8+1d6+3` | constantes e somas de termos |
 
+## Trilha sonora
+
+As duas mesas têm botão de som (e volume no ▾). A trilha é gerada no navegador (Web Audio, sem arquivos) conforme o humor
+que o mestre dá à cena, com um estilo por sistema: fantasia medieval (D&D 5e, Pathfinder 1e, modo história), fantasia épica
+com cordas e trompas (Pathfinder 2e), noite gótica com darkwave, órgão e chuva (Vampiro V5), horror com caixinha desafinada,
+teremim e gramofone (d100), dungeon synth de fita cassete (OSR), aventura pulp com metais (Fate) e folk de rabeca (Dungeon
+World). Código em `src/lib/cliente/musica/` (`estilos.ts` tem os estilos).
+
+**Suas músicas:** coloque arquivos de áudio em `musica/<sistema>/<humor>/` na pasta da taverna (ou `musica/<sistema>/`,
+`musica/geral/<humor>/`, `musica/geral/`) e eles tocam no lugar da trilha gerada, em ordem aleatória e com crossfade ao mudar
+de cena. A pasta fica fora do git; o passo a passo está em [`musica/LEIA-ME.md`](musica/LEIA-ME.md). Cada aparelho da mesa
+toca no próprio alto-falante pelas rotas `/api/musica` (lista) e `/api/musica/arquivo` (arquivo, com Range).
+
 ## Mesa local (vários jogadores, um computador)
 
 Crie um personagem para cada pessoa na mesma campanha. Na mesa, o seletor **Agindo como** (ou `Alt+1..9`) troca quem está

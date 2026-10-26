@@ -6,6 +6,7 @@ import { CartaoDado } from "@/components/chat/cartao-dado";
 import type { Mensagem } from "@/lib/db";
 import type { PersonagemVisivel } from "@/lib/mesa";
 import type { SistemaPublico } from "@/lib/sistemas/tipos";
+import { temaDoSistema } from "@/lib/temas";
 import { DADOS_RAPIDOS, EXEMPLOS, lerFaces, montarExpressao, somaConstantes, validarExpressao, type Lados } from "./notacao";
 
 // Rolador de dados dos jogadores. Quem rola é o servidor (rota /api/campanhas/[id]/rolagem): o número é honesto
@@ -391,6 +392,8 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar }
       <div className="fixed inset-0 z-40 bg-black/55 backdrop-blur-[1px] sm:hidden" onClick={() => fechar(false)} aria-hidden />
       <div
         ref={painel}
+        // o painel vai para o <body> (portal) e sai de dentro da mesa: leva o tema do sistema junto
+        data-tema={temaDoSistema(sistema.id)}
         role="dialog"
         aria-modal={!desktop}
         aria-label="Rolador de dados"

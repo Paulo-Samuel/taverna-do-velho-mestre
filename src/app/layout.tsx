@@ -4,10 +4,12 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { ehDestaMaquina } from "@/lib/rede/local";
 import { Navegacao } from "./config/navegacao";
+import { classesFontesTemas } from "./fontes-temas";
 import "./globals.css";
 
 const corpo = Alegreya({ subsets: ["latin"], variable: "--font-corpo" });
-const titulo = IM_Fell_English_SC({ subsets: ["latin"], weight: "400", variable: "--font-titulo" });
+// a fonte de título da casa vira --fonte-fell; o --font-titulo de verdade é escolhido pelo tema no globals.css
+const titulo = IM_Fell_English_SC({ subsets: ["latin"], weight: "400", variable: "--fonte-fell" });
 
 export const metadata: Metadata = {
   title: "Taverna do Velho Mestre",
@@ -22,7 +24,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const daMaquina = ehDestaMaquina(h.get("host"), h.get("x-forwarded-for"));
 
   return (
-    <html lang="pt-BR" className={`${corpo.variable} ${titulo.variable}`}>
+    <html lang="pt-BR" className={`${corpo.variable} ${titulo.variable} ${classesFontesTemas}`}>
       <body className="min-h-dvh font-sans text-[17px] antialiased">
         <header className="relative z-20 border-b border-border/70 bg-background/70 backdrop-blur">
           <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4">

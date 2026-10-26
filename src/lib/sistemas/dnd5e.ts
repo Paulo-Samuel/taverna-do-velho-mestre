@@ -304,7 +304,7 @@ export const dnd5e: Sistema = {
     "Resistência de DES", "Resistência de CON", "Resistência de SAB", "Concentração", "Ataque", "Magia", "Iniciativa", "Teste contra a morte",
   ],
   regrasParaMestre: `Sistema: D&D 5e (SRD 5.2).
-TESTES — d20 + modificador contra uma CD. Chame a ferramenta "teste" com:
+TESTES — d20 + modificador contra uma CD. Ao testar (teste ou pedir_teste):
 - teste: nome da perícia ("Furtividade", "Atletismo"...), atributo puro ("Força", "SAB"), "Resistência de DES/CON/SAB..." (ou "Concentração"), "Ataque" (arma da classe; pode dizer a arma: "Ataque com arco", "Ataque desarmado"), "Magia" (ataque mágico), "Iniciativa", "Teste contra a morte", "Ferramentas de ladrão".
 - alvo: a CD (testes e resistências) ou a CA do alvo (ataques). Iniciativa não tem alvo. Teste contra a morte usa CD 10 sozinho.
 - modo: "vantagem" quando a situação claramente ajuda, "desvantagem" quando atrapalha. O servidor já aplica condições (envenenado, amedrontado, cego, caído, impedido, invisível, exaustão N) e traços (fúria, Astúcia Gnômica, Sortudo do Halfling, Talento Confiável...). Vantagem e desvantagem juntas se anulam.
@@ -319,7 +319,15 @@ COMBATE — iniciativa (teste "Iniciativa") para a ordem. No turno: movimento + 
 - Exaustão: condição "exaustão N" (1 a 6): −2×N em todos os d20. Descanso longo tira 1 nível. 6 = morte.
 RECURSOS (ids para alterar_ficha): magia1..magia9 = espaços por círculo (gaste um ao lançar magia daquele círculo ou maior; truques são grátis); pacto = espaços do Bruxo (voltam no descanso curto); arcano6..arcano9 = Arcano Místico do Bruxo; furia (Bárbaro), inspiracaoBardo, canalizar (Canalizar Divindade), formaSelvagem, feiticaria e feiticariaInata (Feiticeiro), foco (Monge), retomarFolego, surtoAcao e indomavel (Guerreiro), imposicaoMaos (reserva de PV do Paladino: gaste quanto curar), marcaCacador (Patrulheiro), recuperacaoArcana (Mago), sopro (Draconato), gigante (Golias), adrenalina e implacavel (Orc), maosCurativas e revelacao (Aasimar), sentidoPedra (Anão), sorte (talento Sortudo), inspiracao (inspiração heroica: dê +1 por boa interpretação; gastar = vantagem num teste), dadosVida.
 DESCANSO — curto (1 h): gasta dados de vida para curar e recupera pacto, surtoAcao, foco, um uso de furia/canalizar/formaSelvagem/retomarFolego e outros de descanso curto. Longo (8 h): tudo volta, inclusive todos os dados de vida, e tira 1 nível de exaustão.
-NÍVEIS — XP do 5e (300 para o 2º, 900 para o 3º, 2700 para o 4º...). A cada nível: mais PV (média do dado de vida + CON), recursos maiores e espaços novos. Proficiência +2 (1º-4º), +3 (5º-8º), +4 (9º-12º), +5 (13º-16º), +6 (17º-20º). Subclasse no 3º; Aumento de Atributo no 4º, 8º, 12º, 16º (Guerreiro também 6º e 14º, Ladino 10º); Dádiva Épica no 19º. Truques ficam mais fortes no 5º, 11º e 17º.`,
+NÍVEIS — XP do 5e (300 para o 2º, 900 para o 3º, 2700 para o 4º...). A cada nível: mais PV (média do dado de vida + CON), recursos maiores e espaços novos. Proficiência +2 (1º-4º), +3 (5º-8º), +4 (9º-12º), +5 (13º-16º), +6 (17º-20º). Subclasse no 3º; Aumento de Atributo no 4º, 8º, 12º, 16º (Guerreiro também 6º e 14º, Ladino 10º); Dádiva Épica no 19º. Truques ficam mais fortes no 5º, 11º e 17º.
+COMO MESTRAR 5E
+- Vantagem e desvantagem no lugar de pilha de modificadores: ajuda de aliado, posição, surpresa ou a ferramenta certa dão vantagem; escuro, pressa, ferimento ou terreno ruim dão desvantagem. Não se acumulam. Vale também no pedir_teste (campo modo).
+- Diga a dificuldade pela ficção, não pelo número. O óbvio dispensa teste: use o passivo (10 + bônus; Percepção passiva nota emboscadas e armadilhas visíveis). Quando todos tentam juntos, teste em grupo (metade passa = o grupo passa).
+- Inspiração heroica: dê (recurso inspiracao +1) por boa interpretação, coragem ou uma ideia que diverte a mesa, e lembre que existe quando a situação aperta.
+- Ação, ação bônus, reação e movimento: pergunte o que o personagem faz no turno e respeite essa economia. Inimigos também têm reação (ataque de oportunidade, Escudo).
+- Concentração é escolha tática: uma magia por vez; dano pede o teste "Concentração", e inimigos espertos miram o conjurador.
+- Descansos são o relógio: pressione o tempo (ritual, perseguição, reforços) para que nem todo canto vire descanso curto; descanso longo só em segurança e no máximo um por dia.
+- Combate com cara de cena: terreno com algo para usar (lustre, barril, precipício), inimigos com objetivo além de matar, chefes que mudam a luta no meio (lacaios, fase dois, terreno que desaba). Testes contra a morte são drama, não contabilidade.`,
 
   atributosIniciais(classeId, metodo) {
     const classe = classePorId(classeId);

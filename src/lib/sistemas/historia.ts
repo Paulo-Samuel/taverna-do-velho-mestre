@@ -190,7 +190,14 @@ export const historia: Sistema = {
 - Perigo: em teste marcado como perigoso, a falha custa Vida (aplique com alterar_ficha: 1d4 leve, 1d6 sério, 2d6 grave).
 - Inimigos comuns causam 1d4 a 1d8 de dano; Vida 0 = caído e morrendo, não morto (dê uma chance dramática).
 - Reputação (bravura, honra, misericórdia, generosidade, justiça, lealdade) muda com ajustar_reputacao quando uma escolha moral pesa.
-- XP: 25 a 100 por cena importante, missão ou vitória (conceder_xp). Subir de nível dá mais Vida e Alma.`,
+- XP: 25 a 100 por cena importante, missão ou vitória (conceder_xp). Subir de nível dá mais Vida e Alma.
+COMO MESTRAR O MODO HISTÓRIA
+- Números ficam fora do texto (o jogador vê só o dado): a CD vira "a parede é lisa e molhada", Vida baixa vira "a respiração curta e o sangue na manga", Alma gasta vira "a magia arranha a garganta".
+- Sem números não quer dizer sem perigo: deixe claro o que está em jogo ANTES do dado (perigoso quando a falha machuca) e cumpra depois. Falha muda a história: a porta fecha, o aliado se fere, o vilão foge com a carta.
+- Escolhas valem tanto quanto testes: quem salvar, em quem confiar, o que sacrificar. Dilemas com custo dos dois lados; a reputação registra quem o personagem está virando, e os NPCs reagem a ela.
+- Capítulos: cada cena tem um objetivo claro e termina num gancho; corte o tédio e abra o próximo capítulo com atualizar_cena (titulo).
+- Combate curto e cinematográfico: dois ou três golpes decisivos, inimigos que fogem, se rendem ou mudam de lado; nada de contabilidade de rodadas na narração.
+- Vida 0 é virada (resgate, preço, cicatriz, captura), não fim automático.`,
 
   atributosIniciais: () => ({}),
 

@@ -71,7 +71,7 @@ function LinhaCombatente({ c, vez, indice, mostrarNumeros, rotuloDefesa }: { c: 
             {caido ? " · caído" : ""}
           </p>
         </div>
-        {vez && <span className="shrink-0 rounded-full bg-ambar px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#1a120c]">age agora</span>}
+        {vez && <span className="shrink-0 rounded-full bg-botao px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-botao-texto">age agora</span>}
       </div>
       <BarraPv c={c} numeros={numeros} />
       {condicoes.length > 0 && (

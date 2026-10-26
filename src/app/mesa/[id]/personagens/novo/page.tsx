@@ -5,6 +5,7 @@ import { FormularioPersonagem } from "@/components/ficha/formulario-personagem";
 import { listarPersonagens, obterCampanha } from "@/lib/db";
 import { acessoNaPagina } from "@/lib/rede/acesso";
 import { obterSistema, sistemasPublicos } from "@/lib/sistemas";
+import { temaDoSistema } from "@/lib/temas";
 import { criarPersonagemAcao } from "../acoes";
 
 // Mais uma cadeira na mesa: ficha nova no sistema da campanha. Serve para a mesa local (vários no mesmo teclado)
@@ -28,7 +29,8 @@ export default async function NovoPersonagem(props: PageProps<"/mesa/[id]/person
   const grupo = listarPersonagens(campanha.id).map((p) => p.ficha.nome);
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
+    // data-tema já no HTML do servidor; o formulário põe o mesmo tema no <body> (fundo e cabeçalho)
+    <main data-tema={temaDoSistema(campanha.sistema)} className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
       <Link href={`/mesa/${campanha.id}`} className="-my-2 inline-block py-2 text-xs text-muted hover:text-ambar">
         ← voltar para {campanha.nome}
       </Link>

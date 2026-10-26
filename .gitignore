@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.next-*/
 /out/
 
 # production
@@ -43,3 +44,7 @@ next-env.d.ts
 # banco local
 /data/
 !.env.example
+
+# músicas próprias de quem joga (só o LEIA-ME vai para o git)
+/musica/*
+!/musica/LEIA-ME.md

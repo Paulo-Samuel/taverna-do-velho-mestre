@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import type { AncestralidadeDef, ClasseDef, OpcaoCriacao, SistemaPublico } from "@/lib/sistemas/tipos";
+import { temaDoSistema } from "@/lib/temas";
 import { cenariosSugeridos, GANCHOS_HISTORIA, TONS } from "./sugestoes";
 import { agrupar, capitalizar, casaBusca, sinal } from "./utilidades";
 
@@ -67,20 +68,21 @@ function Chip({ ativo, onClick, children }: { ativo: boolean; onClick: () => voi
   );
 }
 
-function Cartao({ ativo, desativado, onClick, children }: { ativo: boolean; desativado?: boolean; onClick: () => void; children: ReactNode }) {
-  // flex-col: o conteúdo fica no topo mesmo quando o vizinho da grade é mais alto
+function Cartao({ ativo, desativado, onClick, children, tema }: { ativo: boolean; desativado?: boolean; onClick: () => void; children: ReactNode; tema?: string }) {
+  // flex-col: o conteúdo fica no topo mesmo quando o vizinho da grade é mais alto; com tema, o cartão mostra as cores do sistema
   return (
     <button
       type="button"
+      data-tema={tema}
       aria-pressed={ativo}
       disabled={desativado}
       onClick={onClick}
-      className={`cartao relative flex h-full w-full flex-col justify-start p-3.5 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${
+      className={`cartao relative flex h-full w-full ${tema ? "cartao-tema" : ""} flex-col justify-start p-3.5 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${
         ativo ? "border-ambar bg-ambar/[0.07] ring-1 ring-ambar/70" : "hover:border-ambar/50 hover:bg-surface-2/60"
       }`}
     >
       {ativo && (
-        <span className="absolute right-2.5 top-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-ambar text-xs text-[#1a120c]" aria-hidden>
+        <span className="absolute right-2.5 top-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-botao text-xs text-botao-texto" aria-hidden>
           ✓
         </span>
       )}
@@ -153,7 +155,7 @@ export function PassoSistema({ sistemas, e, escolher }: { sistemas: SistemaPubli
       <Titulo ajuda="Cada sistema tem seu jeito de rolar e de matar personagens. Dá para ter campanhas em sistemas diferentes.">Que regras vamos usar?</Titulo>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {sistemas.map((s) => (
-          <Cartao key={s.id} ativo={e.sistemaId === s.id} desativado={!s.pronto} onClick={() => escolher(s.id)}>
+          <Cartao key={s.id} tema={temaDoSistema(s.id)} ativo={e.sistemaId === s.id} desativado={!s.pronto} onClick={() => escolher(s.id)}>
             <div className="flex items-start gap-3 pr-6">
               <span className="titulo flex h-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-ambar/40 bg-ambar/10 px-1 text-sm text-ambar">
                 {s.dadoPrincipal}

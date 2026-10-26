@@ -61,7 +61,8 @@ function Grade({ itens }: Extract<BlocoFicha, { tipo: "grade" }>) {
       {itens.map((i, n) => (
         <div key={`${i.rotulo}-${n}`} className="rounded-md border border-border bg-surface-2/70 px-1 py-1.5 text-center" title={i.rotulo}>
           <p className="truncate text-[10px] uppercase tracking-wider text-muted">{i.rotulo}</p>
-          <p className="titulo break-words text-base leading-tight text-pergaminho">{i.valor}</p>
+          {/* sem o espaçamento largo de alguns temas: "Gravidade 2" quebrava no meio da palavra numa caixa estreita */}
+          <p className="titulo break-words text-base leading-tight tracking-normal! text-pergaminho">{i.valor}</p>
           {i.detalhe && <p className="truncate text-[11px] text-ambar">{i.detalhe}</p>}
         </div>
       ))}

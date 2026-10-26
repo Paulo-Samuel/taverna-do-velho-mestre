@@ -1,19 +1,7 @@
 @import "tailwindcss";
 
-/* Taverna à luz de vela: madeira escura, pergaminho, âmbar e sangue. */
-:root {
-  --background: #120d0a;
-  --surface: #1c1511;
-  --surface-2: #261c16;
-  --foreground: #eadfc8;
-  --muted: #a39580;
-  --border: #3a2c22;
-  --ambar: #e0a24a;
-  --ambar-forte: #b9792a;
-  --sangue: #b23a2c;
-  --musgo: #7fa35a;
-  --pergaminho: #f1e4c4;
-}
+/* Tokens da taverna (madeira escura, pergaminho, âmbar e sangue) e os temas de cada sistema ([data-tema="..."]). */
+@import "./temas.css";
 
 @theme inline {
   --color-background: var(--background);
@@ -27,6 +15,9 @@
   --color-sangue: var(--sangue);
   --color-musgo: var(--musgo);
   --color-pergaminho: var(--pergaminho);
+  --color-botao: var(--botao);
+  --color-botao-texto: var(--botao-texto);
+  --color-botao-hover: var(--botao-hover);
   --font-sans: var(--font-corpo);
   --font-titulo: var(--font-titulo);
 }
@@ -42,25 +33,22 @@ html {
     outline-offset: 2px;
   }
   ::selection {
-    background: rgb(224 162 74 / 0.35);
+    background: color-mix(in srgb, var(--ambar) 35%, transparent);
     color: var(--pergaminho);
   }
 }
 
 body {
-  /* grão de madeira + brilho de lareira no canto */
-  background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012 .5' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .6 0 0 0 0 .4 0 0 0 0 .25 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
-    radial-gradient(900px 600px at 100% 100%, rgba(224, 162, 74, 0.13), transparent 60%),
-    radial-gradient(700px 500px at 0% 0%, rgba(178, 58, 44, 0.1), transparent 60%);
+  /* textura do tema (na taverna: grão de madeira + brilho de lareira no canto); o <body> ganha data-tema nas páginas de um sistema */
+  background-image: var(--textura);
   background-color: var(--background);
-  background-attachment: scroll, fixed, fixed;
+  background-attachment: fixed;
   color: var(--foreground);
 }
 
 @utility titulo {
   font-family: var(--font-titulo);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--titulo-espaco, 0.02em);
 }
 
 @utility btn {
@@ -68,7 +56,7 @@ body {
 }
 
 @utility btn-ambar {
-  @apply btn bg-ambar text-[#1a120c] shadow-[0_0_24px_-6px_var(--ambar)] hover:bg-[#f0b762];
+  @apply btn bg-botao text-botao-texto shadow-[0_0_24px_-6px_var(--botao)] hover:bg-botao-hover;
 }
 
 @utility btn-borda {

@@ -80,7 +80,13 @@ export function PedidoTeste({
 }) {
   const d = dadosDoPedido(mensagem);
   const [rolagem, setRolagem] = useState<Rolagem | null>(null);
-  const nome = personagem?.ficha.nome ?? d.personagem ?? "Alguém";
+  // desfazer o turno devolve o teste para "pendente": o dado já rolado aqui volta a esperar (ajuste durante a renderização)
+  const [statusVisto, setStatusVisto] = useState(d.status);
+  if (d.status !== statusVisto) {
+    setStatusVisto(d.status);
+    if (d.status === "pendente" && rolagem && rolagem.fase !== "girando") setRolagem(null);
+  }
+  const nome =personagem?.ficha.nome ?? d.personagem ?? "Alguém";
   const cor = corDoNome(nome);
   const bonus = typeof d.bonus === "number" ? d.bonus : (d.resultado?.bonus ?? 0);
   const alvo = d.alvo ?? d.resultado?.alvo ?? null;

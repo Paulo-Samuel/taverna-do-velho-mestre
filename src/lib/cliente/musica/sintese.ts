@@ -133,3 +133,64 @@ export function murmurio(taxa: number, segundos: number, vozes = 6, rng: Aleator
   if (pico > 0) for (let i = 0; i < total; i++) y[i] /= pico;
   return y;
 }
+
+/** Chuva: chiado suave (ruído num passa-baixa) com gotas soltas em cima, em laço. */
+export function chuva(taxa: number, segundos: number, rng: Aleatorio = Math.random): Float32Array {
+  const total = Math.max(1, Math.floor(taxa * segundos));
+  const y = new Float32Array(total);
+  let filtrado = 0;
+  for (let i = 0; i < total; i++) {
+    filtrado += 0.35 * (rng() * 2 - 1 - filtrado);
+    y[i] = filtrado * 0.6;
+  }
+  // gotas: estalinhos curtos de ruído com queda rápida
+  const gotas = Math.floor(segundos * 40);
+  for (let g = 0; g < gotas; g++) {
+    const inicio = Math.floor(rng() * total);
+    const tamanho = Math.floor(taxa * (0.004 + rng() * 0.01));
+    const forca = 0.2 + rng() * 0.5;
+    for (let j = 0; j < tamanho; j++) y[(inicio + j) % total] += forca * (rng() * 2 - 1) * Math.exp((-5 * j) / tamanho);
+  }
+  let pico = 0;
+  for (let i = 0; i < total; i++) pico = Math.max(pico, Math.abs(y[i]));
+  if (pico > 0) for (let i = 0; i < total; i++) y[i] /= pico;
+  return y;
+}
+
+/** Chiado de disco: estalos esparsos de agulha e um sopro baixinho, em laço. */
+export function chiado(taxa: number, segundos: number, rng: Aleatorio = Math.random): Float32Array {
+  const total = Math.max(1, Math.floor(taxa * segundos));
+  const y = new Float32Array(total);
+  for (let i = 0; i < total; i++) y[i] = (rng() * 2 - 1) * 0.06;
+  const estalos = Math.floor(segundos * 14);
+  for (let e = 0; e < estalos; e++) {
+    const i = Math.floor(rng() * total);
+    const forca = (rng() < 0.15 ? 0.9 : 0.35) * (rng() < 0.5 ? -1 : 1);
+    for (let j = 0; j < 6; j++) y[(i + j) % total] += forca * Math.exp(-j);
+  }
+  let pico = 0;
+  for (let i = 0; i < total; i++) pico = Math.max(pico, Math.abs(y[i]));
+  if (pico > 0) for (let i = 0; i < total; i++) y[i] /= pico;
+  return y;
+}
+
+/** Ruído marrom (integrado): ronco grave de cidade ao longe. */
+export function ruidoMarrom(taxa: number, segundos: number, rng: Aleatorio = Math.random): Float32Array {
+  const total = Math.max(1, Math.floor(taxa * segundos));
+  const y = new Float32Array(total);
+  let v = 0;
+  let pico = 0;
+  for (let i = 0; i < total; i++) {
+    v = (v + 0.02 * (rng() * 2 - 1)) * 0.998;
+    y[i] = v;
+    pico = Math.max(pico, Math.abs(v));
+  }
+  // emenda do laço: apaga início e fim em 50 ms
+  const borda = Math.min(total >> 1, Math.floor(taxa * 0.05));
+  for (let i = 0; i < borda; i++) {
+    y[i] *= i / borda;
+    y[total - 1 - i] *= i / borda;
+  }
+  if (pico > 0) for (let i = 0; i < total; i++) y[i] /= pico;
+  return y;
+}

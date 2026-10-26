@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useDeferredValue, useEffect, useState } from "react";
+import { dadosDoTema, temaDoSistema } from "@/lib/temas";
 
 export type Verbete = { id: string; nome: string; descricao: string; detalhe: string };
 
@@ -93,6 +94,7 @@ export function Catalogo({ itens }: { itens: ItemCatalogo[] }) {
             <a
               key={s.id}
               href={`#${s.id}`}
+              data-tema={temaDoSistema(s.id)}
               aria-current={naTela === s.id ? "location" : undefined}
               className={`inline-flex min-h-9 shrink-0 items-center rounded-full border px-3 text-xs transition ${
                 naTela === s.id ? "border-ambar bg-ambar/10 text-ambar" : "border-border bg-surface-2 text-muted hover:border-ambar hover:text-ambar"
@@ -142,8 +144,9 @@ function CartaoSistema({ s, classes, ancestralidades, buscando }: { s: ItemCatal
       </span>
     );
 
+  const tema = dadosDoTema(s.id);
   return (
-    <section id={s.id} className="cartao scroll-mt-52 p-5 sm:scroll-mt-40">
+    <section id={s.id} data-tema={tema.id} className="cartao cartao-tema scroll-mt-52 p-5 sm:scroll-mt-40">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -153,6 +156,10 @@ function CartaoSistema({ s, classes, ancestralidades, buscando }: { s: ItemCatal
             <span className="etiqueta font-mono">{s.dadoPrincipal}</span>
           </div>
           <h2 className="titulo mt-2 text-2xl text-pergaminho">{s.nome}</h2>
+          {/* o clima do tema: a mesa, a criação e o cartão no início ganham estas cores */}
+          <p className="mt-0.5 text-xs uppercase tracking-[0.2em] text-ambar-forte">
+            <span aria-hidden>{tema.ornamento}</span> {tema.nome} <span aria-hidden>{tema.ornamento}</span>
+          </p>
         </div>
         <div className="hidden sm:block">{comecar("")}</div>
       </div>

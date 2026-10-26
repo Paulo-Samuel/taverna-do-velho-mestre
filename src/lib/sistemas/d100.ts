@@ -478,7 +478,7 @@ export const d100: Sistema = {
   testesSugeridos: ["Encontrar", "Escutar", "Biblioteca", "Psicologia", "Furtividade", "Lábia", "Persuasão", "Esquivar", "Lutar", "Armas de Fogo", "Ideia", "Sorte", "Sanidade"],
   regrasParaMestre: `Sistema: horror investigativo d100 (Basic Roleplaying, ORC). Investigadores comuns contra o horror cósmico: correr e pesquisar valem mais que lutar.
 TESTE: rola-se 1d100 e o resultado precisa ser MENOR OU IGUAL ao valor da perícia/característica. Graus: 01 = Crítico; ≤ 1/5 do valor = Extremo; ≤ 1/2 = Difícil; ≤ valor = Normal; acima = Falha; 100 (ou 96-100 se o valor for menor que 50) = Desastre.
-COMO CHAMAR A FERRAMENTA teste: em "teste" passe a perícia ("Encontrar", "Biblioteca", "Lábia", "Armas de Fogo", "Lutar"), a característica ("FOR", "DES", "INT", "Ideia" = INT, "Conhecimento" = EDU, "Esforço" = FOR), "Sorte", "Sanidade", "Resistência" (CON contra veneno/doença; "Resistência de POD" contra controle mental; "Reflexos" = DES), "Ataque" (usa a arma da ocupação ou a melhor luta; "Ataque à distância" usa armas de fogo), "Magia" (POD) ou "Iniciativa" (DES).
+COMO PEDIR O TESTE (teste ou pedir_teste): em "teste" passe a perícia ("Encontrar", "Biblioteca", "Lábia", "Armas de Fogo", "Lutar"), a característica ("FOR", "DES", "INT", "Ideia" = INT, "Conhecimento" = EDU, "Esforço" = FOR), "Sorte", "Sanidade", "Resistência" (CON contra veneno/doença; "Resistência de POD" contra controle mental; "Reflexos" = DES), "Ataque" (usa a arma da ocupação ou a melhor luta; "Ataque à distância" usa armas de fogo), "Magia" (POD) ou "Iniciativa" (DES).
 - NÃO passe CD. "alvo" é a dificuldade exigida: omita (Normal), 2 = Difícil (precisa de ≤ metade), 3 = Extremo (≤ um quinto). Use Difícil para tarefas sob pressão ou contra alguém competente (perícia do oponente 50+), Extremo para o quase impossível (oponente 90+).
 - "modo": vantagem = 1 dado bônus (rola duas dezenas e fica com a menor), desvantagem = 1 dado de penalidade (fica com a maior). Escreva "2 dados de bônus" no nome do teste para dois. "modificador" soma pontos percentuais ao valor (raramente necessário; prefira dados bônus/penalidade).
 - Oposição: cada lado testa; vence o grau maior; empate fica com quem tem o valor mais alto.
@@ -496,7 +496,16 @@ COMBATE: rodadas em ordem de DES (arma de fogo pronta age como DES+50). Corpo a 
 - Primeiros Socorros cura 1 PV (e estabiliza); Medicina cura 1d3 após o socorro.
 MAGIA: feitiços custam Pontos de Magia (recurso "pm") e quase sempre SAN; teste "Magia" (POD) quando houver resistência ou risco. PM voltam com descanso.
 EVOLUÇÃO: não há níveis nem XP. Ao fim de uma aventura o mestre concede uma "fase de desenvolvimento" (subir de nível na ferramenta): perícias usadas com sucesso podem melhorar 1d10, recupera um pouco de SAN e talvez Sorte.
-Descanso: curto = PM voltam aos poucos (1 por hora); longo (noite/dia de repouso) = PM cheios e +1 PV (ferimento grave pede teste de CON para sarar).`,
+Descanso: curto = PM voltam aos poucos (1 por hora); longo (noite/dia de repouso) = PM cheios e +1 PV (ferimento grave pede teste de CON para sarar).
+COMO MESTRAR O HORROR
+- Investigadores são frágeis e comuns: uma faca mata, um tiro derruba. Correr, esconder, queimar o livro e chamar a polícia são vitórias; luta é a pior opção e deve parecer assim.
+- Pistas essenciais nunca dependem de teste (veja PISTAS): procurou no lugar certo, achou; o teste decide o extra, o tempo e o preço. Pistas concretas (um recibo, uma marca no batente, um nome riscado) e os jogadores ligam os pontos.
+- Horror pelo não-dito: o efeito antes da causa (cheiro, cachorros calados, alguém a mais na foto). Revele a coisa em pedaços e nunca a explique por inteiro: uma frase certa assusta mais que um parágrafo de tentáculos.
+- Escalada: normalidade com uma rachadura → padrões estranhos → presença → revelação. Cada cena aperta um grau.
+- Sanidade é a moeda: peça o teste diante do horror de verdade, não de qualquer cadáver; narre a perda pelo corpo (mãos que não param, riso fora de hora). Surto é cena: descreva o impulso e deixe o jogador interpretar.
+- Forçar é oferta séria: diga o preço antes (o vigia acorda, o livro cobra SAN, o chão cede) e cumpra.
+- NPCs mentem por medo, vergonha ou porque o culto paga. Documentos e diários aparecem em trechos curtos, com a voz de quem escreveu. Respeite a época (em 1920 há telegrama e telefonista, não celular).
+- No pedir_teste, dado de bônus/penalidade vai em modo ("vantagem"/"desvantagem"); "difícil" ou "extremo" vão no nome do teste (alvo 1 = Normal).`,
 
   atributosIniciais(classeId, metodo) {
     const oc = ocupacaoDe(classeId);

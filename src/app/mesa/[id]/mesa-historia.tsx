@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AcoesTurno, acaoParaCampo, avisoDoDesfeito, type Desfeito } from "@/components/chat/acoes-turno";
+import { AjudaAtalhos, rolarPedido, useAtalhos } from "@/components/chat/atalhos";
+import { Anteriormente } from "@/components/historia/anteriormente";
 import { CabecalhoCena } from "@/components/historia/cabecalho-cena";
 import { CartaoAcao, type DesfechoAcao } from "@/components/historia/cartao-acao";
 import { CeuEstrelado } from "@/components/historia/ceu-estrelado";
@@ -17,7 +20,9 @@ import { PedidoTeste, dadosDoPedido } from "@/components/historia/pedido-teste";
 import { Retrato } from "@/components/historia/retrato";
 import { Presenca } from "@/components/presenca/presenca";
 import { Convite } from "@/components/presenca/convite";
+import { BotaoVoz, Ouvir, useLeituraAutomatica } from "@/components/voz/voz";
 import * as identidade from "@/lib/cliente/identidade";
+import { parar as pararVoz } from "@/lib/cliente/voz";
 import { useMesa } from "@/lib/cliente/use-mesa";
 import { INICIO, RESULTADO_TESTE } from "@/lib/constantes";
 import type { Mensagem } from "@/lib/db";
@@ -81,6 +86,9 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   const ultimoTopo = useRef(0);
   const campo = useRef<HTMLTextAreaElement>(null);
   const anterior = useRef<number | null>(null);
+  /** ação devolvida ao campo depois de desfazer o turno */
+  const [preencher, setPreencher] = useState<{ texto: string; n: number } | null>(null);
+  const [ajuda, setAjuda] = useState(false);
 
   const ativo = mesa.personagens.find((p) => p.id === mesa.eu.personagemId) ?? null;
   const euLocal = mesa.presenca.find((j) => j.clienteId === mesa.eu.clienteId)?.local ?? false;
@@ -191,6 +199,9 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
 
   const fecharCodex = useCallback(() => setCodexAberto(false), []);
 
+  // narração em voz alta: lê as narrações novas (com a leitura automática ligada) e cala ao sair da mesa
+  useLeituraAutomatica(mesa.mensagens);
+
   function abrirCodex(aba?: AbaCodex) {
     if (aba) setAbaCodex(aba);
     setCodexAberto(true);
@@ -199,6 +210,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   // ---------- ações ----------
 
   async function enviar(texto: string): Promise<boolean> {
+    pararVoz();
     if (!(await acoes.enviarAcao(texto))) return false;
     longeRef.current = false;
     irParaOFim(true);
@@ -226,6 +238,17 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
     cartao.querySelector<HTMLButtonElement>("button[data-rolar]")?.focus({ preventScroll: true });
   }
 
+  /** Depois de desfazer: a ação do personagem ativo volta ao campo para ser reescrita (refazer não devolve nada). */
+  function aoDesfazer(r: Desfeito, refazer: boolean) {
+    pararVoz();
+    const texto = refazer ? null : acaoParaCampo(r, mesa.eu.personagemId);
+    if (texto) {
+      setPreencher((p) => ({ texto, n: (p?.n ?? 0) + 1 }));
+      if (window.matchMedia("(pointer: fine)").matches) setTimeout(() => campo.current?.focus(), 50);
+    }
+    setAviso(avisoDoDesfeito(r, refazer, Boolean(texto)));
+  }
+
   // ---------- desenho ----------
 
   const vazia = total === 0 && !mesa.ocupado && !filaVisivel.length;
@@ -237,12 +260,31 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   const novasAbaixo = longeDoFim && (total > vistas || Boolean(mesa.aoVivo));
   const testeMeu = meuPendente ? (dadosDoPedido(meuPendente).teste ?? null) : null;
   const sugestoes = mesa.cena.sugestoes ?? [];
+  const sugestoesVisiveis = !mesa.ocupado && pendentes.length === 0 && Boolean(ativo) && !minhaNaFila && !meuPendente ? sugestoes : [];
+  // desfazer/refazer só com o mestre quieto e nada esperando na fila
+  const ultimoMestre = mesa.mensagens.findLast((m) => m.tipo === "mestre")?.id ?? null;
+  const podeDesfazer = !mesa.ocupado && !mesa.aoVivo && filaVisivel.length === 0;
+
+  useAtalhos({
+    totalSugestoes: Math.min(9, sugestoesVisiveis.length),
+    escolherSugestao: (i) => sugestoesVisiveis[i] && void enviar(sugestoesVisiveis[i].texto),
+    rolarTeste: () => rolarPedido(meuPendente?.id),
+    focarCampo: () => campo.current?.focus(),
+    fechar: () => setAjuda(false),
+    alternarAjuda: () => setAjuda((v) => !v),
+  });
 
   function desenhar(m: Mensagem) {
     if (m.tipo === "mestre")
       return (
-        <div key={m.id} className="surgir my-5">
+        <div key={m.id} className="surgir group my-5">
           <NarracaoLivro texto={m.texto} destaque={destaque} />
+          <div className="mt-1 flex min-h-8 flex-wrap items-center justify-end gap-1">
+            {m.id === ultimoMestre && podeDesfazer && (
+              <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={setAviso} className="mr-auto -ml-2.5" />
+            )}
+            <Ouvir id={`msg-${m.id}`} texto={m.texto} />
+          </div>
         </div>
       );
     if (m.tipo === "jogador") {
@@ -312,7 +354,19 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
           >
             ⚙
           </Link>
-          <Musica musica={mesa.cena.musica} />
+          <Link
+            href={`/mesa/${mesa.campanha.id}/livro`}
+            className="hidden size-10 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2/60 hover:text-ambar md:grid"
+            aria-label="Livro da campanha"
+            title="Livro da campanha: a história inteira, para reler, imprimir ou baixar"
+          >
+            <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z" fill="currentColor" fillOpacity={0.15} />
+              <path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3M9 7h6M9 10h4" />
+            </svg>
+          </Link>
+          <BotaoVoz compacto />
+          <Musica musica={mesa.cena.musica} sistema={mesa.sistema.id} />
           <button
             type="button"
             onClick={() => (codexAberto ? fecharCodex() : abrirCodex())}
@@ -346,8 +400,22 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
 
       <Codex mesa={mesa} acoes={acoes} aberto={codexAberto} aoFechar={fecharCodex} aba={abaCodex} aoMudarAba={setAbaCodex} />
 
+      <AjudaAtalhos aberta={ajuda} aoFechar={() => setAjuda(false)} extras={[["C", "abre e fecha o códex"]]} />
+
       {/* o livro */}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+        <Anteriormente
+          campanhaId={mesa.campanha.id}
+          nome={mesa.campanha.nome}
+          mensagens={mesa.mensagens}
+          cena={mesa.cena}
+          diario={mesa.diario}
+          livro
+          aoContinuar={() => {
+            longeRef.current = false;
+            irParaOFim(true);
+          }}
+        />
         <div ref={rolador} onScroll={aoRolar} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div ref={conteudo} className="mx-auto max-w-[720px] px-4 pb-10 pt-4 sm:px-6 sm:pt-8">
             {vazia && (
@@ -473,6 +541,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
             rotuloCampo={ativo ? `Ação de ${ativo.ficha.nome}` : "Mensagem ao mestre"}
             enviar={enviar}
             campoRef={campo}
+            preencher={preencher}
             topo={
               <div className="mb-2 flex min-h-10 items-center gap-2 text-xs sm:min-h-8">
                 {ativo ? (
@@ -533,7 +602,12 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
               </div>
             }
           />
-          <p className="mt-2 text-center text-[11px] text-muted/70">Os personagens são IA. As respostas são ficção.</p>
+          <p className="mt-2 text-center text-[11px] text-muted/70">
+            Os personagens são IA. As respostas são ficção.
+            <button type="button" onClick={() => setAjuda(true)} className="ml-2 hidden underline-offset-2 hover:text-ambar hover:underline [@media(pointer:fine)]:inline">
+              Atalhos: <kbd className="rounded border border-border/70 px-1">?</kbd>
+            </button>
+          </p>
         </div>
       </footer>
     </div>

@@ -4,6 +4,8 @@ import { useActionState, useRef, useState, useTransition, type FormEvent, type K
 import { previaFicha, sugerirAtributos, type PreviaFicha } from "@/app/acoes-ficha";
 import { apelido as apelidoSalvo, salvarApelido } from "@/lib/cliente/identidade";
 import type { OpcaoCriacao, SistemaPublico } from "@/lib/sistemas/tipos";
+import { temaDoSistema } from "@/lib/temas";
+import { TemaPagina } from "@/components/tema-pagina";
 import {
   PassoAncestralidade,
   PassoAntecedente,
@@ -98,6 +100,8 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
   // veio do catálogo com o sistema escolhido: pula direto para o personagem (a barra de passos deixa voltar)
   const [passo, setPasso] = useState<Passo>(sistemaFixo || pedido ? "ancestralidade" : "sistema");
   const [aviso, setAviso] = useState<string | null>(null);
+  // a página assume o tema do sistema assim que o jogador escolhe um (antes disso, a taverna de sempre)
+  const [tocouSistema, setTocouSistema] = useState(false);
   // passo mais adiantado já visitado: a barra de passos deixa pular até ele (validando o caminho)
   const [alcance, setAlcance] = useState(0);
   // de que classe+método vieram os atributos atuais; editar à mão congela (não sobrescrevemos o que o jogador digitou)
@@ -144,6 +148,7 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
   }
 
   function escolherSistema(id: string) {
+    if (sistemas.find((s) => s.id === id)?.pronto) setTocouSistema(true);
     if (id === e.sistemaId) return;
     const novo = sistemas.find((s) => s.id === id);
     if (!novo?.pronto) return;
@@ -329,6 +334,7 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
   }
 
   const prontos = sistemas.filter((s) => s.pronto);
+  const temaEscolhido = Boolean(sistemaFixo || pedido || tocouSistema || atual !== "sistema");
   // a prévia só faz sentido entre o sistema e o resumo (o resumo já mostra a ficha inteira)
   const mostrarPrevia = Boolean(sistema) && atual !== "sistema" && atual !== "resumo";
   const proximo = passos[indice + 1];
@@ -344,6 +350,7 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
 
   return (
     <div ref={topoRef} className="mt-6 scroll-mt-4">
+      {temaEscolhido && <TemaPagina tema={temaDoSistema(e.sistemaId)} />}
       {sistemaFixo && sistema && !sistema.pronto ? null : prontos.length === 0 ? (
         <p className="cartao p-4 text-sm text-muted">Nenhum sistema pronto ainda. O mestre está afinando as regras.</p>
       ) : (

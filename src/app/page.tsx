@@ -2,6 +2,7 @@ import Link from "next/link";
 import { listarCampanhas, listarMensagens, listarPersonagens, type Campanha, type Personagem } from "@/lib/db";
 import { lerAjustesMestre, provedorAtual } from "@/lib/mestre";
 import { obterSistema } from "@/lib/sistemas";
+import { dadosDoTema, temaDoSistema } from "@/lib/temas";
 import { excluirCampanhaAcao } from "./acoes-campanha";
 import { BotaoExcluir } from "./botao-excluir";
 
@@ -56,7 +57,11 @@ function Etiquetas({ c }: { c: CampanhaListada }) {
   const historia = (c.config.modoJogo ?? "avancado") === "historia";
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {c.sistema.id !== "historia" && <span className="etiqueta text-ambar-forte">{c.sistema.nomeCurto}</span>}
+      {c.sistema.id !== "historia" && (
+        <span className="etiqueta text-ambar-forte" title={dadosDoTema(c.sistema.id).nome}>
+          <span aria-hidden>{dadosDoTema(c.sistema.id).ornamento}</span> {c.sistema.nomeCurto}
+        </span>
+      )}
       {historia ? (
         <span className="etiqueta" title="Mesa em estilo de livro: ações sugeridas e você rola os dados na tela">
           Modo história
@@ -120,7 +125,11 @@ function Continuar({ c }: { c: CampanhaListada }) {
   const trecho = ondeParou(c.id);
   const herois = c.personagens.map((p) => p.ficha.nome).filter(Boolean);
   return (
-    <section aria-labelledby="continuar-titulo" className="cartao relative overflow-hidden border-ambar-forte/60 p-5 sm:p-6">
+    <section
+      aria-labelledby="continuar-titulo"
+      data-tema={temaDoSistema(c.sistema.id)}
+      className="cartao cartao-tema relative overflow-hidden border-ambar-forte/60 p-5 sm:p-6"
+    >
       {/* brilho de vela atrás do cartão */}
       <div aria-hidden className="pointer-events-none absolute -top-16 -right-16 size-48 rounded-full bg-ambar/10 blur-3xl" />
       <p className="text-xs uppercase tracking-[0.18em] text-ambar-forte">Onde vocês pararam · {haQuanto(c.atualizadaEm)}</p>
@@ -144,6 +153,9 @@ function Continuar({ c }: { c: CampanhaListada }) {
         </Link>
         <Link href={`/mesa/${c.id}/ajustes`} className="btn-borda min-h-11 px-4">
           Ajustes
+        </Link>
+        <Link href={`/mesa/${c.id}/livro`} className="inline-flex min-h-11 items-center gap-1 px-2 text-sm text-muted underline-offset-4 hover:text-ambar hover:underline" title="Livro da campanha: reler, imprimir ou baixar">
+          <span aria-hidden>📜</span> Livro
         </Link>
       </div>
     </section>
@@ -262,7 +274,7 @@ export default function Inicio() {
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {campanhas.map((c) => (
-            <li key={c.id} className="cartao flex flex-col p-5">
+            <li key={c.id} data-tema={temaDoSistema(c.sistema.id)} className="cartao cartao-tema flex flex-col p-5">
               <Etiquetas c={c} />
               <Link href={`/mesa/${c.id}`} className="group mt-2 rounded-sm">
                 <h3 className="titulo text-xl text-pergaminho group-hover:text-ambar">{c.nome}</h3>
@@ -291,6 +303,13 @@ export default function Inicio() {
               </div>
               <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-2 text-xs text-muted">
                 <span title={dataDoBanco(c.atualizadaEm).toLocaleString("pt-BR")}>Última jogada: {haQuanto(c.atualizadaEm)}</span>
+                <Link
+                  href={`/mesa/${c.id}/livro`}
+                  className="ml-auto inline-flex min-h-8 items-center gap-1 rounded-sm hover:text-ambar"
+                  title="Livro da campanha: reler, imprimir ou baixar"
+                >
+                  <span aria-hidden>📜</span> Livro
+                </Link>
                 <form action={excluirCampanhaAcao}>
                   <input type="hidden" name="id" value={c.id} />
                   <BotaoExcluir nome={c.nome} />

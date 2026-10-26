@@ -1,0 +1,174 @@
+/* Livro da campanha (/mesa/[id]/livro): prosa de livro, ações em itálico, rolagens na margem e o CSS de impressão. */
+
+.livro-texto {
+  font-size: 1.1rem;
+  line-height: 1.85;
+  color: color-mix(in srgb, var(--foreground) 95%, transparent);
+}
+.livro-paragrafo {
+  margin: 0 0 1.1rem;
+  text-wrap: pretty;
+  hyphens: auto;
+}
+.livro-paragrafo strong {
+  font-weight: 600;
+  color: var(--pergaminho);
+}
+.livro-fala {
+  color: var(--pergaminho);
+}
+/* capitular: a primeira letra do capítulo, grande e em âmbar */
+.livro-capitular::first-letter {
+  float: left;
+  font-family: var(--font-titulo);
+  font-size: 3.4em;
+  line-height: 0.85;
+  padding: 0.08em 0.1em 0 0;
+  color: var(--ambar);
+}
+.livro-historia .livro-capitular::first-letter {
+  font-family: inherit;
+  font-weight: 700;
+}
+.livro-separador {
+  margin: 1.6rem 0;
+  text-align: center;
+  font-size: 0.85rem;
+  letter-spacing: 0.6em;
+  color: color-mix(in srgb, var(--ambar) 55%, transparent);
+}
+.livro-acao {
+  margin: 1.3rem 0;
+  padding-left: 1rem;
+  border-left: 2px solid color-mix(in srgb, var(--ambar) 45%, transparent);
+  font-size: 1rem;
+  line-height: 1.7;
+  color: color-mix(in srgb, var(--foreground) 85%, transparent);
+}
+.livro-acao-nome {
+  font-variant: small-caps;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ambar);
+}
+.livro-acao-autor {
+  font-size: 0.8em;
+  color: var(--muted);
+}
+.livro-nota {
+  margin: 0.4rem 0 1rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.livro-sistema {
+  margin: 1.8rem 0;
+  text-align: center;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  color: var(--muted);
+}
+.livro-etiqueta {
+  font-size: 0.8em;
+  color: var(--muted);
+  font-style: italic;
+}
+.livro-sumario a {
+  min-height: 2rem;
+  align-items: center;
+}
+
+/* tela larga: as rolagens vão para a margem esquerda, como nota de rodapé lateral */
+@media (min-width: 1180px) {
+  .livro-texto {
+    position: relative;
+  }
+  .livro-nota {
+    float: left;
+    clear: left;
+    width: 11rem;
+    margin: 0.35rem 0 0.6rem -13.5rem;
+    text-align: right;
+    padding-right: 0.75rem;
+    border-right: 1px solid var(--border);
+  }
+}
+
+/* ---------- impressão / PDF ---------- */
+@media print {
+  @page {
+    margin: 18mm 16mm;
+  }
+  /* papel claro: os tokens viram tinta sobre branco, em qualquer tema */
+  html,
+  body,
+  body[data-tema],
+  .livro,
+  .livro[data-tema] {
+    --background: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f4f1ea;
+    --foreground: #1b1610;
+    --muted: #5a5046;
+    --border: #cfc6b8;
+    --ambar: #7a4b12;
+    --ambar-forte: #7a4b12;
+    --pergaminho: #120d08;
+    --sangue: #8a2418;
+    --textura: none;
+    --textura-cartao: none;
+    background: #ffffff !important;
+    background-image: none !important;
+    color: #1b1610 !important;
+    color-scheme: light;
+  }
+  body > header,
+  .nao-imprimir,
+  .ceu-historia,
+  nextjs-portal {
+    display: none !important;
+  }
+  .livro * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  .livro-capa {
+    min-height: auto;
+    padding: 30mm 0 10mm;
+    break-after: page;
+  }
+  .livro-sumario {
+    break-after: page;
+  }
+  .livro-capitulo {
+    break-before: page;
+    padding-top: 0 !important;
+  }
+  .livro-capitulo header,
+  .livro-acao,
+  .livro-ficha,
+  .livro-diario-secao li {
+    break-inside: avoid;
+  }
+  .livro-texto {
+    font-size: 11.5pt;
+    line-height: 1.6;
+  }
+  .livro-nota {
+    float: none;
+    width: auto;
+    margin: 0.2rem 0 0.6rem;
+    text-align: left;
+    border: 0;
+    padding: 0;
+  }
+  .livro-ficha {
+    border: 1px solid #cfc6b8 !important;
+    background: #fff !important;
+  }
+  .livro a {
+    color: inherit;
+    text-decoration: none;
+  }
+}

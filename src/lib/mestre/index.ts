@@ -1,8 +1,16 @@
 import "server-only";
 import {
+  abrirInstantaneo,
   adicionarMensagem,
   atualizarMensagem,
+  capturarEstado,
+  contarInstantaneos,
+  descartarInstantaneoAberto,
   enfileirarAcao,
+  registrarInstantaneo,
+  removerInstantaneo,
+  restaurarEstado,
+  ultimoInstantaneo,
   lerAjuste,
   listarFila,
   listarPersonagens,
@@ -176,6 +184,9 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
   const personagens = listarPersonagens(campanhaId);
   const recentes = mensagensDepois(campanhaId, campanha.resumoAte);
 
+  // o jeito de voltar atrás: guarda a mesa como estava antes deste turno (e das ações que ele vai gravar)
+  registrarInstantaneo(campanhaId, capturarEstado(campanhaId), acoes.map((a) => ({ personagemId: a.personagemId, autor: a.autor, acao: a.acao })));
+
   const inicio = acoes.some((a) => a.acao === INICIO);
   const doTurno: AcaoDoTurno[] = [];
   if (inicio) {
@@ -250,9 +261,13 @@ export function rolarTestePendente(campanhaId: number, mensagemId: number, autor
   const r = sistema.resolverTeste(p.ficha, {
     teste: String(dados.testePedido ?? dados.teste),
     alvo: typeof dados.alvo === "number" ? dados.alvo : null,
+    modo: dados.modo === "vantagem" || dados.modo === "desvantagem" ? dados.modo : undefined,
+    modificador: typeof dados.modificador === "number" ? dados.modificador : undefined,
     motivo: String(dados.motivo ?? ""),
   });
   const texto = `${p.ficha.nome} · ${r.teste} — ${r.motivo}: ${r.expressao} → ${r.total}${r.alvo !== null ? ` vs ${r.alvo}` : ""} · ${r.rotuloGrau}`;
+  // desfazer o turno que esta rolagem vai disparar devolve o teste para "pendente"
+  abrirInstantaneo(campanhaId, capturarEstado(campanhaId));
   const atualizada = atualizarMensagem(m.id, texto, { ...dados, status: "resolvido", resultado: r, roladoPor: autor || null });
   if (atualizada) publicar(campanhaId, { e: "mensagem_atualizada", mensagem: atualizada });
 
@@ -270,6 +285,43 @@ export function rolarTestePendente(campanhaId: number, mensagemId: number, autor
   const perigoso = dados.perigoso ? " (teste perigoso: a falha custa caro)" : "";
   enviarAcao(campanhaId, { personagemId: p.id, autor, acao: `${RESULTADO_TESTE}${texto}${perigoso}` });
   return r;
+}
+
+export type Desfeito = {
+  /** ações dos jogadores que o turno desfeito tinha recebido (para voltarem ao campo de texto) */
+  acoes: { personagemId: number | null; autor: string; acao: string }[];
+  /** era a cena de abertura */
+  abertura: boolean;
+  /** quantos turnos ainda dá para desfazer */
+  restantes: number;
+};
+
+/**
+ * Volta a mesa para antes do último turno do mestre: apaga o que ele escreveu e desfaz fichas, cena e diário.
+ * `refazer` volta só até o começo do turno e manda as mesmas ações de novo (o mestre responde outra vez);
+ * sem ele, volta até antes da entrada do jogador (inclusive um teste rolado, que fica pendente de novo).
+ */
+export function desfazerTurno(campanhaId: number, opcoes: { refazer?: boolean } = {}): Desfeito {
+  if (execucao(campanhaId).ocupado) throw new Error("O mestre ainda está narrando. Espere ele terminar ou interrompa.");
+  const inst = ultimoInstantaneo(campanhaId);
+  if (!inst) throw new Error("Não há turno para desfazer.");
+
+  descartarInstantaneoAberto(campanhaId);
+  restaurarEstado(campanhaId, opcoes.refazer ? inst.turno : (inst.entrada ?? inst.turno));
+  removerInstantaneo(inst.id);
+  publicar(campanhaId, { e: "recarregar" });
+
+  const abertura = inst.acoes.some((a) => a.acao === INICIO);
+  if (opcoes.refazer) {
+    for (const a of inst.acoes) enfileirarAcao(campanhaId, a);
+    publicarEstado(campanhaId);
+    agendar(campanhaId, true);
+  }
+  return {
+    acoes: inst.acoes.filter((a) => a.acao !== INICIO && !a.acao.startsWith(RESULTADO_TESTE)),
+    abertura,
+    restantes: contarInstantaneos(campanhaId),
+  };
 }
 
 async function atualizarResumo(campanhaId: number) {

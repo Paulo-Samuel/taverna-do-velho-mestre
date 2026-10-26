@@ -601,7 +601,16 @@ export const pf1e: Sistema = {
 - Recursos de classe: furia, musica, canalizar, ki, maos, destruir, bombas, desafio, julgamento, reserva, garra, panache, inspiracao, fervor, fardo (tolerância: cada ponto de fardo gasto reduz em 1 e causa dano não letal = nível por ponto), heroi (pontos de herói: +8 num teste, ação extra ou escapar da morte; não voltam com descanso).
 - Inimigos comuns: CA 13-18, ND = nível do grupo para um encontro médio. Com 0 PV o personagem fica inconsciente e morrendo; morre com PV negativo igual à CON (ex.: CON 14 morre em -14).
 - Descanso: uma noite inteira recupera PV igual ao nível e todos os recursos diários (magias, fúria, ki...). Cura mágica e kits de Cura são o resto. Não existe descanso curto de cura.
-- Por nível: PV (dado de vida médio + CON), BBA e salvamentos sobem, novos espaços de magia, +1 talento nos níveis ímpares e +1 atributo a cada 4 níveis. Trilha média de XP (2.000 para o 2º nível, 5.000 para o 3º...).`,
+- Por nível: PV (dado de vida médio + CON), BBA e salvamentos sobem, novos espaços de magia, +1 talento nos níveis ímpares e +1 atributo a cada 4 níveis. Trilha média de XP (2.000 para o 2º nível, 5.000 para o 3º...).
+COMO MESTRAR PF1E
+- Combate tático em palavras: diga distâncias (quadrados de 1,5 m), cobertura, terreno difícil e quem ameaça quem, porque isso decide flanco, ataques de oportunidade e ataque total.
+- Ação padrão + de movimento, ou rodada completa (ataque total: todos os ataques do BBA, só com passo de 1,5 m). O passo não provoca; sair de área ameaçada, levantar, recarregar besta, conjurar ou fazer manobra sem o talento Aprimorado provocam ataque de oportunidade (1 por rodada, salvo Reflexos em Combate). Avise antes de o jogador provocar; inimigos também sofrem e usam isso.
+- BBA mede o treino marcial: mago de BBA baixo luta mal, mesmo forte. Manobra = BMC do atacante (BBA + FOR + tamanho) contra a DMC do alvo; inimigos também agarram, derrubam e desarmam.
+- Crítico: narre a ameaça como tensão e a confirmação como golpe devastador.
+- Perícias por graduação: perícia de classe treinada ganha +3; sem graduação, algumas nem podem ser tentadas. Conhecimento identifica criaturas (CD 10 + ND; cada 5 acima dá mais um fato). Escolher 10 ou 20 fora de perigo poupa rolagens inúteis.
+- Bônus do mesmo tipo (moral, sorte, circunstância...) não se somam: prefira um ±2 claro a uma conta longa.
+- Recursos diários são o relógio da aventura (magias, fúria, canalizar): pressione com tempo (reforços, ritual em andamento) para que descansar a cada sala tenha custo.
+- A morte é lenta e tensa: com PV negativo o personagem sangra 1 por rodada até estabilizar (CON, CD 10 + PV negativos) ou receber cura; narre a corrida para salvá-lo.`,
 
   atributosIniciais(classeId, metodo) {
     const classe = CLASSES.find((c) => c.id === classeId) ?? CLASSES[0];

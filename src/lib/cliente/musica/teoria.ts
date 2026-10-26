@@ -16,7 +16,36 @@ export type Instrumento =
   | "pulso" // grave pulsando (tensão)
   | "tambor" // tambor de mão
   | "bumbo"
-  | "chocalho";
+  | "chocalho"
+  // timbres dos estilos de cada sistema (estilos.ts)
+  | "orgao" // órgão de tubos (parciais em seno), distante
+  | "sinte" // sintetizador de darkwave: serras com filtro que fecha
+  | "baixoSinte" // baixo de sintetizador curto e pulsante
+  | "quadrada" // onda quadrada crua (dungeon synth)
+  | "piano" // piano de parciais (gramofone no horror)
+  | "caixinha" // caixinha de música, um tico desafinada
+  | "teremim" // senoide com vibrato e glissando
+  | "rabeca" // rabeca/fiddle de arco
+  | "trompa" // trompa redonda (épico)
+  | "cordas" // naipe de cordas que incha devagar
+  | "caixa" // caixa clara (marcha, backbeat)
+  | "clang" // pancada metálica industrial
+  | "coracao"; // batida de coração abafada
+
+/** timbre do pad e do drone contínuos */
+export type TimbrePad = "serra" | "orgao" | "cordas" | "quadrada";
+export type TimbreDrone = "padrao" | "gaita" | "cru";
+
+/** cor da camada inteira: ambiente em laço e processamento (gramofone, fita cassete, saturação) */
+export type Efeitos = {
+  ambiente?: { tipo: "chuva" | "chiado" | "fita" | "cidade"; volume: number }[];
+  /** wow/flutter de fita cassete (afinação ondulando) */
+  fita?: boolean;
+  /** passa-faixa estreito de gramofone */
+  gramofone?: boolean;
+  /** saturação suave (0..1), para o industrial */
+  saturacao?: number;
+};
 
 /** Uma nota do compasso. quando e duracao em batidas (o motor converte com o andamento). */
 export type Nota = { quando: number; instrumento: Instrumento; midi: number; duracao: number; intensidade: number };
@@ -112,9 +141,10 @@ export type Receita = {
   volume: number;
   /** quanto vai para o reverb (0..1) */
   reverb: number;
-  pad: { volume: number; brilho: number; oitava: number } | null;
+  pad: { volume: number; brilho: number; oitava: number; timbre?: TimbrePad } | null;
   /** drone fixo: intervalos a partir da tônica + oitava */
-  drone: { volume: number; intervalos: number[]; oitava: number } | null;
+  drone: { volume: number; intervalos: number[]; oitava: number; timbre?: TimbreDrone } | null;
+  efeitos?: Efeitos;
   /** volume do murmúrio de conversa (0 = sem) */
   conversa: number;
   /** peça curta que acaba e passa para outro humor */
@@ -122,12 +152,12 @@ export type Receita = {
   compor: (c: Contexto) => Nota[];
 };
 
-function nota(quando: number, instrumento: Instrumento, midi: number, duracao: number, intensidade: number): Nota {
+export function nota(quando: number, instrumento: Instrumento, midi: number, duracao: number, intensidade: number): Nota {
   return { quando, instrumento, midi, duracao, intensidade };
 }
 
 /** passeio melódico por graus: passos curtos, às vezes um salto; fica entre min e max */
-function passo(c: Contexto, chave: string, min: number, max: number, tendencia = 0): number {
+export function passo(c: Contexto, chave: string, min: number, max: number, tendencia = 0): number {
   let g = c.estado[chave] ?? Math.round((min + max) / 2);
   const r = c.rng() + tendencia;
   const delta = r < 0.36 ? -1 : r < 0.72 ? 1 : r < 0.82 ? 0 : r < 0.91 ? -2 : 2;
@@ -140,7 +170,7 @@ function passo(c: Contexto, chave: string, min: number, max: number, tendencia =
 }
 
 /** puxa um grau para a nota do acorde mais próxima (tempos fortes soam resolvidos) */
-function noAcorde(c: Contexto, g: number): number {
+export function noAcorde(c: Contexto, g: number): number {
   const n = c.modo.length;
   let melhor = g;
   let dist = Infinity;
@@ -154,7 +184,7 @@ function noAcorde(c: Contexto, g: number): number {
   return melhor;
 }
 
-function escala(c: Contexto, g: number): number {
+export function escala(c: Contexto, g: number): number {
   return grauParaMidi(c.tonica, c.modo, g);
 }
 
@@ -247,7 +277,7 @@ export const RECEITAS: Record<HumorMusical, Receita> = {
     volume: 0.85,
     reverb: 0.42,
     pad: null,
-    drone: { volume: 0.32, intervalos: [0, 7], oitava: -2 },
+    drone: { volume: 0.32, intervalos: [0, 7], oitava: -2, timbre: "gaita" },
     conversa: 0,
     compor(c) {
       const r = c.acorde[0];
@@ -479,9 +509,9 @@ export type Compositor = {
 const VALIDO = (n: Nota) =>
   Number.isFinite(n.quando) && Number.isFinite(n.midi) && n.duracao > 0 && n.intensidade > 0 && n.quando >= 0;
 
-/** Compositor de um humor: escolhe a frase (progressão), lembra a melodia e devolve um compasso por chamada. */
-export function criarCompositor(humor: HumorMusical, rng: Aleatorio): Compositor {
-  const receita = RECEITAS[humor];
+/** Compositor de um humor: escolhe a frase (progressão), lembra a melodia e devolve um compasso por chamada.
+ * receita: a do estilo do sistema (estilos.ts); sem ela, a fantasia base. */
+export function criarCompositor(humor: HumorMusical, rng: Aleatorio, receita: Receita = RECEITAS[humor]): Compositor {
   const tonica = receita.tonica + escolher(rng, receita.transposicoes);
   const estado: Record<string, number> = {};
   let progressao = escolher(rng, receita.progressoes);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { DIFICULDADES, FOCOS, MAX_FOCO_LIVRE, MAX_INSTRUCOES, separarFoco, TAMANHOS, type Dificuldade, type TamanhoNarracao } from "@/lib/mestre/estilo";
 import type { EstadoAjustes } from "./acoes";
 
 // Formulários da página de ajustes: dados da campanha, PIN da rede e a porta dos fundos (excluir).
@@ -54,13 +55,56 @@ function Aviso({ estado }: { estado: EstadoAjustes }) {
 // cartão de opção com rádio dentro: o anel aparece quando o rádio tem foco de teclado
 const CARTAO_RADIO = "cursor-pointer rounded-lg border p-3 transition has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-ambar/70";
 
+/** Grupo de cartões de rádio (mesmo visual de "Modo da mesa" e "Quem rola os testes"). */
+function CartoesRadio<T extends string>({
+  legenda,
+  nome,
+  opcoes,
+  valor,
+  aoMudar,
+}: {
+  legenda: string;
+  nome: string;
+  opcoes: readonly { id: T; nome: string; texto: string }[];
+  valor: T;
+  aoMudar: (v: T) => void;
+}) {
+  return (
+    <fieldset>
+      <legend className="mb-2 text-sm text-muted">{legenda}</legend>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {opcoes.map((m) => (
+          <label key={m.id} className={`${CARTAO_RADIO} ${valor === m.id ? "border-ambar bg-ambar/10" : "border-border hover:border-ambar/50"}`}>
+            <span className="flex items-center gap-2">
+              <input type="radio" name={nome} value={m.id} checked={valor === m.id} onChange={() => aoMudar(m.id)} className="h-4 w-4 accent-[var(--ambar)]" />
+              <span className="font-semibold text-pergaminho">{m.nome}</span>
+            </span>
+            <span className="mt-1 block text-xs leading-relaxed text-muted">{m.texto}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 export function FormularioCampanha({
   acao,
   inicial,
   bloqueado,
 }: {
   acao: Acao;
-  inicial: { nome: string; cenario: string; tom: string; modo: "livre" | "rodada"; dados: "jogador" | "automatico"; sugestoes: boolean };
+  inicial: {
+    nome: string;
+    cenario: string;
+    tom: string;
+    modo: "livre" | "rodada";
+    dados: "jogador" | "automatico";
+    sugestoes: boolean;
+    dificuldade: Dificuldade;
+    narracao: TamanhoNarracao;
+    foco: string[];
+    instrucoes: string;
+  };
   bloqueado: boolean;
 }) {
   // "sujo" = mexeu em algo depois do último salvar; o rodapé avisa para ninguém sair achando que salvou
@@ -73,6 +117,10 @@ export function FormularioCampanha({
   const [modo, setModo] = useState(inicial.modo);
   const [dados, setDados] = useState(inicial.dados);
   const [tom, setTom] = useState(inicial.tom);
+  const [dificuldade, setDificuldade] = useState(inicial.dificuldade);
+  const [narracao, setNarracao] = useState(inicial.narracao);
+  const [instrucoes, setInstrucoes] = useState(inicial.instrucoes);
+  const foco = separarFoco(inicial.foco);
   return (
     <form action={enviar} onChange={() => setSujo(true)} className="space-y-4">
       <fieldset disabled={bloqueado} className="space-y-4">
@@ -151,6 +199,56 @@ export function FormularioCampanha({
             <span className="mt-1 block text-xs leading-relaxed text-muted">A cada turno o mestre oferece 3 opções clicáveis. Dá para escrever a própria ação do mesmo jeito.</span>
           </span>
         </label>
+
+        {/* estilo do mestre: entra no prompt a partir do próximo turno */}
+        <div className="space-y-4 border-t border-border pt-4">
+          <div>
+            <h3 className="titulo text-lg text-pergaminho">Estilo do mestre</h3>
+            <p className="text-xs text-muted">Vale a partir do próximo turno. O padrão é o mestre de sempre.</p>
+          </div>
+          <CartoesRadio legenda="Dificuldade" nome="dificuldade" opcoes={DIFICULDADES} valor={dificuldade} aoMudar={setDificuldade} />
+          <CartoesRadio legenda="Tamanho da narração" nome="narracao" opcoes={TAMANHOS} valor={narracao} aoMudar={setNarracao} />
+          <fieldset>
+            <legend className="mb-2 text-sm text-muted">Foco (opcional): o que o mestre deve privilegiar</legend>
+            <div className="flex flex-wrap gap-1.5">
+              {FOCOS.map((f) => (
+                <label
+                  key={f.id}
+                  className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border border-border px-3 text-sm text-foreground/80 transition hover:border-ambar/60 has-[input:checked]:border-ambar has-[input:checked]:bg-ambar/15 has-[input:checked]:text-ambar has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-ambar/70 sm:min-h-8 sm:text-xs"
+                >
+                  <input type="checkbox" name="foco" value={f.id} defaultChecked={foco.ids.includes(f.id)} className="h-3.5 w-3.5 accent-[var(--ambar)]" />
+                  {f.nome}
+                </label>
+              ))}
+            </div>
+            <input
+              name="focoLivre"
+              defaultValue={foco.livre}
+              maxLength={MAX_FOCO_LIVRE}
+              aria-label="Outro foco, em poucas palavras"
+              placeholder="Outro, em poucas palavras (ex.: política de guildas)"
+              className="campo mt-2"
+            />
+          </fieldset>
+          <label className="block">
+            <span className="mb-1 block text-sm text-muted">Instruções da casa</span>
+            <textarea
+              name="instrucoes"
+              value={instrucoes}
+              onChange={(e) => setInstrucoes(e.target.value)}
+              maxLength={MAX_INSTRUCOES}
+              rows={3}
+              className="campo resize-y"
+              placeholder="Regras e preferências da mesa: “sem aranhas”, “NPCs falam com sotaque nordestino”, “regra da casa: críticos explodem”"
+            />
+            <span className="mt-1 flex justify-between gap-2 text-xs text-muted">
+              <span>O mestre segue isto acima das regras gerais (menos as de segurança).</span>
+              <span aria-live="polite">
+                {instrucoes.length}/{MAX_INSTRUCOES}
+              </span>
+            </span>
+          </label>
+        </div>
       </fieldset>
       {/* rodapé grudado enquanto o formulário está na tela: o Salvar e o retorno ficam sempre à vista */}
       <div className="sticky bottom-0 z-10 -mx-5 -mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-b-xl border-t border-border bg-surface/95 px-5 py-3 backdrop-blur">

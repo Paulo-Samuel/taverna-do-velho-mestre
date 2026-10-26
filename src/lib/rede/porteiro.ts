@@ -10,6 +10,8 @@ const LIBERADAS: RegExp[] = [
   /^\/mesa\/\d+(\/.*)?$/,
   /^\/api\/campanhas\/\d+\/.+$/,
   /^\/api\/rede\/?$/,
+  // trilha das músicas próprias: a rota confere ?campanha= e o PIN da mesa (o som toca em cada aparelho)
+  /^\/api\/musica(\/arquivo)?\/?$/,
   // arquivos do Next, HMR e overlay de erro do modo dev
   /^\/_next\//,
   /^\/__nextjs/,

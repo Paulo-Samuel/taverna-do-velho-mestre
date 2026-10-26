@@ -47,6 +47,12 @@ export function SugestoesCompactas({ sugestoes, aoEscolher }: { sugestoes: Suges
                 {s.texto}
               </span>
               {s.pericia && <span className="shrink-0 rounded-full border border-border/80 px-2 text-[11px] leading-5 text-muted">{s.pericia}</span>}
+              {/* atalho de teclado (1, 2, 3): só onde há teclado de verdade */}
+              {i < 9 && (
+                <kbd className="hidden shrink-0 rounded border border-border/80 px-1.5 text-[10px] leading-4 text-muted [@media(pointer:fine)]:inline" aria-hidden>
+                  {i + 1}
+                </kbd>
+              )}
             </button>
           </li>
         ))}

@@ -477,6 +477,13 @@ export function Codex({
             {mesa.sistema.nomeCurto} · Mestre: {mesa.provedor}
             {mesa.limite?.uso != null && ` · plano ${Math.round(mesa.limite.uso * 100)}%`}
           </p>
+          <Link
+            href={`/mesa/${mesa.campanha.id}/livro`}
+            className="flex min-h-10 shrink-0 items-center gap-1 rounded-md px-2 hover:bg-surface-2 hover:text-ambar"
+            title="Livro da campanha: a história inteira, para reler, imprimir ou baixar"
+          >
+            <span aria-hidden>📜</span> Livro
+          </Link>
           <Link href={`/mesa/${mesa.campanha.id}/ajustes`} className="flex min-h-10 shrink-0 items-center gap-1 rounded-md px-2 hover:bg-surface-2 hover:text-ambar">
             <span aria-hidden>⚙</span> Ajustes da mesa
           </Link>

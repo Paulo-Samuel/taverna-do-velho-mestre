@@ -262,6 +262,8 @@ export function definirFerramentas(ctx: ContextoFerramentas): DefFerramenta[] {
           personagem: campoPersonagem,
           teste: { type: "string", description: "Perícia ou tipo de teste." },
           alvo: { type: "integer", description: "Dificuldade (CD)." },
+          modo: { type: "string", enum: ["normal", "vantagem", "desvantagem"], description: "Vantagem/desvantagem (ou bônus/penalidade equivalente do sistema)." },
+          modificador: { type: "integer", description: "Bônus ou penalidade circunstancial (no Vampiro: dados a mais ou a menos na parada)." },
           perigoso: { type: "boolean", description: "true se a falha machuca ou custa caro (o jogador vê o aviso antes de rolar)." },
           motivo: { type: "string", description: "Frase curta do que está sendo tentado, mostrada no cartão do dado." },
         },
@@ -370,6 +372,8 @@ const ENTRADAS = {
     personagem: z.string().optional(),
     teste: z.string().min(1),
     alvo: z.number().int(),
+    modo: z.enum(["normal", "vantagem", "desvantagem"]).optional(),
+    modificador: z.number().int().optional(),
     perigoso: z.boolean().optional(),
     motivo: z.string().default(""),
   }),
@@ -1040,7 +1044,7 @@ export async function executarFerramenta(ctx: ContextoFerramentas, nome: string,
       throw new Error(`${p.ficha.nome} já tem um teste esperando o jogador rolar. Termine o turno.`);
     }
     // prévia só para mostrar o bônus no cartão; o dado de verdade é sorteado quando o jogador clica
-    const previa = ctx.sistema.resolverTeste(p.ficha, { teste: e.teste, alvo: e.alvo, motivo: e.motivo });
+    const previa = ctx.sistema.resolverTeste(p.ficha, { teste: e.teste, alvo: e.alvo, modo: e.modo, modificador: e.modificador, motivo: e.motivo });
     const dados = {
       tipo: "pedido_teste",
       status: "pendente",
@@ -1053,6 +1057,8 @@ export async function executarFerramenta(ctx: ContextoFerramentas, nome: string,
       dadoPrincipal: ctx.sistema.dadoPrincipal,
       alvo: e.alvo,
       bonus: previa.bonus,
+      ...(e.modo && e.modo !== "normal" ? { modo: e.modo } : {}),
+      ...(e.modificador ? { modificador: e.modificador } : {}),
       perigoso: Boolean(e.perigoso),
       motivo: e.motivo,
       sistema: ctx.sistema.id,

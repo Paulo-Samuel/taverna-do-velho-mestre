@@ -51,6 +51,8 @@ mestre chama `pedir_teste` e o jogador rola pela rota `/api/campanhas/[id]/rolar
 - `src/lib/dados.ts` — motor de dados (o código decide o número; o modelo só decide quando rolar).
 - `src/lib/tempo-real.ts`, `src/app/api/campanhas/[id]/eventos` — eventos em tempo real (SSE) para todos os aparelhos.
 - `src/lib/rede/` — PIN, porteiro (quem vem pela rede só acessa as mesas) e endereços da rede local.
+- `src/lib/cliente/musica/` — trilha: estilo por sistema (`estilos.ts`), motor Web Audio e tocador das músicas próprias da
+  pasta `musica/` (fora do git, ver `musica/LEIA-ME.md`; rotas `src/app/api/musica/`).
 - `src/app/` — páginas (início, nova campanha, mesa, ajustes, entrar, sistemas, configurações).
 
 Next.js 16 tem mudanças grandes (params são Promises, `proxy.ts` no lugar de middleware): consulte

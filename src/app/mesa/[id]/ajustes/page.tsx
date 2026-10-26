@@ -2,12 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { listarPersonagens, obterCampanha } from "@/lib/db";
+import { dificuldadeDe, tamanhoDe } from "@/lib/mestre/estilo";
 import { acessoNaPagina, daMaquinaNaPagina } from "@/lib/rede/acesso";
 import { obterSistema } from "@/lib/sistemas";
+import { temaDoSistema } from "@/lib/temas";
+import { TemaPagina } from "@/components/tema-pagina";
 import { excluirCampanhaAcao, salvarAjustesAcao } from "./acoes";
 import { FormularioCampanha, FormularioExcluir, FormularioPin } from "./formularios";
 
-// Ajustes da mesa: nome, cenário, tom, modo (livre/rodada), PIN da rede e exclusão.
+// Ajustes da mesa: nome, cenário, tom, modo (livre/rodada), dados, estilo do mestre, PIN da rede e exclusão.
 // Pela rede a página abre só para leitura; quem manda no salão é a máquina da taverna.
 
 export const dynamic = "force-dynamic";
@@ -38,7 +41,10 @@ export default async function AjustesMesa(props: PageProps<"/mesa/[id]/ajustes">
   const grupo = listarPersonagens(campanha.id);
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 px-4 py-8 [&_:focus-visible]:outline-2 [&_:focus-visible]:outline-offset-2 [&_:focus-visible]:outline-ambar">
+    <main
+      data-tema={temaDoSistema(campanha.sistema)}
+      className="mx-auto max-w-3xl space-y-6 px-4 py-8 [&_:focus-visible]:outline-2 [&_:focus-visible]:outline-offset-2 [&_:focus-visible]:outline-ambar">
+      <TemaPagina tema={temaDoSistema(campanha.sistema)} />
       <div>
         <Link href={`/mesa/${campanha.id}`} className="-my-2 inline-block py-2 text-xs text-muted hover:text-ambar">
           ← voltar para a mesa
@@ -66,6 +72,10 @@ export default async function AjustesMesa(props: PageProps<"/mesa/[id]/ajustes">
             modo: campanha.config.modo ?? "livre",
             dados: campanha.config.dados ?? "jogador",
             sugestoes: campanha.config.sugestoes !== false,
+            dificuldade: dificuldadeDe(campanha.config.dificuldade),
+            narracao: tamanhoDe(campanha.config.narracao),
+            foco: campanha.config.foco ?? [],
+            instrucoes: campanha.config.instrucoes ?? "",
           }}
           bloqueado={!local}
         />

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { atualizarCampanha, excluirCampanha, listarFila, obterCampanha } from "@/lib/db";
 import { cancelarTurno, forcarRodada } from "@/lib/mestre";
+import { dificuldadeDe, FOCOS, MAX_FOCO_LIVRE, MAX_INSTRUCOES, tamanhoDe } from "@/lib/mestre/estilo";
 import { daMaquinaNaPagina } from "@/lib/rede/acesso";
 import { publicar } from "@/lib/tempo-real";
 
@@ -28,7 +29,20 @@ export async function salvarAjustesAcao(campanhaId: number, _anterior: EstadoAju
   const dados = form.get("dados") === "automatico" ? "automatico" : "jogador";
   const sugestoes = form.get("sugestoes") === "on";
 
-  atualizarCampanha(campanha.id, { nome, cenario, tom, config: { ...campanha.config, modo, dados, sugestoes } });
+  // estilo do mestre: o que não for opção conhecida volta ao padrão
+  const dificuldade = dificuldadeDe(form.get("dificuldade"));
+  const narracao = tamanhoDe(form.get("narracao"));
+  const foco = [...new Set(form.getAll("foco").map(String))].filter((f) => FOCOS.some((x) => x.id === f));
+  const focoLivre = String(form.get("focoLivre") ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_FOCO_LIVRE);
+  if (focoLivre) foco.push(focoLivre);
+  const instrucoes = String(form.get("instrucoes") ?? "").replace(/\r\n/g, "\n").trim().slice(0, MAX_INSTRUCOES);
+
+  atualizarCampanha(campanha.id, {
+    nome,
+    cenario,
+    tom,
+    config: { ...campanha.config, modo, dados, sugestoes, dificuldade, narracao, foco, instrucoes },
+  });
   // nome, tom e modo aparecem nos aparelhos: todo mundo recarrega o estado
   publicar(campanha.id, { e: "recarregar" });
   // saindo da rodada, as ações que esperavam os atrasados já podem ir para o mestre

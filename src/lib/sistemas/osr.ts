@@ -683,7 +683,7 @@ FILOSOFIA
 - Encontros aleatórios: na masmorra role 1d6 a cada 2 turnos (1 = encontro); ao ar livre, uma vez por período do dia. Use rolar_dados.
 - Reação de monstros: quando um encontro não é óbvio, role 2d6 com rolar_dados (ou teste "Reação" do personagem que fala, que soma o CAR): 2 ataca, 3-5 hostil, 6-8 incerto, 9-11 aceita conversa, 12 amigável. Monstro não é saco de XP; muitos negociam, fogem ou cobram pedágio.
 - Moral: monstros rolam 2d6 contra a moral (2-12) quando o primeiro deles morre e quando metade cai; se passar da moral, fogem ou se rendem. Seguidores dos jogadores usam teste "Moral" (alvo = lealdade).
-COMO CHAMAR A FERRAMENTA teste
+COMO PEDIR O TESTE (teste ou pedir_teste)
 - Atributo: teste = "FOR", "DES", "Inteligência"... É ROLAR ABAIXO: d20 ≤ atributo. alvo é ignorado; dificuldade vai em modificador (+2 fácil, −2 difícil, −4 muito difícil). 1 natural é espetacular, 20 natural é desastre.
 - Salvaguarda: teste = "Salvaguarda contra Morte" (veneno também), "contra Varinhas", "contra Paralisia" (petrificação), "contra Sopro", "contra Magias" (bastões, cajados). d20 ≥ valor da ficha → "Salvo!". Não passe alvo; modificador para circunstâncias.
 - Ataque: teste = "Ataque" (corpo a corpo, soma FOR) ou "Ataque à distância" (arco/funda/besta, soma DES), alvo = CA ASCENDENTE do inimigo (sem armadura 10-12, couro 12, cota 14, placas 16, +1 escudo; CA descendente d vira 19 − d). 20 natural sempre acerta, 1 sempre erra. "Ataque pelas costas" dá +4 (ladrão/assassino/acrobata/meio-orc dobram o dano). "Assassinar" (assassino): +4 e, se acertar, o alvo salva contra Morte ou morre. Os detalhes mostram o THAC0 equivalente. Dano: arma da classe (d4 adaga, d6 espada curta/maça/arco, d8 espada, d10 duas mãos) + FOR no corpo a corpo; monstros causam o dano da ficha deles.
@@ -705,7 +705,17 @@ NÍVEIS
 - Cada classe tem sua tabela de XP e nível máximo (humanos até 14; anão 12, elfo e drow 10, halfling, gnomo, meio-orc e svirfneblin 8). PV: dado de vida + CON até o 9º nível; depois +1 a +3 fixos. Salvaguardas e ataque melhoram em faixas; habilidades de ladrão sobem todo nível; magias novas aparecem nas tabelas.
 - No 9º nível, guerreiros, clérigos, ladrões e afins ganham fortaleza, templo ou guilda e seguidores. Seguidores máximos e lealdade vêm do CAR.
 RAÇA
-- Modo raça separada: Humano, Anão, Elfo, Halfling, Gnomo, Meio-elfo, Meio-orc, Drow, Svirfneblin ou Duergar com qualquer classe humana (ajustes de atributo e traços aplicados). Raças-classe (Anão, Elfo, Halfling, Gnomo, Meio-orc, Drow, Svirfneblin, Duergar, Meio-elfo como CLASSE) ignoram a raça escolhida: a raça da ficha vira a da classe.`,
+- Modo raça separada: Humano, Anão, Elfo, Halfling, Gnomo, Meio-elfo, Meio-orc, Drow, Svirfneblin ou Duergar com qualquer classe humana (ajustes de atributo e traços aplicados). Raças-classe (Anão, Elfo, Halfling, Gnomo, Meio-orc, Drow, Svirfneblin, Duergar, Meio-elfo como CLASSE) ignoram a raça escolhida: a raça da ficha vira a da classe.
+COMO MESTRAR OSR
+- Decisão do jogador acima da ficha: descreva o lugar com coisas para mexer (alavanca, poça, estátua de olhos de vidro) e pergunte "como, exatamente?". O que está à vista não pede rolagem; procurar pede dizer onde e como, e gasta tempo.
+- Informação antes do perigo: barulho atrás da porta, rastro, ossos roídos. Armadilha justa deixa pista; o resto é escolha do grupo.
+- Tempo de masmorra: conte os turnos de 10 minutos no momento da cena (atualizar_cena, ex.: "turno 4 · tocha 2/6"). Cada turno custa: tocha acaba, encontro aleatório a cada 2 turnos, pausa obrigatória a cada hora. Barulho e demora atraem monstros.
+- Reação e moral antes da espada: deixe o monstro negociar, cobrar pedágio, fugir ou mentir. Inimigo em fuga é informação e perigo futuro, não XP fácil.
+- XP por ouro: o tesouro é guardado, escondido e pesado; tirá-lo da masmorra é o desafio (carga, carregadores, mulas).
+- Contratados são gente: têm preço, medo e lealdade; maltratados, fogem ou traem.
+- Salvaguarda é a última chance contra o desastre (veneno, sopro, petrificação): o perigo é anunciado antes, pela descrição.
+- Morte é real e rápida: não amacie dados nem salve ninguém de uma má decisão; personagem novo entra logo (contratado promovido, prisioneiro libertado).
+- Mundo vivo: a masmorra tem facções e ecologia, e o que o grupo faz muda o que vem depois. Anote facções e rumores no diário.`,
 
   atributosIniciais(classeId, metodo) {
     const classe = classePorId(classeId);

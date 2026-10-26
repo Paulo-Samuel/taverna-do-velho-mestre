@@ -31,6 +31,12 @@ export function ListaSugestoes({
             </span>
             <span className="min-w-0 flex-1 leading-snug text-foreground/90 group-hover:text-foreground">{s.texto}</span>
             {s.pericia && <span className="shrink-0 text-xs text-muted">{s.pericia}</span>}
+            {/* atalho de teclado (1, 2, 3): só onde há teclado de verdade */}
+            {i < 9 && (
+              <kbd className="hidden shrink-0 rounded border border-border/80 px-1.5 text-[10px] leading-4 text-muted [@media(pointer:fine)]:inline" aria-hidden>
+                {i + 1}
+              </kbd>
+            )}
           </button>
         </li>
       ))}
@@ -48,6 +54,7 @@ export function PainelAcao({
   enviar,
   topo,
   campoRef,
+  preencher,
 }: {
   sugestoes: SugestaoAcao[];
   mostrarSugestoes: boolean;
@@ -60,8 +67,16 @@ export function PainelAcao({
   /** linha acima do campo (personagem ativo, estado do mestre) */
   topo?: ReactNode;
   campoRef?: React.RefObject<HTMLTextAreaElement | null>;
+  /** põe um texto no campo (ex.: a ação devolvida depois de desfazer o turno); `n` muda a cada pedido */
+  preencher?: { texto: string; n: number } | null;
 }) {
   const [texto, setTexto] = useState("");
+  // pedido novo de preencher: ajusta o estado durante a renderização (sem efeito), como manda o React
+  const [preenchido, setPreenchido] = useState(0);
+  if (preencher && preencher.n !== preenchido) {
+    setPreenchido(preencher.n);
+    setTexto(preencher.texto);
+  }
   const [enviando, setEnviando] = useState(false);
   const proprio = useRef<HTMLTextAreaElement>(null);
   const campo = campoRef ?? proprio;
