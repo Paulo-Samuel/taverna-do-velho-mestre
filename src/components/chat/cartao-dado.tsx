@@ -3,7 +3,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { Mensagem } from "@/lib/db";
 
-// Cartão de uma mensagem de dado: teste de personagem (d20, d100, Fate, PbtA), rolagem livre (mestre ou jogador),
+// Cartão de uma mensagem de dado: teste de personagem (d20, d100, Fate, PbtA, parada de d10 do Vampiro V5), rolagem livre (mestre ou jogador),
 // mudança de ficha, XP, descanso, iniciativa, fim de combate, cena e diário. Tipo desconhecido cai num cartão genérico com mensagem.texto.
 // Os dados vêm do servidor (ResultadoTeste de sistemas/tipos.ts, Rolagem de dados.ts ou resumos das ferramentas).
 
@@ -173,8 +173,9 @@ function Moldura({ children, mensagem, destaque = "border-border", tom = "bg-sur
 
 // ---------- testes ----------
 
-function sabor(r: Dados): "d100" | "fate" | "pbta" | "d20" {
+function sabor(r: Dados): "vtm5" | "d100" | "fate" | "pbta" | "d20" {
   const expr = String(r.expressao ?? "").toLowerCase();
+  if (r.sistema === "vtm5" || Array.isArray(r.dadosFome)) return "vtm5";
   if (/d100|d%/.test(expr) || r.sistema === "d100") return "d100";
   if (/df/.test(expr) || r.sistema === "fate") return "fate";
   if (/^2d6/.test(expr) || r.sistema === "pbta") return "pbta";
@@ -346,6 +347,121 @@ function TestePbta({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: 
         ))}
       </div>
       {r.detalhes && <p className="mt-1 truncate text-xs text-muted">{r.detalhes}</p>}
+    </Moldura>
+  );
+}
+
+/** Dado de d10 em pipa: normal (6+ sucesso, 10 em âmbar) ou de Fome (vermelho; 10 com presas, 1 com caveira). */
+function D10({ valor, fome, despertar, i, novo }: { valor: number; fome: boolean; despertar?: boolean; i: number; novo: boolean }) {
+  const dez = valor === 10;
+  const sucesso = valor >= 6;
+  const bestial = fome && !despertar && valor === 1;
+  const cor = fome
+    ? dez
+      ? "text-ambar"
+      : bestial
+        ? "text-sangue"
+        : sucesso
+          ? "text-[#e0675a]"
+          : "text-sangue/70"
+    : dez
+      ? "text-ambar"
+      : sucesso
+        ? "text-pergaminho"
+        : "text-muted/70";
+  const titulo = fome ? (despertar ? "Despertar" : dez ? "10 de Fome" : bestial ? "1 de Fome: a Besta" : "dado de Fome") : dez ? "10" : sucesso ? "sucesso" : "falha";
+  return (
+    <span
+      className={`relative inline-grid size-9 shrink-0 place-items-center ${cor} ${novo ? "cd-face" : ""}`}
+      style={{ ["--i" as string]: i }}
+      title={`${titulo}: ${valor}`}
+      aria-label={`${titulo}: ${valor}`}
+    >
+      <svg viewBox="0 0 100 100" className="absolute inset-0" aria-hidden>
+        <polygon
+          points="50,4 92,40 50,96 8,40"
+          fill={fome ? "var(--sangue)" : "currentColor"}
+          fillOpacity={fome ? (dez || sucesso ? 0.35 : 0.22) : dez ? 0.18 : 0.08}
+          stroke={fome ? "var(--sangue)" : "currentColor"}
+          strokeWidth={dez ? 7 : 5}
+          strokeLinejoin="round"
+        />
+        <polyline points="8,40 50,58 92,40" fill="none" stroke={fome ? "var(--sangue)" : "currentColor"} strokeOpacity=".4" strokeWidth="3" />
+      </svg>
+      <span className={`relative -mt-1 text-xs font-semibold tabular-nums ${dez ? "text-sm" : ""}`}>{valor}</span>
+      {fome && dez && !despertar && (
+        <span className="absolute -right-1 -top-1.5 text-[10px] text-sangue" aria-hidden>
+          ᐯᐯ
+        </span>
+      )}
+      {bestial && (
+        <span className="absolute -right-1 -top-1.5 text-[11px]" aria-hidden>
+          ☠
+        </span>
+      )}
+    </span>
+  );
+}
+
+const ROTULO_VTM: Record<string, string> = {
+  "Crítico Sujo": "text-sangue",
+  "Falha Bestial": "text-sangue",
+  Crítico: "text-ambar",
+};
+
+/** Teste de Vampiro V5: parada de d10, dados de Fome em vermelho, sucessos contados. */
+function TesteVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: boolean }) {
+  const dados: number[] = Array.isArray(r.dados) ? r.dados : [];
+  const fome: number[] = Array.isArray(r.dadosFome) ? r.dadosFome : [];
+  const normais = dados.slice(0, Math.max(0, dados.length - fome.length));
+  const despertar = r.vtm === "despertar";
+  const total = num(r.total) ?? 0;
+  const alvo = num(r.alvo);
+  const rotulo = String(r.rotuloGrau ?? "");
+  const cor = ROTULO_VTM[rotulo] ?? COR_GRAU[r.grau] ?? "text-foreground";
+  const sujo = rotulo === "Crítico Sujo";
+  const bestial = rotulo === "Falha Bestial" || r.grau === "falha_critica";
+  const destaque = sujo || bestial ? "border-sangue/70" : r.grau === "sucesso_critico" ? "border-ambar/60" : despertar && !r.sucesso ? "border-sangue/40" : "border-border";
+  const tom = sujo || bestial ? "bg-sangue/10" : "bg-surface-2/80";
+  const dezes = [...normais, ...fome].filter((v) => v === 10).length;
+  const pares = Math.floor(dezes / 2);
+  return (
+    <Moldura mensagem={mensagem} destaque={destaque} tom={tom}>
+      <Cabecalho r={r} mensagem={mensagem} />
+      <div className="mt-1.5 flex items-center gap-3">
+        <div className={`grid size-14 shrink-0 place-items-center rounded-full border-2 ${sujo || bestial ? "border-sangue/70" : "border-current"} ${cor} ${novo ? "dado-rolando" : ""} ${novo && (sujo || bestial || r.grau === "sucesso_critico") ? "cd-brilho" : ""}`}>
+          <span className="flex flex-col items-center leading-none">
+            <span className="titulo text-2xl">{total}</span>
+            <span className="mt-0.5 text-[9px] uppercase tracking-wider text-muted">{despertar ? "ok" : total === 1 ? "sucesso" : "sucessos"}</span>
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm">
+            <span className="text-pergaminho">{r.teste}</span>{" "}
+            <span className="text-muted">
+              {r.expressao}
+              {num(r.margem) !== null && alvo !== null && !despertar && <span className="text-muted/80"> ({r.margem >= 0 ? `+${r.margem}` : r.margem})</span>}
+            </span>
+          </p>
+          {!despertar && (
+            <p className="mt-0.5 text-[11px] text-muted">
+              {num(r.parada) ?? dados.length} dados{fome.length ? <span className="text-sangue"> · {fome.length} de Fome</span> : null}
+              {pares > 0 && <span className="text-ambar"> · {pares} par{pares > 1 ? "es" : ""} de 10</span>}
+            </p>
+          )}
+        </div>
+        <Grau r={r} cor={cor} novo={novo} />
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1">
+        {normais.map((v, i) => (
+          <D10 key={`n${i}`} valor={v} fome={false} i={i} novo={novo} />
+        ))}
+        {fome.length > 0 && normais.length > 0 && <span className="mx-0.5 h-6 w-px bg-sangue/40" aria-hidden />}
+        {fome.map((v, i) => (
+          <D10 key={`f${i}`} valor={v} fome despertar={despertar} i={normais.length + i} novo={novo} />
+        ))}
+      </div>
+      {r.detalhes && <p className={`mt-1.5 text-xs ${sujo || bestial ? "text-sangue/90" : "text-muted"}`}>{r.detalhes}</p>}
     </Moldura>
   );
 }
@@ -608,6 +724,7 @@ function Conteudo({ mensagem, novo }: { mensagem: Mensagem; novo: boolean }) {
   switch (r.tipo) {
     case "teste": {
       const s = sabor(r);
+      if (s === "vtm5") return <TesteVtm r={r} mensagem={mensagem} novo={novo} />;
       if (s === "d100") return <TesteD100 r={r} mensagem={mensagem} novo={novo} />;
       if (s === "fate") return <TesteFate r={r} mensagem={mensagem} novo={novo} />;
       if (s === "pbta") return <TestePbta r={r} mensagem={mensagem} novo={novo} />;

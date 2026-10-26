@@ -17,6 +17,7 @@ import * as identidade from "@/lib/cliente/identidade";
 import { useMesa, type Mesa as EstadoVivo } from "@/lib/cliente/use-mesa";
 import { INICIO } from "@/lib/constantes";
 import type { EstadoMesa } from "@/lib/mesa";
+import { AvisoDarkPack } from "@/components/aviso-dark-pack";
 
 // Casca da mesa de jogo: chat com o mestre, campo de ação e painéis laterais.
 // Cada painel é um componente próprio em src/components/*, que recebe o estado vivo da mesa.
@@ -87,6 +88,11 @@ function Lateral({ mesa, acoes }: { mesa: EstadoVivo; acoes: ReturnType<typeof u
         <p>
           {mesa.sistema.nomeCurto} · Mestre: {mesa.provedor}
         </p>
+        {mesa.sistema.id === "vtm5" && (
+          <div className="mt-3">
+            <AvisoDarkPack compacto />
+          </div>
+        )}
         {mesa.limite?.uso != null && (
           <p className="mt-1">
             Uso do plano: {Math.round(mesa.limite.uso * 100)}% da {NOMES_JANELAS[mesa.limite.janela] ?? mesa.limite.janela}

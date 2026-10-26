@@ -1,7 +1,7 @@
 # Licenças do conteúdo de jogo
 
 O código da Taverna do Velho Mestre é do autor do repositório. As **regras de jogo** de cada sistema vêm de conteúdo com
-licença aberta. Todas as descrições foram escritas pela taverna, em português, com palavras próprias; nenhum cenário, divindade
+licença aberta (Vampiro: A Máscara é a exceção: entra como fã-conteúdo gratuito sob o Dark Pack, ver abaixo). Todas as descrições foram escritas pela taverna, em português, com palavras próprias; nenhum cenário, divindade
 ou marca registrada (Product Identity / Reserved Material) é usado.
 
 ## D&D 5ª Edição — SRD 5.2 (`src/lib/sistemas/dnd5e*`)
@@ -34,6 +34,18 @@ Attribution 3.0 Unported license (http://creativecommons.org/licenses/by/3.0/).
 
 Baseado em *Dungeon World*, de Sage LaTorra e Adam Koebel, licenciado sob Creative Commons Attribution 3.0 Unported
 (http://creativecommons.org/licenses/by/3.0/).
+
+## Vampiro: A Máscara 5ª edição (`src/lib/sistemas/vtm5*`) — fã-conteúdo Dark Pack
+
+<img src="public/darkpack.png" alt="Dark Pack" width="96">
+
+Fã-conteúdo **gratuito e não oficial**, feito sob a política Dark Pack da Paradox Interactive
+(https://www.paradoxinteractive.com/games/world-of-darkness/community/dark-pack-agreement). Não é material oficial de World
+of Darkness e não tem nenhuma cobrança, compra dentro do app ou monetização. As mecânicas foram descritas com palavras
+próprias; nenhum texto dos livros é reproduzido.
+
+Portions of the materials are the copyrights and trademarks of Paradox Interactive AB, and are used with permission. All
+rights reserved. For more information please visit worldofdarkness.com.
 
 ## Pathfinder 1e e Old-School B/X (`src/lib/sistemas/pf1e*`, `src/lib/sistemas/osr*`) — Open Game License 1.0a
 

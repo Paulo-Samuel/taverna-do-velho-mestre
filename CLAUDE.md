@@ -23,6 +23,14 @@ licenças das regras em LICENCAS.md.
 
 Para testar a interface sem gastar nada, use `TAVERNA_PROVEDOR=falso` (mestre de teste sem IA).
 
+### Atalho na Área de Trabalho (Windows)
+
+`iniciar-taverna.ps1` liga a taverna em modo de produção (instala dependências e compila quando precisa), espera subir e
+abre o navegador; fechar a janela desliga. Se a pessoa pedir um atalho, crie um `.lnk` na Área de Trabalho
+(`[Environment]::GetFolderPath("Desktop")`) apontando para
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File "<pasta do repo>\iniciar-taverna.ps1"`, com pasta de trabalho no
+repo e ícone `assets\taverna.ico`. `iniciar-taverna.cmd` faz o mesmo com duplo clique.
+
 ## Regras importantes
 
 - O modo `cli` é para uso pessoal: o login da própria pessoa, na própria máquina. Não exponha a taverna na internet nem

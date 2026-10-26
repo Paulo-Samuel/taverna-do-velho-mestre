@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { adicionarMensagem, listarPersonagens, obterCampanha } from "@/lib/db";
+import { adicionarMensagem, listarPersonagens, obterCampanha, salvarFicha } from "@/lib/db";
+import { publicarPersonagem } from "@/lib/mesa";
 import { descreverRolagem, expressaoValida, rolar } from "@/lib/dados";
 import { acessoPermitido } from "@/lib/rede/acesso";
 import { obterSistema } from "@/lib/sistemas";
@@ -72,6 +73,13 @@ export async function POST(request: Request, ctx: RouteContext<"/api/campanhas/[
       });
       texto = `${personagem.ficha.nome} · ${r.teste} — ${r.motivo}: ${r.expressao} → ${r.total}${r.alvo !== null ? ` vs ${r.alvo}` : ""} · ${r.rotuloGrau}`;
       dados = { ...r, origem: "jogador" };
+      // efeitos do teste na ficha (ex.: Despertar falho sobe a Fome no VtM), como nos testes pedidos pelo mestre;
+      // rolagem "só para mim" é segredo e não mexe em nada
+      const nova = privada ? null : sistema.aposTeste?.(personagem.ficha, r);
+      if (nova) {
+        salvarFicha(personagem.id, nova);
+        publicarPersonagem(campanha.id, { ...personagem, ficha: nova });
+      }
     } catch (e) {
       return erro(e instanceof Error ? e.message : "O sistema não soube resolver esse teste.");
     }

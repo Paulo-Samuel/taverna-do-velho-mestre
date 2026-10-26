@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { sistemasPublicos } from "@/lib/sistemas";
+import { AvisoDarkPack, DECLARACAO_DARK_PACK } from "@/components/aviso-dark-pack";
 import { Catalogo, type ItemCatalogo } from "./catalogo";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ const ATRIBUICAO: Record<string, string> = {
   d100: "Baseado no Basic Roleplaying: Universal Game Engine, de Chaosium Inc., sob a ORC License. Não usa marcas nem cenários da Chaosium.",
   fate:
     "This work is based on Fate Core System and Fate Accelerated Edition (found at http://www.faterpg.com/), products of Evil Hat Productions, LLC, developed, authored, and edited by Leonard Balsera, Brian Engard, Jeremy Keller, Ryan Macklin, Mike Olson, Clark Valentine, Amanda Valentine, Fred Hicks, and Rob Donoghue, and licensed for our use under the Creative Commons Attribution 3.0 Unported license (http://creativecommons.org/licenses/by/3.0/).",
+  vtm5: `Fã-conteúdo gratuito e não oficial sob a política Dark Pack da Paradox Interactive. Vampire: The Masquerade e World of Darkness são marcas da Paradox Interactive AB. ${DECLARACAO_DARK_PACK}`,
   pbta: "Baseado em Dungeon World, de Sage LaTorra e Adam Koebel, licenciado sob Creative Commons Attribution 3.0 Unported (http://creativecommons.org/licenses/by/3.0/).",
 };
 
@@ -26,6 +28,7 @@ const MECANICA: Record<string, string> = {
   d20: "d20 + modificador contra uma dificuldade",
   d100: "rolar abaixo da porcentagem da perícia",
   "4dF": "quatro dados Fate (+, −, branco) somados à escada",
+  d10: "parada de d10 (atributo + perícia): 6+ é sucesso, par de 10 é crítico e os dados de Fome mordem",
   "2d6": "2d6 + atributo: 10+ acerto, 7–9 com custo, 6− o mestre faz um movimento",
 };
 
@@ -61,10 +64,13 @@ export default function PaginaSistemas() {
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
       <h1 className="titulo text-3xl text-pergaminho sm:text-4xl">Sistemas da casa</h1>
       <p className="mt-2 max-w-2xl text-muted">
-        {itens.length} jeitos de rolar dados e se arrepender, {prontos} já servidos na mesa. Todos de licença aberta: a taverna escreveu as
-        descrições com as próprias palavras (e o próprio veneno).
+        {itens.length} jeitos de rolar dados e se arrepender, {prontos} já servidos na mesa. Quase todos de licença aberta (Vampiro entra como fã-conteúdo do Dark Pack): a
+        taverna escreveu as descrições com as próprias palavras (e o próprio veneno).
       </p>
       <Catalogo itens={itens} />
+      <div className="mt-10 border-t border-border pt-6">
+        <AvisoDarkPack />
+      </div>
     </main>
   );
 }

@@ -59,11 +59,16 @@ mora em `src/lib/sistemas/<id>.ts` (com dados em `src/lib/sistemas/<id>/`) e imp
 | `d100` | Horror investigativo (d100) | rolar abaixo da porcentagem | Basic Roleplaying, ORC License |
 | `fate` | Fate Acelerado | 4dF + abordagem na escada | Creative Commons BY 3.0 |
 | `pbta` | Dungeon World (PbtA) | 2d6 + atributo: 10+, 7–9, 6− | Creative Commons BY 3.0 |
+| `vtm5` | Vampiro: A Máscara 5ª edição | parada de d10, Fome, Humanidade | Fã-conteúdo não oficial (Dark Pack, Paradox) |
 
 Todas as descrições foram escritas pela taverna, em português e com as próprias palavras; nenhum texto de livro foi copiado.
 Nomes de cenário, divindades e outras marcas ("Product Identity") ficam de fora.
 
 ### Atribuições
+
+- **Vampiro: A Máscara (Dark Pack)** — fã-conteúdo gratuito e não oficial. Portions of the materials are the copyrights and
+  trademarks of Paradox Interactive AB, and are used with permission. All rights reserved. For more information please
+  visit worldofdarkness.com. Detalhes em [LICENCAS.md](LICENCAS.md).
 
 - **SRD 5.2** — This work includes material from the System Reference Document 5.2 (“SRD 5.2”) by Wizards of the Coast LLC,
   available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0

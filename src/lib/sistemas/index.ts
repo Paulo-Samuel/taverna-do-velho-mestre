@@ -7,10 +7,11 @@ import { osr } from "./osr";
 import { pbta } from "./pbta";
 import { pf1e } from "./pf1e";
 import { pf2e } from "./pf2e";
+import { vtm5 } from "./vtm5";
 import type { Sistema, SistemaPublico } from "./tipos";
 
 // Registro de sistemas. Para adicionar um sistema: crie o arquivo e inclua-o aqui.
-export const SISTEMAS: Sistema[] = [dnd5e, pf2e, pf1e, osr, d100, fate, pbta];
+export const SISTEMAS: Sistema[] = [dnd5e, pf2e, pf1e, osr, d100, fate, pbta, vtm5];
 
 export const SISTEMA_PADRAO = "dnd5e";
 
