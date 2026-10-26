@@ -31,7 +31,25 @@ export type ContextoFerramentas = {
   personagens: Personagem[];
   /** fecha o trecho de narração em andamento antes de registrar um resultado (mantém a ordem no chat) */
   antes: () => void;
+  /** quantos caracteres de narração o mestre já escreveu neste turno */
+  narrado?: () => number;
+  /** grava um trecho de narração vindo da ferramenta `narrar` (na ordem certa do chat) */
+  narrar?: (texto: string) => void;
+  /** mínimo de narração antes de sugerir ações ou pedir teste (0 = sem cobrança, ex.: conversa fora do jogo) */
+  exigirNarracao?: number;
+  /** a cobrança acontece uma vez por turno, para nunca travar o mestre num laço */
+  cobrado?: boolean;
 };
+
+/** O mestre às vezes registra cena e diário e pula direto para as sugestões, sem narrar. A ferramenta recusa uma vez e pede o texto. */
+function cobrarNarracao(ctx: ContextoFerramentas, oQue: string) {
+  const minimo = ctx.exigirNarracao ?? 0;
+  if (!minimo || ctx.cobrado || !ctx.narrado || ctx.narrado() >= minimo) return;
+  ctx.cobrado = true;
+  throw new Error(
+    `Falta a narração deste turno: o jogador ainda não leu NADA da cena. O que você escreveu no raciocínio interno não aparece para ele. Chame AGORA a ferramenta narrar com a narração completa no tamanho combinado (onde estão, o que acontece, quem fala, o gancho), e só depois ${oQue} de novo.`,
+  );
+}
 
 /** Sistema sem tabela de XP: o mestre sobe de nível por marcos. */
 const porMarcos = (s: Sistema) => {
@@ -273,6 +291,19 @@ export function definirFerramentas(ctx: ContextoFerramentas): DefFerramenta[] {
     });
   }
 
+  // texto pensado no raciocínio não chega ao jogador; esta ferramenta garante que a narração apareça
+  lista.push({
+    name: "narrar",
+    description:
+      "Mostra a narração ao jogador, como um trecho do livro da aventura. Use SEMPRE na abertura e sempre que a narração vier entre ferramentas. O que você só pensa no raciocínio NÃO aparece para o jogador. Prosa no tamanho combinado, falas entre aspas. Não repita o mesmo texto fora da ferramenta.",
+    input_schema: {
+      type: "object",
+      properties: { texto: { type: "string", description: "A narração completa deste momento (parágrafos separados por linha em branco)." } },
+      required: ["texto"],
+      additionalProperties: false,
+    },
+  });
+
   if (mostraSugestoes) {
     lista.push({
       name: "sugerir_acoes",
@@ -377,6 +408,7 @@ const ENTRADAS = {
     perigoso: z.boolean().optional(),
     motivo: z.string().default(""),
   }),
+  narrar: z.object({ texto: z.string().min(1) }),
   sugerir_acoes: z.object({
     acoes: z.array(z.object({ texto: z.string().trim().min(1).max(200), pericia: z.string().max(40).optional() })).max(6),
   }),
@@ -1039,6 +1071,7 @@ export async function executarFerramenta(ctx: ContextoFerramentas, nome: string,
 
   if (nome === "pedir_teste") {
     const e = ENTRADAS.pedir_teste.parse(entradaBruta);
+    cobrarNarracao(ctx, "peça o teste");
     const p = acharPersonagem(ctx, e.personagem);
     if (testesPendentes(ctx.campanha.id).some((m) => m.personagemId === p.id)) {
       throw new Error(`${p.ficha.nome} já tem um teste esperando o jogador rolar. Termine o turno.`);
@@ -1074,8 +1107,16 @@ export async function executarFerramenta(ctx: ContextoFerramentas, nome: string,
     };
   }
 
+  if (nome === "narrar") {
+    const e = ENTRADAS.narrar.parse(entradaBruta);
+    if (!ctx.narrar) throw new Error("Narração indisponível neste turno: escreva o texto na resposta.");
+    ctx.narrar(e.texto);
+    return { ok: true, mostrado: "O jogador já está lendo esta narração." };
+  }
+
   if (nome === "sugerir_acoes") {
     const e = ENTRADAS.sugerir_acoes.parse(entradaBruta);
+    cobrarNarracao(ctx, "chame sugerir_acoes");
     const cena = cenaAtual(ctx);
     cena.sugestoes = e.acoes.slice(0, 4).map((a) => ({ texto: a.texto, ...(a.pericia ? { pericia: a.pericia } : {}) }));
     gravarCena(ctx, cena);

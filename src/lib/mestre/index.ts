@@ -209,20 +209,35 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
     doTurno.push({ personagem: nomeDoPersonagem(personagens, a.personagemId), autor: a.autor, acao: a.acao });
   }
 
+  const provedor = provedorAtual();
   let trecho = "";
+  let narrado = 0;
+  // quanto de narração cobrar antes de sugestões/testes: a abertura precisa da cena inteira; fala fora do jogo não cobra nada
+  // (o mestre de teste tem falas prontas e curtas: não cobra)
+  const soForaDoJogo = doTurno.length > 0 && doTurno.every((a) => /^\s*\(\(.*\)\)\s*$/s.test(a.acao));
+  const exigirNarracao = provedor.id === "falso" || soForaDoJogo ? 0 : inicio && !doTurno.length ? 400 : 150;
   const fecharTrecho = () => {
     const texto = trecho.trim();
     trecho = "";
     if (texto) publicar(campanhaId, { e: "mensagem", mensagem: adicionarMensagem(campanhaId, "mestre", texto) });
   };
 
-  const ctx: ContextoFerramentas = { campanha, sistema, personagens, antes: fecharTrecho };
+  // narração entregue pela ferramenta `narrar`: fecha o que veio como texto antes e entra no chat na mesma ordem
+  const narrar = (t: string) => {
+    fecharTrecho();
+    const texto = t.trim();
+    if (!texto) return;
+    narrado += texto.length;
+    publicar(campanhaId, { e: "mensagem", mensagem: adicionarMensagem(campanhaId, "mestre", texto) });
+  };
+
+  const ctx: ContextoFerramentas = { campanha, sistema, personagens, antes: fecharTrecho, narrado: () => narrado, narrar, exigirNarracao };
   const ferramentas = definirFerramentas(ctx);
   const executar = (nome: string, entrada: unknown) => executarFerramenta(ctx, nome, entrada);
   const token = registrarTurno({ ferramentas, executar });
 
   try {
-    await provedorAtual().turno({
+    await provedor.turno({
       sistema: promptDoSistema(campanha, sistema, personagens),
       prompt: promptDoTurno(recentes, personagens, inicio && !doTurno.length ? "inicio" : doTurno),
       ferramentas,
@@ -232,6 +247,7 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
       emitir: (ev) => {
         if (ev.tipo === "texto") {
           trecho += ev.texto;
+          narrado += ev.texto.trim().length;
           publicar(campanhaId, { e: "texto", texto: ev.texto });
         } else if (ev.tipo === "limite") {
           publicar(campanhaId, { e: "limite", janela: ev.janela, uso: ev.uso, renovaEm: ev.renovaEm });

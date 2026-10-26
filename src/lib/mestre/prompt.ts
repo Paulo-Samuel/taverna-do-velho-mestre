@@ -19,7 +19,7 @@ const regrasDoMestre = (tamanho: string) => `Você é o Velho Mestre da Taverna:
 - Sem repetição nem clichê: não reabra com a mesma imagem nem repita bordões; nada de "de repente" ou "um arrepio percorre sua espinha". Varie o tamanho das frases e o tipo de ameaça.
 
 ## Turno
-- Ordem (a tela mostra nessa ordem): 1) \`atualizar_cena\` se mudou o lugar, a hora ou o clima; 2) a narração; 3) o teste, se precisar, só DEPOIS da narração; 4) \`sugerir_acoes\` por último, se existir. Registros (\`alterar_ficha\`, \`anotar_diario\`, \`conceder_xp\`) entram quando o fato acontece. Depois da última ferramenta, no máximo uma frase curta.
+- Ordem (a tela mostra nessa ordem): 1) \`atualizar_cena\` se mudou o lugar, a hora ou o clima; 2) a narração; 3) o teste, se precisar, só DEPOIS da narração; 4) \`sugerir_acoes\` por último, se existir. Registros (\`alterar_ficha\`, \`anotar_diario\`, \`conceder_xp\`) entram quando o fato acontece. A narração completa vem ANTES de \`sugerir_acoes\`, como texto da resposta ou pela ferramenta \`narrar\` (use \`narrar\` sempre que a narração vier depois de outras ferramentas; o raciocínio interno não aparece para o jogador: nunca narre só nele) (pode vir depois de outras ferramentas, mas nunca é trocada por elas); depois de \`sugerir_acoes\`, no máximo uma frase curta.
 - Resolva as ações na ordem da ficção (em combate, na da iniciativa). Com vários personagens, divida o holofote: quem agiu pouco ganha uma pergunta direta ou um gancho pessoal; ninguém domina duas respostas seguidas.
 - Termine SEMPRE dizendo de quem é a vez e o que está em jogo.
 
@@ -231,7 +231,7 @@ export function promptDoTurno(recentes: Mensagem[], personagens: Personagem[], a
   const historico = transcricao(recentes, personagens);
   const pedido =
     acoes === "inicio"
-      ? "[início da campanha]"
+      ? "[início da campanha]\n\nAbra a aventura nesta ordem: 1) atualizar_cena; 2) a ferramenta narrar com a CENA DE ABERTURA completa, no tamanho combinado para a abertura: onde o personagem está, o que vê, ouve e sente, quem está ali e o que diz, e o gancho ligado à história dele, terminando com a pergunta do que ele faz; 3) anotar_diario com a missão e os NPCs; 4) sugerir_acoes. O que você rascunha no raciocínio NÃO aparece para o jogador: sem o narrar ele não sabe onde está nem por quê."
       : acoes.length === 1
         ? `Nova ação${acoes[0].personagem ? ` de ${acoes[0].personagem}` : ""}:\n${acoes[0].acao}`
         : `Ações desta rodada:\n${acoes.map((a) => `- ${a.personagem ?? a.autor}: ${a.acao}`).join("\n")}`;
@@ -241,7 +241,8 @@ export function promptDoTurno(recentes: Mensagem[], personagens: Personagem[], a
       ? personagens.filter((p) => !recentes.slice(-12).some((m) => m.tipo === "jogador" && m.personagemId === p.id) && !acoes.some((a) => a.personagem === p.ficha.nome))
       : [];
   const holofote = calados.length ? `\n(Holofote: ${calados.map((p) => p.ficha.nome).join(", ")} não agiu há um tempo; dê espaço.)` : "";
-  return `${historico ? `Cena até aqui (mais recente por último):\n\n${historico}\n\n---\n\n` : ""}${pedido}\n\n${LEMBRETE}${holofote}`;
+  // na abertura o lembrete do checklist distrai: o que importa é a cena
+  return `${historico ? `Cena até aqui (mais recente por último):\n\n${historico}\n\n---\n\n` : ""}${pedido}${acoes === "inicio" ? "" : `\n\n${LEMBRETE}`}${holofote}`;
 }
 
 export const SISTEMA_RESUMO = `Você mantém o diário de uma campanha de RPG. Reescreva o resumo incorporando os acontecimentos novos.
