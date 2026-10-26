@@ -22,6 +22,19 @@ const MODOS = [
   },
 ] as const;
 
+const DADOS = [
+  {
+    id: "jogador",
+    nome: "O jogador, na tela",
+    texto: "O mestre pede o teste e espera. Você clica e rola: d20 em 3D, ou a parada do sistema (d10 do Vampiro, d100, Fate). Mais suspense, um clique a mais.",
+  },
+  {
+    id: "automatico",
+    nome: "O mestre, na hora",
+    texto: "O servidor rola assim que o mestre pede e ele já narra o resultado. Mais rápido, menos cerimônia.",
+  },
+] as const;
+
 function Aviso({ estado }: { estado: EstadoAjustes }) {
   if (estado.erro) return <p className="text-sm text-sangue">{estado.erro}</p>;
   if (estado.ok) return <p className="text-sm text-musgo">{estado.ok}</p>;
@@ -34,11 +47,12 @@ export function FormularioCampanha({
   bloqueado,
 }: {
   acao: Acao;
-  inicial: { nome: string; cenario: string; tom: string; modo: "livre" | "rodada" };
+  inicial: { nome: string; cenario: string; tom: string; modo: "livre" | "rodada"; dados: "jogador" | "automatico"; sugestoes: boolean };
   bloqueado: boolean;
 }) {
   const [estado, enviar, enviando] = useActionState(acao, { erro: null });
   const [modo, setModo] = useState(inicial.modo);
+  const [dados, setDados] = useState(inicial.dados);
   return (
     <form action={enviar} className="space-y-4">
       <fieldset disabled={bloqueado} className="space-y-4">
@@ -77,6 +91,30 @@ export function FormularioCampanha({
             ))}
           </div>
         </fieldset>
+        <fieldset>
+          <legend className="mb-2 text-sm text-muted">Quem rola os testes</legend>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {DADOS.map((m) => (
+              <label
+                key={m.id}
+                className={`cursor-pointer rounded-lg border p-3 transition ${dados === m.id ? "border-ambar bg-ambar/10" : "border-border hover:border-ambar/50"}`}
+              >
+                <span className="flex items-center gap-2">
+                  <input type="radio" name="dados" value={m.id} checked={dados === m.id} onChange={() => setDados(m.id)} className="accent-[var(--ambar)]" />
+                  <span className="font-semibold text-pergaminho">{m.nome}</span>
+                </span>
+                <span className="mt-1 block text-xs leading-relaxed text-muted">{m.texto}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <label className="flex items-start gap-2">
+          <input type="checkbox" name="sugestoes" defaultChecked={inicial.sugestoes} className="mt-1 accent-[var(--ambar)]" />
+          <span>
+            <span className="text-sm text-pergaminho">Ações sugeridas</span>
+            <span className="block text-xs text-muted">A cada turno o mestre oferece 3 opções clicáveis. Dá para escrever a própria ação do mesmo jeito.</span>
+          </span>
+        </label>
       </fieldset>
       <Aviso estado={estado} />
       <button className="btn-ambar" disabled={bloqueado || enviando}>

@@ -74,7 +74,8 @@ export function definirFerramentas(ctx: ContextoFerramentas): DefFerramenta[] {
     additionalProperties: false,
   };
 
-  const modoHistoria = ctx.campanha.config.modoJogo === "historia";
+  // ações sugeridas valem nos dois modos (botões acima do campo de ação), a menos que a mesa desligue
+  const mostraSugestoes = ctx.campanha.config.sugestoes !== false;
   const jogadorRola = jogadorRolaOsDados(ctx.campanha);
 
   const lista: DefFerramenta[] = [
@@ -270,7 +271,7 @@ export function definirFerramentas(ctx: ContextoFerramentas): DefFerramenta[] {
     });
   }
 
-  if (modoHistoria) {
+  if (mostraSugestoes) {
     lista.push({
       name: "sugerir_acoes",
       description:
@@ -423,9 +424,9 @@ const ENTRADAS = {
   }),
 };
 
-/** Quem rola os testes nesta campanha: no modo história, por padrão, o próprio jogador. */
+/** Quem rola os testes nesta campanha: por padrão o próprio jogador, na tela; "automatico" deixa o servidor rolar na hora. */
 export function jogadorRolaOsDados(c: Campanha): boolean {
-  return (c.config.dados ?? (c.config.modoJogo === "historia" ? "jogador" : "automatico")) === "jogador";
+  return (c.config.dados ?? "jogador") === "jogador";
 }
 
 export function acharPersonagem(ctx: ContextoFerramentas, nome?: string): Personagem {
@@ -1047,6 +1048,9 @@ export async function executarFerramenta(ctx: ContextoFerramentas, nome: string,
       personagemId: p.id,
       teste: previa.teste,
       testePedido: e.teste,
+      // como a parada é rolada ("1d20+4", "7d10 (2 de Fome)"), para o cartão mostrar o dado certo antes do clique
+      expressao: previa.expressao.replace(/\s+vs\s+.*$/, ""),
+      dadoPrincipal: ctx.sistema.dadoPrincipal,
       alvo: e.alvo,
       bonus: previa.bonus,
       perigoso: Boolean(e.perigoso),

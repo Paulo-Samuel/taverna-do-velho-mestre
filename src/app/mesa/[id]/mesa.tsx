@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { CartaoDado } from "@/components/chat/cartao-dado";
+import { ListaSugestoes } from "@/components/historia/painel-acao";
+import { dadosDoPedido, PedidoTeste } from "@/components/historia/pedido-teste";
 import { PainelCena } from "@/components/cena/painel-cena";
 import { Diario } from "@/components/diario/diario";
 import { PainelFicha } from "@/components/ficha/painel-ficha";
@@ -130,6 +132,19 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
   const agiram = quemAgiu(mesa);
   const faltam = mesa.personagens.filter((p) => !agiram.has(p.id));
   const euLocal = mesa.presenca.find((j) => j.clienteId === mesa.eu.clienteId)?.local ?? false;
+  // testes que o mestre pediu e que esperam o jogador rolar (mesmo fluxo do modo história)
+  const pendentes = mesa.mensagens.filter((m) => m.tipo === "dado" && dadosDoPedido(m).tipo === "pedido_teste" && dadosDoPedido(m).status === "pendente");
+  const pidDoPedido = (m: (typeof mesa.mensagens)[number]) => dadosDoPedido(m).personagemId ?? m.personagemId;
+  const meuPendente = ativo ? (pendentes.find((m) => pidDoPedido(m) === ativo.id) ?? null) : null;
+  const sugestoes = mesa.cena.sugestoes ?? [];
+  const mostrarSugestoes = !mesa.ocupado && pendentes.length === 0 && Boolean(ativo) && !minhaNaFila && sugestoes.length > 0;
+  /** Este aparelho pode rolar o teste deste personagem? Dono do personagem, máquina da taverna ou aparelho sozinho na mesa. */
+  const podeRolarPara = (pid: number | null | undefined) => {
+    if (!mesa.eu.clienteId) return false;
+    const p = mesa.personagens.find((x) => x.id === pid);
+    return mesa.eu.personagemId === pid || euLocal || mesa.presenca.length <= 1 || Boolean(p?.jogador && p.jogador === mesa.eu.apelido);
+  };
+  const irParaDado = () => meuPendente && document.getElementById(`pedido-${meuPendente.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
 
   useEffect(() => {
     fim.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -167,11 +182,12 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
     return () => clearTimeout(t);
   }, [aviso]);
 
-  async function enviar() {
-    const texto = acao.trim();
-    if (!texto) return;
+  /** Envia o campo, ou uma ação sugerida (sem apagar o que o jogador estava digitando). */
+  async function enviar(sugerida?: string) {
+    const texto = (sugerida ?? acao).trim();
+    if (!texto || meuPendente) return;
     if (!(await acoes.enviarAcao(texto))) return;
-    setAcao("");
+    if (sugerida === undefined) setAcao("");
     // hot-seat no modo rodada: a vez passa para o próximo que ainda não agiu (na ordem do grupo)
     if (!rodada || !ativo || texto.startsWith("((")) return;
     const ja = new Set(agiram).add(ativo.id);
@@ -279,6 +295,8 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
               <div key={m.id} className="surgir cartao max-w-[95%] px-5 py-4 leading-relaxed">
                 <Narracao texto={m.texto} />
               </div>
+            ) : m.tipo === "dado" && dadosDoPedido(m).tipo === "pedido_teste" ? (
+              <PedidoTeste key={m.id} mensagem={m} personagem={personagemDe(pidDoPedido(m))} podeRolar={podeRolarPara(pidDoPedido(m))} rolar={acoes.rolarTeste} />
             ) : m.tipo === "dado" ? (
               <CartaoDado key={m.id} mensagem={m} novo={mesa.novas.has(m.id)} />
             ) : (
@@ -357,6 +375,7 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
             void enviar();
           }}
         >
+          {mostrarSugestoes && <ListaSugestoes sugestoes={sugestoes} aoEscolher={(t) => void enviar(t)} />}
           <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
             <SeletorAtivo mesa={mesa} acoes={acoes} />
             <RoladorDados campanhaId={mesa.campanha.id} sistema={mesa.sistema} personagem={ativo} autor={mesa.eu.apelido} aoRolar={acoes.receberMensagem} />
@@ -371,34 +390,43 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
               {aviso}
             </p>
           )}
-          <div className="flex items-end gap-2">
-            <textarea
-              ref={campo}
-              value={acao}
-              onChange={(e) => setAcao(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void enviar();
+          {meuPendente ? (
+            <div className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-ambar/50 bg-ambar/10 px-3 py-2 text-sm">
+              <span className="text-ambar">🎲 Role o dado primeiro</span>
+              <button type="button" onClick={irParaDado} className="shrink-0 rounded-md px-2 py-1 text-xs text-muted hover:text-ambar hover:underline">
+                ir para o dado ↑
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-end gap-2">
+              <textarea
+                ref={campo}
+                value={acao}
+                onChange={(e) => setAcao(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void enviar();
+                  }
+                }}
+                rows={2}
+                maxLength={2000}
+                aria-label={ativo ? `Ação de ${ativo.ficha.nome}` : "Mensagem ao mestre"}
+                placeholder={
+                  !ativo
+                    ? "Fale com o mestre fora do jogo ((assim)), ou adicione um personagem."
+                    : minhaNaFila
+                      ? `${ativo.ficha.nome} já está na fila. Mande outra para complementar.`
+                      : // curto para caber nas 2 linhas do campo no celular
+                        `O que ${ativo.ficha.nome} faz? · ((assim)) fala fora do jogo`
                 }
-              }}
-              rows={2}
-              maxLength={2000}
-              aria-label={ativo ? `Ação de ${ativo.ficha.nome}` : "Mensagem ao mestre"}
-              placeholder={
-                !ativo
-                  ? "Fale com o mestre fora do jogo ((assim)), ou adicione um personagem."
-                  : minhaNaFila
-                    ? `${ativo.ficha.nome} já está na fila. Mande outra para complementar.`
-                    : // curto para caber nas 2 linhas do campo no celular
-                      `O que ${ativo.ficha.nome} faz? · ((assim)) fala fora do jogo`
-              }
-              className="campo min-h-12 flex-1 resize-none"
-            />
-            <button className="btn-ambar h-12" disabled={!acao.trim()}>
-              Agir
-            </button>
-          </div>
+                className="campo min-h-12 flex-1 resize-none"
+              />
+              <button className="btn-ambar h-12" disabled={!acao.trim()}>
+                Agir
+              </button>
+            </div>
+          )}
         </form>
       </div>
 

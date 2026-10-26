@@ -127,8 +127,10 @@ export type ConfigCampanha = {
    * "avancado": escolha de sistema, ficha completa, mesa com painéis. Campanhas antigas sem o campo são "avancado".
    */
   modoJogo?: "historia" | "avancado";
-  /** quem rola os testes dos personagens: o próprio jogador (com o dado 3D) ou o servidor, na hora */
+  /** quem rola os testes dos personagens: o próprio jogador (padrão, na tela) ou o servidor, na hora */
   dados?: "jogador" | "automatico";
+  /** o mestre sugere ações em botões a cada turno (padrão: sim) */
+  sugestoes?: boolean;
 };
 
 export type Campanha = {

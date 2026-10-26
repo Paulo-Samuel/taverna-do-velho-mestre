@@ -6,6 +6,38 @@ import type { SugestaoAcao } from "@/lib/sistemas/tipos";
 // Rodapé da mesa do modo história: as ações que o mestre sugeriu (lista vertical clicável) e o campo
 // "Ou escreva sua própria ação…". Enter envia; Shift+Enter quebra a linha.
 
+/** As ações sugeridas pelo mestre, como opções clicáveis (usada também na mesa avançada). */
+export function ListaSugestoes({
+  sugestoes,
+  desabilitado,
+  aoEscolher,
+}: {
+  sugestoes: SugestaoAcao[];
+  desabilitado?: boolean;
+  aoEscolher: (texto: string) => void;
+}) {
+  return (
+    <ul className="surgir mb-2 space-y-1.5" aria-label="Ações sugeridas">
+      {sugestoes.map((s, i) => (
+        <li key={`${i}-${s.texto}`}>
+          <button
+            type="button"
+            disabled={desabilitado}
+            onClick={() => aoEscolher(s.texto)}
+            className="group flex min-h-11 w-full items-center gap-3 rounded-lg border border-border/80 bg-surface/70 px-3 py-1.5 text-left text-[0.95rem] sm:py-2 sm:text-base transition hover:border-ambar/70 hover:bg-surface-2 focus-visible:border-ambar focus-visible:outline-none disabled:opacity-50"
+          >
+            <span className="shrink-0 text-ambar/80 transition group-hover:translate-x-0.5 group-hover:text-ambar motion-reduce:transition-none" aria-hidden>
+              ➶
+            </span>
+            <span className="min-w-0 flex-1 leading-snug text-foreground/90 group-hover:text-foreground">{s.texto}</span>
+            {s.pericia && <span className="shrink-0 text-xs text-muted">{s.pericia}</span>}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function PainelAcao({
   sugestoes,
   mostrarSugestoes,
@@ -49,29 +81,7 @@ export function PainelAcao({
 
   return (
     <div>
-      {ver && (
-        <ul className="surgir mb-2 space-y-1.5" aria-label="Ações sugeridas">
-          {sugestoes.map((s, i) => (
-            <li key={`${i}-${s.texto}`}>
-              <button
-                type="button"
-                disabled={enviando}
-                onClick={() => void mandar(s.texto, false)}
-                className="group flex min-h-11 w-full items-center gap-3 rounded-lg border border-border/80 bg-surface/70 px-3 py-1.5 text-left text-[0.95rem] sm:py-2 sm:text-base transition hover:border-ambar/70 hover:bg-surface-2 focus-visible:border-ambar focus-visible:outline-none disabled:opacity-50"
-              >
-                <span
-                  className="shrink-0 text-ambar/80 transition group-hover:translate-x-0.5 group-hover:text-ambar motion-reduce:transition-none"
-                  aria-hidden
-                >
-                  ➶
-                </span>
-                <span className="min-w-0 flex-1 leading-snug text-foreground/90 group-hover:text-foreground">{s.texto}</span>
-                {s.pericia && <span className="shrink-0 text-xs text-muted">{s.pericia}</span>}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      {ver && <ListaSugestoes sugestoes={sugestoes} desabilitado={enviando} aoEscolher={(t) => void mandar(t, false)} />}
 
       {topo}
 

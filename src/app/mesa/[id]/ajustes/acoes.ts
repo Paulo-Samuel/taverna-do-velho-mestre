@@ -25,7 +25,10 @@ export async function salvarAjustesAcao(campanhaId: number, _anterior: EstadoAju
   const modo = form.get("modo") === "rodada" ? "rodada" : "livre";
   const modoAntes = campanha.config.modo ?? "livre";
 
-  atualizarCampanha(campanha.id, { nome, cenario, tom, config: { ...campanha.config, modo } });
+  const dados = form.get("dados") === "automatico" ? "automatico" : "jogador";
+  const sugestoes = form.get("sugestoes") === "on";
+
+  atualizarCampanha(campanha.id, { nome, cenario, tom, config: { ...campanha.config, modo, dados, sugestoes } });
   // nome, tom e modo aparecem nos aparelhos: todo mundo recarrega o estado
   publicar(campanha.id, { e: "recarregar" });
   // saindo da rodada, as ações que esperavam os atrasados já podem ir para o mestre

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CartaoDado } from "@/components/chat/cartao-dado";
 import type { Mensagem } from "@/lib/db";
 import type { PersonagemVisivel } from "@/lib/mesa";
 import { COR_GRAU, corDoNome, sinal } from "./cores";
@@ -23,6 +24,9 @@ type DadosPedido = {
   bonus?: number;
   perigoso?: boolean;
   motivo?: string;
+  /** como a parada é rolada ("1d20+4", "7d10 (2 de Fome)", "4dF+2", "1d100") */
+  expressao?: string;
+  dadoPrincipal?: string;
   resultado?: Partial<ResultadoRolagem> & { bonus?: number; alvo?: number | null };
 };
 
@@ -38,6 +42,16 @@ const DADO_NA_TELA_MS = 8000;
 
 export function dadosDoPedido(m: Mensagem): DadosPedido {
   return (m.dados ?? {}) as DadosPedido;
+}
+
+/** O d20 3D só serve para testes de d20; paradas de d10 (Vampiro), d100, Fate e 2d6 usam o cartão de dados do sistema. */
+function usaD20(d: DadosPedido) {
+  return !d.expressao || /(^|[^\d])d20/i.test(d.expressao);
+}
+
+/** O resultado desenhado pelo cartão de dados (visual próprio de cada sistema). */
+function CartaoDoSistema({ mensagem, resultado, novo }: { mensagem: Mensagem; resultado: unknown; novo: boolean }) {
+  return <CartaoDado mensagem={{ ...mensagem, dados: { ...(resultado as Record<string, unknown>), tipo: "teste" } }} novo={novo} />;
 }
 
 /** "17 + 4 = 21 vs 12" (ou "21 vs 12" quando o sistema não tem dado natural). */
@@ -71,6 +85,7 @@ export function PedidoTeste({
   const bonus = typeof d.bonus === "number" ? d.bonus : (d.resultado?.bonus ?? 0);
   const alvo = d.alvo ?? d.resultado?.alvo ?? null;
   const teste = d.teste ?? "Teste";
+  const d20 = usaD20(d);
 
   // rede de segurança: o dado não avisou que parou
   const fase = rolagem?.fase;
@@ -94,7 +109,7 @@ export function PedidoTeste({
       setRolagem(null);
       return;
     }
-    setRolagem({ fase: typeof r.natural === "number" ? "assentando" : "pronto", resultado: r });
+    setRolagem({ fase: d20 && typeof r.natural === "number" ? "assentando" : "pronto", resultado: r });
   }
 
   // cancelado: uma linha riscada
@@ -112,6 +127,7 @@ export function PedidoTeste({
   // resolvido em outro aparelho, numa visita anterior ou já recolhido: resultado compacto (sem Dado3D)
   if ((!rolagem && d.status === "resolvido") || fase === "recolhido") {
     const r = d.resultado ?? rolagem?.resultado ?? {};
+    if (!d20) return <CartaoDoSistema mensagem={mensagem} resultado={r} novo={false} />;
     const grau = r.grau ?? "";
     return (
       <div className="surgir mx-auto my-5 flex max-w-xl items-center gap-3 rounded-lg border border-border/70 bg-surface/50 px-3 py-2 text-sm">
@@ -162,8 +178,8 @@ export function PedidoTeste({
       </div>
       <h3 className="titulo mt-2 text-xl text-pergaminho sm:text-2xl">
         Teste de {teste}
-        {typeof alvo === "number" && <span className="text-muted"> — CD {alvo}</span>}
-        <span className="text-ambar"> ({sinal(bonus)})</span>
+        {typeof alvo === "number" && <span className="text-muted"> — {d20 ? "CD" : "Dificuldade"} {alvo}</span>}
+        {d20 ? <span className="text-ambar"> ({sinal(bonus)})</span> : d.expressao && <span className="text-ambar"> ({d.expressao})</span>}
       </h3>
       {d.motivo && <p className="mx-auto mt-1.5 max-w-md text-[0.95rem] italic text-foreground/80">{d.motivo}</p>}
       {d.perigoso && (
@@ -172,17 +188,27 @@ export function PedidoTeste({
         </p>
       )}
 
-      <div className="mt-4 flex justify-center">
-        <Dado3D
-          valor={natural}
-          rolando={rolagem?.fase === "girando"}
-          tamanho={150}
-          destaque={rolagem && rolagem.fase !== "girando" ? destaque : null}
-          aoParar={() => setRolagem((r) => (r && r.fase === "assentando" ? { ...r, fase: "pronto" } : r))}
-        />
-      </div>
+      {d20 ? (
+        <div className="mt-4 flex justify-center">
+          <Dado3D
+            valor={natural}
+            rolando={rolagem?.fase === "girando"}
+            tamanho={150}
+            destaque={rolagem && rolagem.fase !== "girando" ? destaque : null}
+            aoParar={() => setRolagem((r) => (r && r.fase === "assentando" ? { ...r, fase: "pronto" } : r))}
+          />
+        </div>
+      ) : pronto ? (
+        <div className="mt-4 text-left">
+          <CartaoDoSistema mensagem={mensagem} resultado={resultado} novo />
+        </div>
+      ) : (
+        <p className={`mt-4 text-5xl ${rolagem ? "dado-rolando inline-block" : ""}`} aria-hidden>
+          🎲
+        </p>
+      )}
 
-      {pronto ? (
+      {pronto && !d20 ? null : pronto ? (
         <p className="surgir mt-4 text-lg tabular-nums sm:text-xl">
           <span className="text-foreground/90">{conta(resultado.natural, bonus, resultado.total, alvo)}</span>
           <span className="text-muted"> · </span>
@@ -194,7 +220,7 @@ export function PedidoTeste({
         <p className="mt-4 text-sm italic text-muted">O dado corre pela mesa…</p>
       ) : podeRolar ? (
         <button type="button" className="btn-ambar mt-4 min-h-12 px-8 text-base" onClick={() => void clicar()}>
-          🎲 Rolar o dado
+          🎲 {d20 ? "Rolar o dado" : "Rolar os dados"}
         </button>
       ) : (
         <p className="mt-4 text-sm italic text-muted">Esperando {personagem?.jogador || nome} rolar o dado…</p>

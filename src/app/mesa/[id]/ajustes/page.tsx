@@ -59,7 +59,14 @@ export default async function AjustesMesa(props: PageProps<"/mesa/[id]/ajustes">
       <Secao titulo="Campanha">
         <FormularioCampanha
           acao={salvarAjustesAcao.bind(null, campanha.id)}
-          inicial={{ nome: campanha.nome, cenario: campanha.cenario, tom: campanha.tom, modo: campanha.config.modo ?? "livre" }}
+          inicial={{
+            nome: campanha.nome,
+            cenario: campanha.cenario,
+            tom: campanha.tom,
+            modo: campanha.config.modo ?? "livre",
+            dados: campanha.config.dados ?? "jogador",
+            sugestoes: campanha.config.sugestoes !== false,
+          }}
           bloqueado={!local}
         />
       </Secao>
