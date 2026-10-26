@@ -36,10 +36,23 @@ const DADOS = [
 ] as const;
 
 function Aviso({ estado }: { estado: EstadoAjustes }) {
-  if (estado.erro) return <p className="text-sm text-sangue">{estado.erro}</p>;
-  if (estado.ok) return <p className="text-sm text-musgo">{estado.ok}</p>;
+  if (estado.erro)
+    return (
+      <p role="alert" className="text-sm text-sangue">
+        {estado.erro}
+      </p>
+    );
+  if (estado.ok)
+    return (
+      <p role="status" className="text-sm text-musgo">
+        ✓ {estado.ok}
+      </p>
+    );
   return null;
 }
+
+// cartão de opção com rádio dentro: o anel aparece quando o rádio tem foco de teclado
+const CARTAO_RADIO = "cursor-pointer rounded-lg border p-3 transition has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-ambar/70";
 
 export function FormularioCampanha({
   acao,
@@ -50,11 +63,18 @@ export function FormularioCampanha({
   inicial: { nome: string; cenario: string; tom: string; modo: "livre" | "rodada"; dados: "jogador" | "automatico"; sugestoes: boolean };
   bloqueado: boolean;
 }) {
-  const [estado, enviar, enviando] = useActionState(acao, { erro: null });
+  // "sujo" = mexeu em algo depois do último salvar; o rodapé avisa para ninguém sair achando que salvou
+  const [sujo, setSujo] = useState(false);
+  const [estado, enviar, enviando] = useActionState(async (anterior: EstadoAjustes, form: FormData) => {
+    const r = await acao(anterior, form);
+    if (!r.erro) setSujo(false);
+    return r;
+  }, { erro: null });
   const [modo, setModo] = useState(inicial.modo);
   const [dados, setDados] = useState(inicial.dados);
+  const [tom, setTom] = useState(inicial.tom);
   return (
-    <form action={enviar} className="space-y-4">
+    <form action={enviar} onChange={() => setSujo(true)} className="space-y-4">
       <fieldset disabled={bloqueado} className="space-y-4">
         <label className="block">
           <span className="mb-1 block text-sm text-muted">Nome da campanha</span>
@@ -65,25 +85,41 @@ export function FormularioCampanha({
           <textarea name="cenario" defaultValue={inicial.cenario} maxLength={1500} rows={4} className="campo resize-y" placeholder="Onde a história acontece e o que paira no ar" />
           <span className="mt-1 block text-xs text-muted">O mestre relê isto a cada turno. Mudar no meio da campanha é como trocar o mapa com o grupo dentro.</span>
         </label>
-        <label className="block">
-          <span className="mb-1 block text-sm text-muted">Tom</span>
-          <input name="tom" defaultValue={inicial.tom} maxLength={60} list="tons-taverna" className="campo" />
-          <datalist id="tons-taverna">
+        <div>
+          <label htmlFor="tom-mesa" className="mb-1 block text-sm text-muted">
+            Tom
+          </label>
+          <input id="tom-mesa" name="tom" value={tom} onChange={(e) => setTom(e.target.value)} maxLength={60} className="campo" />
+          {/* sugestões à vista (o datalist some no celular) */}
+          <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Sugestões de tom">
             {TONS.map((t) => (
-              <option key={t} value={t} />
+              <button
+                key={t}
+                type="button"
+                aria-pressed={tom === t}
+                onClick={() => {
+                  setTom(t);
+                  setSujo(true);
+                }}
+                className={`inline-flex min-h-10 items-center rounded-full border px-3 text-sm transition sm:min-h-8 sm:text-xs ${
+                  tom === t ? "border-ambar bg-ambar/15 text-ambar" : "border-border text-foreground/80 hover:border-ambar/60 hover:text-foreground"
+                }`}
+              >
+                {t}
+              </button>
             ))}
-          </datalist>
-        </label>
+          </div>
+        </div>
         <fieldset>
           <legend className="mb-2 text-sm text-muted">Modo da mesa</legend>
           <div className="grid gap-2 sm:grid-cols-2">
             {MODOS.map((m) => (
               <label
                 key={m.id}
-                className={`cursor-pointer rounded-lg border p-3 transition ${modo === m.id ? "border-ambar bg-ambar/10" : "border-border hover:border-ambar/50"}`}
+                className={`${CARTAO_RADIO} ${modo === m.id ? "border-ambar bg-ambar/10" : "border-border hover:border-ambar/50"}`}
               >
                 <span className="flex items-center gap-2">
-                  <input type="radio" name="modo" value={m.id} checked={modo === m.id} onChange={() => setModo(m.id)} className="accent-[var(--ambar)]" />
+                  <input type="radio" name="modo" value={m.id} checked={modo === m.id} onChange={() => setModo(m.id)} className="h-4 w-4 accent-[var(--ambar)]" />
                   <span className="font-semibold text-pergaminho">{m.nome}</span>
                 </span>
                 <span className="mt-1 block text-xs leading-relaxed text-muted">{m.texto}</span>
@@ -97,10 +133,10 @@ export function FormularioCampanha({
             {DADOS.map((m) => (
               <label
                 key={m.id}
-                className={`cursor-pointer rounded-lg border p-3 transition ${dados === m.id ? "border-ambar bg-ambar/10" : "border-border hover:border-ambar/50"}`}
+                className={`${CARTAO_RADIO} ${dados === m.id ? "border-ambar bg-ambar/10" : "border-border hover:border-ambar/50"}`}
               >
                 <span className="flex items-center gap-2">
-                  <input type="radio" name="dados" value={m.id} checked={dados === m.id} onChange={() => setDados(m.id)} className="accent-[var(--ambar)]" />
+                  <input type="radio" name="dados" value={m.id} checked={dados === m.id} onChange={() => setDados(m.id)} className="h-4 w-4 accent-[var(--ambar)]" />
                   <span className="font-semibold text-pergaminho">{m.nome}</span>
                 </span>
                 <span className="mt-1 block text-xs leading-relaxed text-muted">{m.texto}</span>
@@ -108,18 +144,27 @@ export function FormularioCampanha({
             ))}
           </div>
         </fieldset>
-        <label className="flex items-start gap-2">
-          <input type="checkbox" name="sugestoes" defaultChecked={inicial.sugestoes} className="mt-1 accent-[var(--ambar)]" />
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition hover:border-ambar/50 has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-ambar/70">
+          <input type="checkbox" name="sugestoes" defaultChecked={inicial.sugestoes} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--ambar)]" />
           <span>
-            <span className="text-sm text-pergaminho">Ações sugeridas</span>
-            <span className="block text-xs text-muted">A cada turno o mestre oferece 3 opções clicáveis. Dá para escrever a própria ação do mesmo jeito.</span>
+            <span className="font-semibold text-pergaminho">Ações sugeridas</span>
+            <span className="mt-1 block text-xs leading-relaxed text-muted">A cada turno o mestre oferece 3 opções clicáveis. Dá para escrever a própria ação do mesmo jeito.</span>
           </span>
         </label>
       </fieldset>
-      <Aviso estado={estado} />
-      <button className="btn-ambar" disabled={bloqueado || enviando}>
-        {enviando ? "Salvando…" : "Salvar ajustes"}
-      </button>
+      {/* rodapé grudado enquanto o formulário está na tela: o Salvar e o retorno ficam sempre à vista */}
+      <div className="sticky bottom-0 z-10 -mx-5 -mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-b-xl border-t border-border bg-surface/95 px-5 py-3 backdrop-blur">
+        <button className="btn-ambar" disabled={bloqueado || enviando}>
+          {enviando ? "Salvando…" : "Salvar ajustes"}
+        </button>
+        {sujo && !enviando && !estado.erro ? (
+          <p className="text-sm text-ambar" role="status">
+            Alterações não salvas
+          </p>
+        ) : (
+          <Aviso estado={estado} />
+        )}
+      </div>
     </form>
   );
 }
@@ -175,7 +220,7 @@ export function FormularioPin({
         {pin ? (
           <>
             PIN atual:{" "}
-            <button type="button" onClick={() => setVer((v) => !v)} className="font-mono text-ambar hover:underline" title={ver ? "Esconder" : "Mostrar"}>
+            <button type="button" onClick={() => setVer((v) => !v)} className="-my-1 rounded px-1.5 py-1 font-mono text-ambar hover:bg-ambar/10 hover:underline" title={ver ? "Esconder" : "Mostrar"}>
               {ver ? pin : "•".repeat(pin.length)}
             </button>
           </>

@@ -80,7 +80,8 @@ function TrocarPin({ campanhaId, temPin, aoMudar }: { campanhaId: number; temPin
   );
 }
 
-export function Convite({ campanhaId, temPin }: { campanhaId: number; temPin: boolean }) {
+/** `compacto`: no celular vira só o ícone (cabeçalho apertado da mesa avançada). */
+export function Convite({ campanhaId, temPin, compacto = false }: { campanhaId: number; temPin: boolean; compacto?: boolean }) {
   const [aberto, setAberto] = useState(false);
   const [info, setInfo] = useState<InfoRede | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -120,9 +121,22 @@ export function Convite({ campanhaId, temPin }: { campanhaId: number; temPin: bo
 
   return (
     <>
-      <button type="button" className="btn-borda px-3 py-1.5" onClick={() => setAberto(true)} title="Chamar gente pela rede local">
-        <span aria-hidden>📜</span> Convidar
-      </button>
+      {compacto ? (
+        <button
+          type="button"
+          className="btn-borda h-10 shrink-0 px-2.5 py-0 focus-visible:outline-2 focus-visible:outline-ambar sm:px-3"
+          onClick={() => setAberto(true)}
+          title="Chamar gente pela rede local"
+          aria-label="Convidar pela rede local"
+        >
+          <span aria-hidden>📜</span>
+          <span className="hidden sm:inline">Convidar</span>
+        </button>
+      ) : (
+        <button type="button" className="btn-borda px-3 py-1.5" onClick={() => setAberto(true)} title="Chamar gente pela rede local">
+          <span aria-hidden>📜</span> Convidar
+        </button>
+      )}
 
       {aberto && (
         <div

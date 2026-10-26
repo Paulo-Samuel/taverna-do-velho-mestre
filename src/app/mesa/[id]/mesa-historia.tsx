@@ -216,9 +216,14 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
     return true;
   }
 
+  // leva ao cartão do teste e deixa o botão "Rolar o dado" com o foco (Enter ou espaço já rolam)
   function irParaDado() {
     if (!meuPendente) return;
-    document.getElementById(`pedido-${meuPendente.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const cartao = document.getElementById(`pedido-${meuPendente.id}`);
+    if (!cartao) return;
+    const reduzido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    cartao.scrollIntoView({ behavior: reduzido ? "auto" : "smooth", block: "center" });
+    cartao.querySelector<HTMLButtonElement>("button[data-rolar]")?.focus({ preventScroll: true });
   }
 
   // ---------- desenho ----------
@@ -228,7 +233,9 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   const comecando = filaVisivel.some((a) => a.acao === INICIO);
   const acoesNaFila = filaVisivel.filter((a) => a.acao !== INICIO);
   const agiram = new Set(acoesNaFila.filter((a) => a.personagemId !== null).map((a) => a.personagemId));
-  const novasAbaixo = longeDoFim && total > vistas;
+  // leitor lá em cima: avisa se chegou coisa nova (mensagem ou o mestre escrevendo); senão oferece só voltar ao fim
+  const novasAbaixo = longeDoFim && (total > vistas || Boolean(mesa.aoVivo));
+  const testeMeu = meuPendente ? (dadosDoPedido(meuPendente).teste ?? null) : null;
   const sugestoes = mesa.cena.sugestoes ?? [];
 
   function desenhar(m: Mensagem) {
@@ -272,7 +279,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
     <div className="fixed inset-0 z-30 flex flex-col overflow-hidden text-foreground">
       <CeuEstrelado />
 
-      {/* cabeçalho fino: logo, campanha, presença, ajustes, som e códex */}
+      {/* cabeçalho fino: campanha, presença, convite e ajustes (no celular os dois moram no códex), som e códex */}
       <header className="relative z-20 border-b border-border/40 bg-background/85">
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-1 px-2 sm:gap-2 sm:px-4">
           <Link
@@ -283,12 +290,15 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
           >
             ←
           </Link>
+          {/* a campanha é o destaque; a taverna vira a assinatura miúda embaixo */}
           <div className="min-w-0 flex-1 leading-none">
-            <p className={`${fonteGotica.className} truncate text-xl text-ambar sm:text-2xl`}>
-              <span className="sm:hidden">Taverna</span>
-              <span className="hidden sm:inline">Taverna do Velho Mestre</span>
+            <h1 className={`${fonteGotica.className} truncate text-lg text-ambar sm:text-2xl`} title={mesa.campanha.nome}>
+              {mesa.campanha.nome}
+            </h1>
+            <p className="mt-1 truncate text-[11px] text-muted">
+              <span className="hidden sm:inline">Taverna do Velho Mestre · </span>
+              {mesa.sistema.nomeCurto}
             </p>
-            <p className="mt-0.5 truncate text-[11px] text-muted">{mesa.campanha.nome}</p>
           </div>
           <Presenca mesa={mesa} acoes={acoes} />
           <div className="hidden sm:block">
@@ -296,7 +306,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
           </div>
           <Link
             href={`/mesa/${mesa.campanha.id}/ajustes`}
-            className="grid size-10 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2/60 hover:text-ambar"
+            className="hidden size-10 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2/60 hover:text-ambar sm:grid"
             aria-label="Ajustes da mesa"
             title="Ajustes da mesa"
           >
@@ -306,26 +316,31 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
           <button
             type="button"
             onClick={() => (codexAberto ? fecharCodex() : abrirCodex())}
-            className="grid size-10 shrink-0 place-items-center rounded-md text-lg text-muted hover:bg-surface-2/60 hover:text-ambar"
-            aria-label="Abrir o códex"
+            className="flex h-10 min-w-10 shrink-0 items-center justify-center gap-1.5 rounded-md text-lg text-muted hover:bg-surface-2/60 hover:text-ambar sm:border sm:border-border sm:px-2.5 sm:text-base"
+            aria-label="Códex: ficha, missões, pessoas e lugares"
             aria-expanded={codexAberto}
-            title="Códex (C)"
+            title="Códex: ficha, missões, pessoas e lugares (tecla C)"
           >
-            📖
+            <span aria-hidden>📖</span>
+            <span className="hidden text-sm font-semibold sm:inline">Códex</span>
           </button>
         </div>
       </header>
 
-      {/* aba do códex na borda esquerda (desktop) */}
+      {/* aba do códex na borda esquerda (desktop largo): marcador de livro com o nome escrito na vertical */}
       {!codexAberto && (
         <button
           type="button"
           onClick={() => abrirCodex()}
-          className="fixed left-0 top-1/2 z-20 hidden h-16 w-7 -translate-y-1/2 place-items-center rounded-r-lg border border-l-0 border-border bg-surface/80 text-muted backdrop-blur hover:text-ambar lg:grid"
+          className="group fixed left-0 top-1/2 z-20 hidden -translate-y-1/2 flex-col items-center gap-2 rounded-r-lg border border-l-0 border-ambar/30 bg-surface/80 px-1.5 py-3 text-muted backdrop-blur transition hover:border-ambar/70 hover:pl-2.5 hover:text-ambar motion-reduce:transition-none lg:flex"
           aria-label="Abrir o códex"
-          title="Códex (C)"
+          title="Códex (tecla C)"
         >
-          ›
+          <span aria-hidden>📖</span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.25em] [writing-mode:vertical-rl]">Códex</span>
+          <kbd className="rounded border border-border px-1 text-[10px] text-muted group-hover:border-ambar/50" aria-hidden>
+            C
+          </kbd>
         </button>
       )}
 
@@ -338,7 +353,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
             {vazia && (
               <div className="surgir py-10 text-center">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted">{mesa.sistema.nomeCurto}</p>
-                <h1 className={`${fonteGotica.className} mt-2 text-4xl leading-tight text-pergaminho sm:text-5xl`}>{mesa.campanha.nome}</h1>
+                <h2 className={`${fonteGotica.className} mt-2 text-4xl leading-tight text-pergaminho sm:text-5xl`}>{mesa.campanha.nome}</h2>
                 <div className="mx-auto mt-4 h-px w-40 bg-linear-to-r from-transparent via-ambar/60 to-transparent" />
                 {mesa.personagens.length > 0 ? (
                   <>
@@ -413,8 +428,13 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
 
             {mesa.erro && (
               <div className="my-4 flex items-start justify-between gap-3 rounded-md border border-sangue/60 bg-sangue/10 px-4 py-3 text-sm" role="alert">
-                <p>{mesa.erro}</p>
-                <button onClick={acoes.limparErro} className="text-muted hover:text-foreground" aria-label="Fechar o aviso">
+                <p className="py-1.5">{mesa.erro}</p>
+                <button
+                  onClick={acoes.limparErro}
+                  className="-my-1 -mr-2 grid size-9 shrink-0 place-items-center rounded-md text-muted hover:bg-sangue/20 hover:text-foreground"
+                  aria-label="Fechar o aviso"
+                  title="Fechar o aviso"
+                >
                   ✕
                 </button>
               </div>
@@ -422,13 +442,15 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
           </div>
         </div>
 
-        {novasAbaixo && (
+        {longeDoFim && (
           <button
             type="button"
             onClick={() => irParaOFim(true)}
-            className="surgir absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-full border border-ambar/60 bg-surface/95 px-4 py-2 text-sm text-ambar shadow-lg backdrop-blur hover:bg-surface-2"
+            className={`surgir absolute bottom-3 left-1/2 z-20 min-h-10 -translate-x-1/2 rounded-full border bg-surface/95 px-4 py-2 text-sm shadow-lg backdrop-blur hover:bg-surface-2 ${
+              novasAbaixo ? "border-ambar/60 text-ambar" : "border-border text-muted hover:text-foreground"
+            }`}
           >
-            ↓ novas mensagens
+            {novasAbaixo ? (mesa.aoVivo && total <= vistas ? "↓ o mestre está narrando" : "↓ novas mensagens") : "↓ voltar ao fim"}
           </button>
         )}
       </div>
@@ -439,7 +461,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
           <PainelAcao
             sugestoes={sugestoes}
             mostrarSugestoes={!mesa.ocupado && pendentes.length === 0 && Boolean(ativo) && !minhaNaFila}
-            bloqueio={meuPendente ? "Role o dado primeiro" : null}
+            bloqueio={meuPendente ? (testeMeu ? `Teste de ${testeMeu}: role o dado antes de agir` : "Role o dado antes de agir") : null}
             aoIrParaBloqueio={irParaDado}
             placeholder={
               ativo
@@ -452,32 +474,47 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
             enviar={enviar}
             campoRef={campo}
             topo={
-              <div className="mb-2 flex min-h-8 items-center gap-2 text-xs">
+              <div className="mb-2 flex min-h-10 items-center gap-2 text-xs sm:min-h-8">
                 {ativo ? (
-                  <button
-                    type="button"
-                    onClick={() => abrirCodex(mesa.personagens.length > 1 ? "grupo" : "personagem")}
-                    className="flex min-w-0 items-center gap-1.5 rounded-full border border-border/70 py-0.5 pl-0.5 pr-2.5 hover:border-ambar/60"
-                    title={mesa.personagens.length > 1 ? "Trocar de personagem" : "Ver a ficha"}
-                  >
-                    <Retrato ficha={ativo.ficha} tamanho={24} />
-                    <span className="truncate font-semibold" style={{ color: corDoNome(ativo.ficha.nome) }}>
-                      {ativo.ficha.nome}
-                    </span>
-                    <span className="shrink-0 tabular-nums text-muted">
-                      {ativo.ficha.pv}/{ativo.ficha.pvMax}
-                    </span>
-                    {mesa.personagens.length > 1 && (
-                      <span className="text-muted" aria-hidden>
-                        ⇄
+                  <>
+                    {/* o personagem abre a ficha; com mais gente no grupo, o ⇄ ao lado troca de personagem */}
+                    <button
+                      type="button"
+                      onClick={() => abrirCodex("personagem")}
+                      className="flex min-h-10 min-w-0 items-center gap-1.5 rounded-full border border-border/70 py-0.5 pl-0.5 pr-2.5 hover:border-ambar/60 sm:min-h-8"
+                      aria-label={`Ficha de ${ativo.ficha.nome}`}
+                      title="Ver a ficha (C)"
+                    >
+                      <Retrato ficha={ativo.ficha} tamanho={28} />
+                      <span className="truncate font-semibold" style={{ color: corDoNome(ativo.ficha.nome) }}>
+                        {ativo.ficha.nome}
                       </span>
+                      <span className="shrink-0 tabular-nums text-muted" title={mesa.sistema.rotulos.pv}>
+                        ♥ {ativo.ficha.pv}/{ativo.ficha.pvMax}
+                      </span>
+                      <span className="hidden shrink-0 text-muted sm:inline">· ficha</span>
+                    </button>
+                    {mesa.personagens.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => abrirCodex("grupo")}
+                        className="grid size-10 shrink-0 place-items-center rounded-full border border-border/70 text-muted hover:border-ambar/60 hover:text-ambar sm:size-8"
+                        aria-label="Trocar de personagem"
+                        title="Trocar de personagem"
+                      >
+                        ⇄
+                      </button>
                     )}
-                  </button>
+                  </>
                 ) : mesa.personagens.length > 0 ? (
-                  <button type="button" className="text-ambar hover:underline" onClick={() => abrirCodex("grupo")}>
+                  <button type="button" className="min-h-10 text-ambar hover:underline sm:min-h-8" onClick={() => abrirCodex("grupo")}>
                     Escolher personagem
                   </button>
-                ) : null}
+                ) : (
+                  <Link href={linkNovo} className="min-h-10 content-center text-ambar hover:underline sm:min-h-8">
+                    + Criar personagem
+                  </Link>
+                )}
                 {aviso && (
                   <span className="surgir min-w-0 truncate text-ambar" role="status">
                     {aviso}
@@ -486,7 +523,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
                 {mesa.ocupado && (
                   <button
                     type="button"
-                    className="ml-auto shrink-0 rounded-md px-2 py-1 text-muted hover:text-sangue"
+                    className="ml-auto min-h-10 shrink-0 rounded-md px-2 py-1 text-muted hover:bg-sangue/10 hover:text-sangue sm:min-h-8"
                     onClick={() => void acoes.controle("cancelar")}
                     title="Interromper o mestre"
                   >

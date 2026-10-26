@@ -86,18 +86,26 @@ export function PainelAcao({
       {topo}
 
       {bloqueio ? (
-        <div className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-ambar/50 bg-ambar/10 px-3 py-2 text-sm">
-          <span className="text-ambar">🎲 {bloqueio}</span>
-          {aoIrParaBloqueio && (
-            <button
-              type="button"
-              onClick={aoIrParaBloqueio}
-              className="shrink-0 rounded-md px-2 py-1 text-xs text-muted underline-offset-2 hover:text-ambar hover:underline"
-            >
-              ir para o dado ↑
-            </button>
-          )}
-        </div>
+        // a barra inteira leva ao dado (alvo grande no celular); sem destino, é só o aviso
+        aoIrParaBloqueio ? (
+          <button
+            type="button"
+            onClick={aoIrParaBloqueio}
+            className="surgir group flex min-h-12 w-full items-center justify-between gap-3 rounded-lg border border-ambar/60 bg-ambar/10 px-3 py-2 text-left text-sm shadow-[0_0_24px_-12px_var(--ambar)] transition hover:border-ambar hover:bg-ambar/15 focus-visible:border-ambar focus-visible:outline-none"
+          >
+            <span className="min-w-0 text-ambar">
+              <span aria-hidden>🎲 </span>
+              {bloqueio}
+            </span>
+            <span className="shrink-0 rounded-md bg-ambar px-3 py-1.5 text-xs font-semibold text-[#1a120c] transition group-hover:bg-[#f0b762]">
+              Ir para o dado ↑
+            </span>
+          </button>
+        ) : (
+          <div className="flex min-h-12 items-center gap-3 rounded-lg border border-ambar/50 bg-ambar/10 px-3 py-2 text-sm text-ambar" role="status">
+            <span aria-hidden>🎲</span> {bloqueio}
+          </div>
+        )
       ) : (
         <form
           className="flex items-end gap-2"
@@ -125,10 +133,18 @@ export function PainelAcao({
           <button
             className="grid size-12 shrink-0 place-items-center rounded-md bg-ambar text-xl text-[#1a120c] shadow-[0_0_24px_-6px_var(--ambar)] transition hover:bg-[#f0b762] disabled:cursor-not-allowed disabled:opacity-40"
             disabled={!texto.trim() || enviando}
-            aria-label="Enviar ação"
-            title="Enviar (Enter)"
+            aria-label={enviando ? "Enviando a ação" : "Enviar ação"}
+            title="Enviar (Enter · Shift+Enter quebra a linha)"
           >
-            ➤
+            {enviando ? (
+              <span className="pensando text-base" aria-hidden>
+                <i />
+                <i />
+                <i />
+              </span>
+            ) : (
+              "➤"
+            )}
           </button>
         </form>
       )}

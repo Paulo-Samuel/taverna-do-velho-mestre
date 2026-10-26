@@ -58,6 +58,7 @@ const SEXOS: { id: Sexo; nome: string }[] = [
   { id: "outro", nome: "Outro" },
 ];
 
+const PASSOS = ["Nome", "Rosto", "Ofício", "Passado"];
 const TITULOS = ["Como você se chama?", "Como você é?", "Qual é o seu ofício?", "De onde você vem?"];
 const SUBTITULOS = [
   "O nome que os bardos vão errar nas canções.",
@@ -180,18 +181,26 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
     return null;
   }
 
+  /** o passo mais adiantado que dá para abrir: o primeiro com pendência (ou o último, se está tudo certo) */
+  const alcancavel = [0, 1, 2].find((p) => problemaDoPasso(p)) ?? 3;
+
+  function irPara(passo: number) {
+    mudar({ passo: Math.max(0, Math.min(3, passo)) });
+    const reduzido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: reduzido ? "auto" : "smooth" });
+  }
+
   function avancar() {
     const p = problemaDoPasso(r.passo);
     if (p) {
       setAviso(p);
       return;
     }
-    mudar({ passo: Math.min(3, r.passo + 1) });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    irPara(r.passo + 1);
   }
 
   function voltar() {
-    mudar({ passo: Math.max(0, r.passo - 1) });
+    irPara(r.passo - 1);
   }
 
   function enterAvanca(e: KeyboardEvent<HTMLInputElement>) {
@@ -201,7 +210,14 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
     }
   }
 
+  const linhasHistoria = r.historia.split("\n").map((l) => l.trim());
+
+  // clicar de novo no gancho tira ele da história
   function usarGancho(g: string) {
+    if (linhasHistoria.includes(g)) {
+      mudar({ historia: r.historia.split("\n").filter((l) => l.trim() !== g).join("\n").trim() });
+      return;
+    }
     const atual = r.historia.trim();
     mudar({ historia: atual ? `${atual}\n${g}` : g });
   }
@@ -225,7 +241,8 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
   const historiaFinal = r.historia.trim() || ganchos[0] || "";
 
   return (
-    <div className="relative min-h-[calc(100dvh-3.5rem)] overflow-hidden">
+    // overflow-clip (e não hidden) para a barra de botões poder grudar no pé da tela
+    <div className="relative min-h-[calc(100dvh-3.5rem)] overflow-clip">
       <style href="taverna-criacao-historia" precedence="default">
         {CSS_CRIACAO}
       </style>
@@ -235,18 +252,50 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
 
       <main className="relative z-10 mx-auto w-full max-w-lg px-4 pb-16 pt-6 sm:pt-10">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <p className="text-xs uppercase tracking-[0.25em] text-muted">
-            Passo {r.passo + 1} de 4
-          </p>
+          {/* os quatro passos: os já liberados dão para clicar (voltar ao nome sem apertar Voltar três vezes) */}
+          <nav aria-label="Passos da criação" className="min-w-0 flex-1">
+            <p className="sr-only">
+              Passo {r.passo + 1} de 4: {PASSOS[r.passo]}
+            </p>
+            <ol className="flex items-center gap-0.5 sm:gap-1">
+              {PASSOS.map((nome, i) => {
+                const atual = i === r.passo;
+                const feito = !atual && i < 3 && !problemaDoPasso(i);
+                return (
+                  <li key={nome} className="min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => irPara(i)}
+                      disabled={i > alcancavel || enviando}
+                      aria-current={atual ? "step" : undefined}
+                      className={`flex min-h-10 items-center gap-1.5 rounded-full px-1.5 text-xs transition sm:px-2 ${
+                        atual ? "text-pergaminho" : feito ? "text-ambar/90 hover:text-ambar" : "text-muted hover:text-foreground"
+                      } disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:text-muted`}
+                    >
+                      <span
+                        className={`grid size-5 shrink-0 place-items-center rounded-full border text-[10px] font-semibold tabular-nums ${
+                          atual ? "border-ambar bg-ambar text-[#1a120c]" : feito ? "border-ambar/70 text-ambar" : "border-border"
+                        }`}
+                        aria-hidden
+                      >
+                        {feito ? "✓" : i + 1}
+                      </span>
+                      <span className={`truncate ${atual ? "font-semibold" : ""}`}>{nome}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </nav>
           <Musica musica={{ humor: "taverna", energia: "baixa" }} />
         </div>
 
-        <form action={aoEnviar} className="cartao relative overflow-hidden border-ambar/25 bg-surface/85 backdrop-blur-sm">
+        <form action={aoEnviar} className="cartao relative overflow-clip border-ambar/25 bg-surface/85 backdrop-blur-sm">
           <div className="h-1 w-full bg-surface-2">
             <div className="criacao-progresso h-full bg-ambar" style={{ width: `${progresso}%` }} />
           </div>
 
-          <div key={r.passo} className="criacao-passo px-5 pb-6 pt-6 sm:px-8 sm:pt-8">
+          <div key={r.passo} className="criacao-passo px-5 pt-6 sm:px-8 sm:pt-8">
             <h1 className={`${gotica.className} text-center text-[2.1rem] leading-tight text-pergaminho drop-shadow-[0_2px_10px_rgba(224,162,74,0.25)] sm:text-5xl`}>
               {TITULOS[r.passo]}
             </h1>
@@ -418,6 +467,9 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
                     placeholder="De onde veio, o que deixou para trás, quem quer sua cabeça…"
                     aria-label="História do personagem"
                   />
+                  {!r.historia.trim() && ganchos[0] && (
+                    <p className="mt-1.5 text-xs italic text-muted">Deixou em branco? O mestre fica com o primeiro gancho aí embaixo.</p>
+                  )}
                 </div>
                 {ganchos.length > 0 && (
                   <div>
@@ -428,16 +480,31 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
                       </button>
                     </div>
                     <div className="space-y-2">
-                      {ganchos.map((g) => (
-                        <button
-                          key={g}
-                          type="button"
-                          onClick={() => usarGancho(g)}
-                          className="block w-full rounded-lg border border-border bg-surface-2/60 px-3 py-2.5 text-left text-sm italic text-foreground transition hover:border-ambar/60 hover:text-pergaminho"
-                        >
-                          “{g}”
-                        </button>
-                      ))}
+                      {ganchos.map((g, i) => {
+                        const usado = linhasHistoria.includes(g);
+                        const padrao = !r.historia.trim() && i === 0;
+                        return (
+                          <button
+                            key={g}
+                            type="button"
+                            onClick={() => usarGancho(g)}
+                            aria-pressed={usado}
+                            title={usado ? "Tirar da história" : "Pôr na história"}
+                            className={`flex w-full items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left text-sm italic transition ${
+                              usado
+                                ? "border-ambar bg-ambar/12 text-pergaminho shadow-[0_0_18px_-8px_var(--ambar)]"
+                                : padrao
+                                  ? "border-ambar/40 border-dashed bg-surface-2/60 text-foreground hover:border-ambar/70"
+                                  : "border-border bg-surface-2/60 text-foreground hover:border-ambar/60 hover:text-pergaminho"
+                            }`}
+                          >
+                            <span className={`mt-px shrink-0 not-italic ${usado ? "text-ambar" : "text-muted"}`} aria-hidden>
+                              {usado ? "✓" : "+"}
+                            </span>
+                            <span className="min-w-0 flex-1">“{g}”</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -454,27 +521,29 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
               </div>
             )}
 
-            {(aviso || estado.erro) && (
-              <p role="alert" className="mt-5 rounded-md border border-sangue/50 bg-sangue/10 px-3 py-2 text-sm text-pergaminho">
-                {aviso ?? estado.erro}
-              </p>
-            )}
-
-            <div className="mt-7 flex items-center gap-3">
-              {r.passo > 0 && (
-                <button type="button" onClick={voltar} className="btn-borda px-4" disabled={enviando}>
-                  ← Voltar
-                </button>
+            {/* barra de botões: gruda no pé da tela nos passos compridos (rostos, ofícios), com o aviso logo acima */}
+            <div className="sticky bottom-0 z-10 -mx-5 mt-7 border-t border-border/50 bg-surface/95 px-5 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3 backdrop-blur sm:-mx-8 sm:px-8">
+              {(aviso || estado.erro) && (
+                <p role="alert" className="surgir mb-3 rounded-md border border-sangue/50 bg-sangue/10 px-3 py-2 text-sm text-pergaminho">
+                  {aviso ?? estado.erro}
+                </p>
               )}
-              {r.passo < 3 ? (
-                <button type="button" onClick={avancar} className="btn-ambar flex-1 py-3 text-base">
-                  Continuar →
-                </button>
-              ) : (
-                <button type="submit" className="btn-ambar flex-1 py-3 text-base" disabled={enviando}>
-                  {enviando ? "Acendendo as velas…" : "Começar a aventura"}
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                {r.passo > 0 && (
+                  <button type="button" onClick={voltar} className="btn-borda min-h-12 px-4" disabled={enviando}>
+                    ← Voltar
+                  </button>
+                )}
+                {r.passo < 3 ? (
+                  <button type="button" onClick={avancar} className="btn-ambar min-h-12 flex-1 py-3 text-base">
+                    Continuar →
+                  </button>
+                ) : (
+                  <button type="submit" className="btn-ambar min-h-12 flex-1 py-3 text-base" disabled={enviando}>
+                    {enviando ? "Acendendo as velas…" : "Começar a aventura"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

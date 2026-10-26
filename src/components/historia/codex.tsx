@@ -16,7 +16,7 @@ import { Retrato } from "./retrato";
 export type AbaCodex = "personagem" | "missoes" | "pessoas" | "lugares" | "grupo";
 
 const ABAS: [AbaCodex, string][] = [
-  ["personagem", "Personagem"],
+  ["personagem", "Ficha"],
   ["missoes", "Missões"],
   ["pessoas", "Pessoas"],
   ["lugares", "Lugares"],
@@ -354,7 +354,7 @@ function AbaGrupo({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
               {ativo ? (
                 <span className="shrink-0 text-xs text-ambar">você</span>
               ) : podeAssumir(mesa, p) ? (
-                <button type="button" className="btn-borda shrink-0 px-3 py-1.5 text-xs" onClick={() => acoes.escolherPersonagem(p.id)}>
+                <button type="button" className="btn-borda min-h-10 shrink-0 px-3 py-1.5 text-xs" onClick={() => acoes.escolherPersonagem(p.id)}>
                   Jogar com
                 </button>
               ) : null}
@@ -364,7 +364,7 @@ function AbaGrupo({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
       </ul>
       {mesa.personagens.length === 0 && <Vazio>Ninguém sentado à mesa.</Vazio>}
       <div className="mt-4 flex flex-wrap gap-2">
-        <Link href={link} className="btn-borda px-3 py-1.5 text-sm">
+        <Link href={link} className="btn-borda min-h-10 px-3 py-1.5 text-sm">
           + Adicionar personagem
         </Link>
         {/* no desktop o convite fica no cabeçalho; aqui só no celular (a gaveta ocupa a tela, o modal cabe nela) */}
@@ -434,33 +434,53 @@ export function Codex({
             ✕
           </button>
         </div>
-        <nav className="flex gap-1 overflow-x-auto border-b border-border/70 px-2 text-sm [scrollbar-width:none]" role="tablist">
+        {/* as cinco abas cabem na largura (celular e gaveta de 400px) sem rolar de lado */}
+        <nav className="flex border-b border-border/70 px-1 text-sm" role="tablist" aria-label="Seções do códex">
           {ABAS.map(([id, rotulo]) => (
             <button
               key={id}
+              id={`codex-aba-${id}`}
               type="button"
               role="tab"
               aria-selected={aba === id}
+              aria-controls="codex-painel"
               onClick={() => aoMudarAba(id)}
-              className={`-mb-px min-h-11 shrink-0 border-b-2 px-3 ${aba === id ? "border-ambar text-ambar" : "border-transparent text-muted hover:text-foreground"}`}
+              className={`-mb-px flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1 border-b-2 px-1 transition-colors ${
+                aba === id ? "border-ambar text-ambar" : "border-transparent text-muted hover:text-foreground"
+              }`}
             >
-              {rotulo}
-              {id === "missoes" && missoesAbertas > 0 && <span className="ml-1 text-xs text-ambar/80">({missoesAbertas})</span>}
-              {id === "grupo" && <span className="ml-1 text-xs text-muted">({mesa.personagens.length})</span>}
+              <span className="truncate">{rotulo}</span>
+              {id === "missoes" && missoesAbertas > 0 && (
+                <span className="grid min-w-4 shrink-0 place-items-center rounded-full bg-ambar/20 px-1 text-[10px] leading-4 text-ambar" aria-label={`${missoesAbertas} em andamento`}>
+                  {missoesAbertas}
+                </span>
+              )}
+              {id === "grupo" && mesa.personagens.length > 1 && <span className="shrink-0 text-[10px] text-muted">{mesa.personagens.length}</span>}
             </button>
           ))}
         </nav>
-        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4" role="tabpanel">
+        <div
+          key={aba}
+          id="codex-painel"
+          className="surgir flex-1 overflow-y-auto overscroll-contain px-4 py-4"
+          role="tabpanel"
+          aria-labelledby={`codex-aba-${aba}`}
+        >
           {aba === "personagem" && <AbaPersonagem mesa={mesa} p={ativo} />}
           {aba === "missoes" && <AbaMissoes entradas={mesa.diario} />}
           {aba === "pessoas" && <AbaPessoas entradas={mesa.diario} />}
           {aba === "lugares" && <AbaLugares mesa={mesa} />}
           {aba === "grupo" && <AbaGrupo mesa={mesa} acoes={acoes} />}
         </div>
-        <p className="border-t border-border/70 px-4 py-2 text-[11px] text-muted">
-          {mesa.sistema.nomeCurto} · Mestre: {mesa.provedor}
-          {mesa.limite?.uso != null && ` · plano ${Math.round(mesa.limite.uso * 100)}%`}
-        </p>
+        <div className="flex items-center gap-3 border-t border-border/70 py-1 pl-4 pr-2 text-[11px] text-muted">
+          <p className="min-w-0 flex-1 truncate" title={`${mesa.sistema.nomeCurto} · Mestre: ${mesa.provedor}`}>
+            {mesa.sistema.nomeCurto} · Mestre: {mesa.provedor}
+            {mesa.limite?.uso != null && ` · plano ${Math.round(mesa.limite.uso * 100)}%`}
+          </p>
+          <Link href={`/mesa/${mesa.campanha.id}/ajustes`} className="flex min-h-10 shrink-0 items-center gap-1 rounded-md px-2 hover:bg-surface-2 hover:text-ambar">
+            <span aria-hidden>⚙</span> Ajustes da mesa
+          </Link>
+        </div>
       </aside>
     </>
   );

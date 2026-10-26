@@ -680,7 +680,7 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar }
         aria-haspopup="dialog"
         aria-expanded={aberto}
         title="Rolar dados (tecla D)"
-        className={`rounded-md border px-2 py-1 text-xs transition ${aberto ? "border-ambar bg-ambar/10 text-ambar" : "border-border text-foreground/90 hover:border-ambar hover:text-ambar"}`}
+        className={`min-h-10 rounded-md border px-2.5 py-1 text-xs transition focus-visible:outline-2 focus-visible:outline-ambar sm:min-h-0 sm:px-2 ${aberto ? "border-ambar bg-ambar/10 text-ambar" : "border-border text-foreground/90 hover:border-ambar hover:text-ambar"}`}
       >
         🎲 Dados
       </button>

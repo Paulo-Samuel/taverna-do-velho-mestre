@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Navegação do cabeçalho (usada por src/app/layout.tsx). Mora aqui junto das configurações por ser
 // "coisa da casa", não de uma mesa. No celular vira um menu que fecha sozinho ao trocar de página.
@@ -25,9 +25,18 @@ export function Navegacao() {
     setAberto(false);
   }
 
+  const botaoRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLElement>(null);
+
+  // abriu: foco no primeiro link; Esc fecha e devolve o foco ao botão (quem usa teclado não fica perdido)
   useEffect(() => {
     if (!aberto) return;
-    const aoTeclar = (e: KeyboardEvent) => e.key === "Escape" && setAberto(false);
+    menuRef.current?.querySelector<HTMLElement>("a")?.focus();
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setAberto(false);
+      botaoRef.current?.focus();
+    };
     window.addEventListener("keydown", aoTeclar);
     return () => window.removeEventListener("keydown", aoTeclar);
   }, [aberto]);
@@ -36,7 +45,8 @@ export function Navegacao() {
     LINKS.map((l) => {
       const ativo = l.ativo(caminho);
       return (
-        <Link key={l.href} href={l.href} className={classe(ativo)} aria-current={ativo ? "page" : undefined}>
+        // fechar no clique cobre o link da página atual, que não muda o caminho
+        <Link key={l.href} href={l.href} className={classe(ativo)} aria-current={ativo ? "page" : undefined} onClick={() => setAberto(false)}>
           {l.rotulo}
         </Link>
       );
@@ -49,8 +59,9 @@ export function Navegacao() {
       </nav>
 
       <button
+        ref={botaoRef}
         type="button"
-        className="btn-borda px-3 py-1.5 md:hidden"
+        className="btn-borda size-10 shrink-0 p-0 text-lg md:hidden"
         aria-expanded={aberto}
         aria-controls="menu-celular"
         onClick={() => setAberto((a) => !a)}
@@ -64,6 +75,7 @@ export function Navegacao() {
           {/* clique fora fecha */}
           <div className="fixed inset-0 z-30 md:hidden" aria-hidden onClick={() => setAberto(false)} />
           <nav
+            ref={menuRef}
             id="menu-celular"
             aria-label="Principal"
             className="cartao surgir absolute inset-x-4 top-full z-40 mt-2 flex flex-col bg-surface! p-2 md:hidden"

@@ -38,9 +38,9 @@ export default async function AjustesMesa(props: PageProps<"/mesa/[id]/ajustes">
   const grupo = listarPersonagens(campanha.id);
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 px-4 py-8">
+    <main className="mx-auto max-w-3xl space-y-6 px-4 py-8 [&_:focus-visible]:outline-2 [&_:focus-visible]:outline-offset-2 [&_:focus-visible]:outline-ambar">
       <div>
-        <Link href={`/mesa/${campanha.id}`} className="text-xs text-muted hover:text-ambar">
+        <Link href={`/mesa/${campanha.id}`} className="-my-2 inline-block py-2 text-xs text-muted hover:text-ambar">
           ← voltar para a mesa
         </Link>
         <h1 className="titulo mt-1 text-3xl text-pergaminho">Ajustes da mesa</h1>
@@ -73,7 +73,7 @@ export default async function AjustesMesa(props: PageProps<"/mesa/[id]/ajustes">
 
       <Secao titulo="Grupo">
         <p className="mb-3 text-sm text-muted">
-          {grupo.length ? grupo.map((p) => p.ficha.nome).join(", ") : "Ninguém sentado ainda."} Para tirar alguém, use a aba Grupo da mesa.
+          {grupo.length ? `${grupo.map((p) => p.ficha.nome).join(", ")}.` : "Ninguém sentado ainda."} Para tirar alguém, use a aba Grupo da mesa.
         </p>
         <Link href={`/mesa/${campanha.id}/personagens/novo`} className="btn-borda">
           + Adicionar personagem

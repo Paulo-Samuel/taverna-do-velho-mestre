@@ -89,6 +89,8 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
   const [estado, enviar, enviando] = useActionState(acao, { erro: null });
   const formRef = useRef<HTMLFormElement>(null);
   const topoRef = useRef<HTMLDivElement>(null);
+  // fica ligada por um instante depois que o resumo aparece (trava contra envio por clique duplo)
+  const travaEnvio = useRef(false);
 
   const pedido = sistemas.find((s) => s.id === sistemaInicial && s.pronto)?.id;
   const inicial = sistemaFixo ?? pedido ?? sistemas.find((s) => s.pronto)?.id ?? "";
@@ -96,6 +98,8 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
   // veio do catálogo com o sistema escolhido: pula direto para o personagem (a barra de passos deixa voltar)
   const [passo, setPasso] = useState<Passo>(sistemaFixo || pedido ? "ancestralidade" : "sistema");
   const [aviso, setAviso] = useState<string | null>(null);
+  // passo mais adiantado já visitado: a barra de passos deixa pular até ele (validando o caminho)
+  const [alcance, setAlcance] = useState(0);
   // de que classe+método vieram os atributos atuais; editar à mão congela (não sobrescrevemos o que o jogador digitou)
   const [origemAtributos, setOrigemAtributos] = useState<string | null>(null);
   const [editados, setEditados] = useState(false);
@@ -159,6 +163,8 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
     setOrigemAtributos(null);
     setEditados(false);
     setAviso(null);
+    // outro sistema tem outros passos: o que estava "visitado" não vale mais
+    setAlcance(indice);
   }
 
   function sugerir(metodo: string, classe = e.classe) {
@@ -252,6 +258,8 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
       if (salvo) setE((v) => ({ ...v, jogador: v.jogador || salvo }));
     }
     if (p === "resumo") {
+      travaEnvio.current = true;
+      setTimeout(() => (travaEnvio.current = false), 800);
       setPrevia(null);
       // o FormData sai dos campos escondidos, que já refletem o estado atual
       const form = formRef.current;
@@ -261,6 +269,7 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
       }
     }
     setPasso(p);
+    setAlcance((a) => Math.max(a, passos.indexOf(p)));
     topoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -269,6 +278,20 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
     if (erro) return setAviso(erro);
     const proximo = passos[indice + 1];
     if (proximo) irPara(proximo);
+  }
+
+  /** Clique na barra de passos: voltar é livre; ir adiante para quem já foi visitado para no primeiro passo com pendência. */
+  function pular(i: number) {
+    if (i === indice || i > alcance) return;
+    if (i > indice) {
+      const pendente = passos.slice(indice, i).find((p) => problema(p));
+      if (pendente) {
+        if (pendente !== atual) irPara(pendente);
+        setAviso(problema(pendente));
+        return;
+      }
+    }
+    irPara(passos[i]);
   }
 
   function voltar() {
@@ -281,6 +304,11 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
     if (!ultimo) {
       ev.preventDefault();
       avancar();
+      return;
+    }
+    // clique duplo no "Revisar" não pode virar envio: o segundo clique cai no botão de criar que acabou de aparecer
+    if (travaEnvio.current) {
+      ev.preventDefault();
       return;
     }
     const pendente = passos.find((p) => problema(p));
@@ -301,40 +329,92 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
   }
 
   const prontos = sistemas.filter((s) => s.pronto);
+  // a prévia só faz sentido entre o sistema e o resumo (o resumo já mostra a ficha inteira)
+  const mostrarPrevia = Boolean(sistema) && atual !== "sistema" && atual !== "resumo";
+  const proximo = passos[indice + 1];
+  const resumoCurto = sistema
+    ? [
+        e.nome.trim() || "Sem nome",
+        sistema.ancestralidades.find((a) => a.id === e.ancestralidade)?.nome,
+        sistema.classes.find((c) => c.id === e.classe)?.nome,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
 
   return (
     <div ref={topoRef} className="mt-6 scroll-mt-4">
       {sistemaFixo && sistema && !sistema.pronto ? null : prontos.length === 0 ? (
         <p className="cartao p-4 text-sm text-muted">Nenhum sistema pronto ainda. O mestre está afinando as regras.</p>
       ) : (
-        <form ref={formRef} action={enviar} onSubmit={aoEnviar} onKeyDown={aoTeclar} noValidate>
-          {/* progresso */}
-          <div className="mb-5">
-            <div className="mb-1.5 flex items-baseline justify-between gap-3 text-xs text-muted">
+        <form
+          ref={formRef}
+          action={enviar}
+          onSubmit={aoEnviar}
+          onKeyDown={aoTeclar}
+          noValidate
+          className="[&_:focus-visible]:outline-2 [&_:focus-visible]:outline-offset-2 [&_:focus-visible]:outline-ambar"
+        >
+          {/* progresso: cada passo já visitado é clicável */}
+          <nav className="mb-4" aria-label="Passos da criação">
+            <div className="flex items-baseline justify-between gap-3 text-xs text-muted">
               <span>
-                Passo {indice + 1} de {passos.length} · <span className="text-ambar">{nomePasso(atual)}</span>
+                Passo {indice + 1} de {passos.length} · <span className="font-semibold text-ambar">{nomePasso(atual)}</span>
               </span>
               {sistema && atual !== "sistema" && <span className="truncate">{sistema.nomeCurto}</span>}
             </div>
-            <div className="flex gap-1" role="list" aria-label="Passos">
-              {passos.map((p, i) => (
-                <button
-                  key={p}
-                  type="button"
-                  role="listitem"
-                  disabled={i >= indice}
-                  onClick={() => irPara(p)}
-                  title={nomePasso(p)}
-                  aria-current={i === indice ? "step" : undefined}
-                  className={`h-1.5 flex-1 rounded-full transition-colors ${i < indice ? "bg-ambar-forte hover:bg-ambar" : i === indice ? "bg-ambar" : "bg-surface-2"} disabled:cursor-default`}
-                >
-                  <span className="sr-only">{nomePasso(p)}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+            <ol className="flex gap-1">
+              {passos.map((p, i) => {
+                const visitado = i <= alcance;
+                return (
+                  <li key={p} className="min-w-0 flex-1">
+                    <button
+                      type="button"
+                      disabled={i === indice || !visitado}
+                      onClick={() => pular(i)}
+                      title={visitado && i !== indice ? `Ir para ${nomePasso(p)}` : nomePasso(p)}
+                      aria-current={i === indice ? "step" : undefined}
+                      className="group flex w-full flex-col gap-1 rounded-sm py-2 text-left disabled:cursor-default"
+                    >
+                      <span
+                        className={`h-1.5 w-full rounded-full transition-colors ${
+                          i === indice ? "bg-ambar" : visitado ? "bg-ambar-forte group-hover:bg-ambar" : "bg-border"
+                        }`}
+                      />
+                      <span
+                        className={`hidden truncate text-[11px] leading-tight md:block ${
+                          i === indice ? "font-semibold text-ambar" : visitado ? "text-foreground/80 group-hover:text-ambar" : "text-muted"
+                        }`}
+                      >
+                        {nomePasso(p)}
+                      </span>
+                      <span className="sr-only md:hidden">{nomePasso(p)}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </nav>
 
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
+          {/* no celular a prévia mora numa gaveta acima do passo */}
+          {sistema && mostrarPrevia && (
+            <details className="cartao group/previa mb-4 lg:hidden">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 px-4 py-2 [&::-webkit-details-marker]:hidden">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[11px] uppercase tracking-widest text-ambar-forte">Prévia da ficha</span>
+                  <span className="block truncate text-sm text-foreground/90">{resumoCurto}</span>
+                </span>
+                <span className="text-muted transition-transform group-open/previa:rotate-180" aria-hidden>
+                  ▾
+                </span>
+              </summary>
+              <div className="border-t border-border px-4 pb-4 pt-3">
+                <PreviaLateral sistema={sistema} e={e} opcoes={opcoes} />
+              </div>
+            </details>
+          )}
+
+          <div className={mostrarPrevia ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]" : ""}>
             <div key={atual} className="surgir min-w-0">
               {atual === "sistema" && <PassoSistema sistemas={sistemas} e={e} escolher={escolherSistema} />}
               {sistema && atual === "ancestralidade" && <PassoAncestralidade sistema={sistema} e={e} atualizar={atualizar} />}
@@ -371,35 +451,44 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
               )}
             </div>
 
-            {sistema && atual !== "sistema" && atual !== "resumo" && (
-              <aside className="hidden lg:block">
-                <div className="cartao sticky top-6 p-4">
+            {sistema && mostrarPrevia && (
+              <aside className="hidden lg:block" aria-label="Prévia da ficha">
+                <div className="cartao sticky top-6 max-h-[calc(100vh-9rem)] overflow-y-auto p-4">
                   <PreviaLateral sistema={sistema} e={e} opcoes={opcoes} />
                 </div>
               </aside>
             )}
           </div>
 
-          {(aviso || (ultimo && estado.erro)) && (
-            <p role="alert" className="mt-4 rounded-md border border-sangue/60 bg-sangue/10 px-3 py-2 text-sm">
-              {aviso ?? estado.erro}
-            </p>
-          )}
-
-          {/* navegação: grudada no rodapé no celular, para não precisar rolar até o fim de listas longas */}
-          <div className="sticky bottom-0 -mx-4 mt-6 flex items-center justify-between gap-3 border-t border-border bg-background/90 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:backdrop-blur-none">
-            <button type="button" className="btn-borda" onClick={voltar} disabled={indice === 0 || enviando}>
-              ← Voltar
-            </button>
-            {ultimo ? (
-              <button type="submit" className="btn-ambar" disabled={enviando}>
-                {enviando ? "Abrindo a porta…" : (textoBotao ?? "Criar")}
-              </button>
-            ) : (
-              <button type="button" className="btn-ambar" onClick={avancar} disabled={!sistema?.pronto}>
-                Avançar →
-              </button>
+          {/* navegação grudada no rodapé (celular e desktop): listas longas não escondem o Avançar, nem o aviso de pendência */}
+          <div className="sticky bottom-0 z-20 -mx-4 mt-6 border-t border-border bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:mx-0 sm:rounded-t-xl sm:border-x sm:bg-surface/95">
+            {(aviso || (ultimo && estado.erro)) && (
+              <p role="alert" className="mb-3 flex items-start gap-2 rounded-md border border-sangue/60 bg-sangue/15 px-3 py-2 text-sm">
+                <span className="text-sangue" aria-hidden>
+                  ✕
+                </span>
+                <span>{aviso ?? estado.erro}</span>
+              </p>
             )}
+            <div className="flex items-center justify-between gap-3">
+              <button type="button" className="btn-borda px-4" onClick={voltar} disabled={indice === 0 || enviando}>
+                ← Voltar
+              </button>
+              <span className="hidden min-w-0 truncate text-center text-xs text-muted sm:block">
+                {ultimo ? "Depois daqui, só o mestre e os dados mexem na ficha." : proximo ? `Próximo: ${nomePasso(proximo)}` : ""}
+              </span>
+              {/* keys diferentes: sem elas o React reaproveita o mesmo <button> e só troca o type para "submit" durante o clique
+                  do Avançar, e o navegador envia o formulário no mesmo clique (criava a campanha ao chegar no resumo) */}
+              {ultimo ? (
+                <button key="enviar" type="submit" className="btn-ambar" disabled={enviando}>
+                  {enviando ? "Abrindo a porta…" : (textoBotao ?? "Criar")}
+                </button>
+              ) : (
+                <button key="avancar" type="button" className="btn-ambar" onClick={avancar} disabled={!sistema?.pronto}>
+                  {proximo === "resumo" ? "Revisar →" : "Avançar →"}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* campos do contrato (src/lib/formulario-ficha.ts) */}

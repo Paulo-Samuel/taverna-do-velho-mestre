@@ -105,7 +105,7 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
   }
 
   return (
-    <div className="mx-auto max-w-xl space-y-4 px-4 py-6">
+    <div className="mx-auto max-w-xl space-y-4 px-4 py-6 [&_:focus-visible]:outline-2 [&_:focus-visible]:outline-offset-2 [&_:focus-visible]:outline-ambar">
       <header className="text-center">
         <p className="text-xs uppercase tracking-widest text-muted">
           {sistema.nome} · {local ? "nesta máquina" : "pela rede local"}
@@ -120,7 +120,7 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
             <span>
               Na taverna você é <strong className="text-ambar">{nomeLimpo}</strong>.
             </span>
-            <button type="button" className="text-xs text-muted hover:text-ambar" onClick={() => setConfirmado(false)}>
+            <button type="button" className="-my-1 rounded px-2 py-2 text-xs text-muted hover:text-ambar" onClick={() => setConfirmado(false)}>
               trocar
             </button>
           </p>
@@ -170,13 +170,17 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
               autoCapitalize="none"
             />
             <button className="btn-ambar px-4" disabled={!pin.trim() || ocupado === "pin"}>
-              {ocupado === "pin" ? "…" : "Entrar"}
+              {ocupado === "pin" ? "Conferindo…" : "Entrar"}
             </button>
           </form>
         </Passo>
       )}
 
-      {erro && <p className="rounded-md border border-sangue/60 bg-sangue/10 px-4 py-3 text-sm">{erro}</p>}
+      {erro && (
+        <p role="alert" className="rounded-md border border-sangue/60 bg-sangue/10 px-4 py-3 text-sm">
+          {erro}
+        </p>
+      )}
 
       {liberado && (
         <Passo n={2} titulo="Seu personagem">
@@ -215,7 +219,7 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
                   </div>
                   <button
                     type="button"
-                    className={meu || !p.jogador ? "btn-ambar px-3 py-1.5" : "btn-borda px-3 py-1.5"}
+                    className={meu || !p.jogador ? "btn-ambar min-h-10 px-4 py-1.5" : "btn-borda min-h-10 px-4 py-1.5"}
                     disabled={!pronto || donoOnline || ocupado !== null}
                     onClick={() => void pegar(p)}
                   >
@@ -227,10 +231,10 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
           </ul>
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3 text-sm">
-            <Link href={`/mesa/${campanha.id}/personagens/novo`} className={`btn-borda py-1.5 ${confirmado ? "" : "pointer-events-none opacity-50"}`}>
+            <Link href={`/mesa/${campanha.id}/personagens/novo`} className={`btn-borda min-h-10 py-1.5 ${confirmado ? "" : "pointer-events-none opacity-50"}`}>
               Criar personagem novo
             </Link>
-            <Link href={`/mesa/${campanha.id}`} className={`text-muted hover:text-ambar ${confirmado ? "" : "pointer-events-none opacity-50"}`}>
+            <Link href={`/mesa/${campanha.id}`} className={`py-2 text-muted hover:text-ambar ${confirmado ? "" : "pointer-events-none opacity-50"}`}>
               Só assistir por enquanto →
             </Link>
           </div>

@@ -163,11 +163,16 @@ export function PedidoTeste({
   const natural = resultado?.natural ?? null;
   const destaque = natural === 20 ? "critico" : natural === 1 ? "falha" : null;
   const corGrau = resultado ? COR_GRAU[resultado.grau] : undefined;
+  // esperando o clique deste aparelho: o cartão respira (brilho em ceu-estrelado.tsx) para chamar o olho
+  const esperando = !rolagem && podeRolar;
   return (
     <section
       id={`pedido-${mensagem.id}`}
-      className="surgir pedido-teste relative mx-auto my-8 max-w-xl scroll-mt-24 overflow-hidden rounded-2xl border border-ambar/50 bg-surface/85 px-4 pb-5 pt-4 text-center shadow-[0_0_60px_-24px_var(--ambar)] sm:px-6"
+      className={`surgir pedido-teste relative mx-auto my-8 max-w-xl scroll-mt-24 overflow-hidden rounded-2xl border bg-surface/85 px-4 pb-5 pt-4 text-center shadow-[0_0_60px_-24px_var(--ambar)] sm:px-6 ${
+        esperando ? "pedido-pendente border-ambar/70" : "border-ambar/50"
+      }`}
       aria-live="polite"
+      aria-label={`Teste de ${teste} de ${nome}`}
     >
       <div className="flex items-center justify-center gap-2 text-xs text-muted">
         {personagem && <Retrato ficha={personagem.ficha} tamanho={28} />}
@@ -219,7 +224,12 @@ export function PedidoTeste({
       ) : rolagem ? (
         <p className="mt-4 text-sm italic text-muted">O dado corre pela mesa…</p>
       ) : podeRolar ? (
-        <button type="button" className="btn-ambar mt-4 min-h-12 px-8 text-base" onClick={() => void clicar()}>
+        <button
+          type="button"
+          data-rolar
+          className="btn-ambar mt-4 min-h-12 px-8 text-base focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ambar"
+          onClick={() => void clicar()}
+        >
           🎲 {d20 ? "Rolar o dado" : "Rolar os dados"}
         </button>
       ) : (

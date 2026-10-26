@@ -53,13 +53,14 @@ function Busca({ valor, mudar, placeholder }: { valor: string; mudar: (v: string
   );
 }
 
+// alvo de toque de 40px no celular; no desktop volta ao tamanho de plaquinha
 function Chip({ ativo, onClick, children }: { ativo: boolean; onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
       aria-pressed={ativo}
       onClick={onClick}
-      className={`rounded-full border px-3 py-1 text-xs transition ${ativo ? "border-ambar bg-ambar/15 text-ambar" : "border-border text-muted hover:border-ambar/60 hover:text-foreground"}`}
+      className={`inline-flex min-h-10 items-center rounded-full border px-3 py-1 text-left text-sm leading-snug transition sm:min-h-8 sm:text-xs ${ativo ? "border-ambar bg-ambar/15 text-ambar" : "border-border text-foreground/80 hover:border-ambar/60 hover:text-foreground"}`}
     >
       {children}
     </button>
@@ -67,14 +68,15 @@ function Chip({ ativo, onClick, children }: { ativo: boolean; onClick: () => voi
 }
 
 function Cartao({ ativo, desativado, onClick, children }: { ativo: boolean; desativado?: boolean; onClick: () => void; children: ReactNode }) {
+  // flex-col: o conteúdo fica no topo mesmo quando o vizinho da grade é mais alto
   return (
     <button
       type="button"
       aria-pressed={ativo}
       disabled={desativado}
       onClick={onClick}
-      className={`cartao relative w-full p-3.5 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${
-        ativo ? "border-ambar ring-1 ring-ambar/70" : "hover:border-ambar/50"
+      className={`cartao relative flex h-full w-full flex-col justify-start p-3.5 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${
+        ativo ? "border-ambar bg-ambar/[0.07] ring-1 ring-ambar/70" : "hover:border-ambar/50 hover:bg-surface-2/60"
       }`}
     >
       {ativo && (
@@ -89,9 +91,45 @@ function Cartao({ ativo, desativado, onClick, children }: { ativo: boolean; desa
 
 function Selo({ children, destaque }: { children: ReactNode; destaque?: boolean }) {
   return (
-    <span className={`rounded-full border px-1.5 py-px text-[10px] uppercase tracking-wider ${destaque ? "border-ambar/50 text-ambar" : "border-border text-muted"}`}>
+    <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] font-normal leading-snug ${destaque ? "border-ambar/50 text-ambar" : "border-border bg-surface-2/60 text-foreground/75"}`}>
       {children}
     </span>
+  );
+}
+
+/** Traços curtos viram plaquinhas; frases ("Especialidade: Intimidação (assaltos) ou...") viram lista, que se lê melhor. */
+function Tracos({ tracos }: { tracos: string[] }) {
+  if (!tracos.length) return null;
+  if (tracos.every((t) => t.length <= 24)) {
+    return (
+      <div className="mt-2 flex flex-wrap gap-1">
+        {tracos.map((t) => (
+          <Selo key={t}>{t}</Selo>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <ul className="mt-2.5 space-y-1 border-t border-border/70 pt-2 text-[13px] leading-snug text-foreground/80">
+      {tracos.map((t) => {
+        // "Rótulo: resto" ganha o rótulo em destaque
+        const [cabeca, ...resto] = t.split(/:\s+/);
+        return (
+          <li key={t} className="flex gap-1.5">
+            <span className="mt-[0.45em] h-1 w-1 shrink-0 rounded-full bg-ambar-forte" aria-hidden />
+            <span>
+              {resto.length ? (
+                <>
+                  <span className="text-ambar">{cabeca}:</span> {resto.join(": ")}
+                </>
+              ) : (
+                t
+              )}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -113,7 +151,7 @@ export function PassoSistema({ sistemas, e, escolher }: { sistemas: SistemaPubli
   return (
     <>
       <Titulo ajuda="Cada sistema tem seu jeito de rolar e de matar personagens. Dá para ter campanhas em sistemas diferentes.">Que regras vamos usar?</Titulo>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {sistemas.map((s) => (
           <Cartao key={s.id} ativo={e.sistemaId === s.id} desativado={!s.pronto} onClick={() => escolher(s.id)}>
             <div className="flex items-start gap-3 pr-6">
@@ -133,7 +171,7 @@ export function PassoSistema({ sistemas, e, escolher }: { sistemas: SistemaPubli
                 {s.ancestralidades.length === 1 ? "" : "s"}
               </p>
             )}
-            <p className="mt-1 text-[11px] leading-snug text-muted/80">{s.licenca}</p>
+            <p className="mt-auto pt-1.5 text-[11px] leading-snug text-muted">{s.licenca}</p>
           </Cartao>
         ))}
       </div>
@@ -170,13 +208,7 @@ export function PassoAncestralidade({ sistema, e, atualizar }: PropsPasso) {
                   {a.deslocamento && <span className="text-muted">deslocamento {a.deslocamento}</span>}
                 </p>
               )}
-              {a.tracos?.length ? (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {a.tracos.map((t) => (
-                    <Selo key={t}>{t}</Selo>
-                  ))}
-                </div>
-              ) : null}
+              <Tracos tracos={a.tracos ?? []} />
             </Cartao>
           );
         })}
@@ -253,7 +285,11 @@ export function PassoClasse({ sistema, e, atualizar }: PropsPasso) {
       <div className="space-y-5">
         {grupos.map(([grupo, classes]) => (
           <section key={grupo || "todas"}>
-            {grupo && <h3 className="titulo mb-2 text-sm uppercase tracking-widest text-ambar-forte">{capitalizar(grupo)}</h3>}
+            {grupo && (
+              <h3 className="titulo mb-2 flex items-center gap-2 text-sm uppercase tracking-widest text-ambar">
+                {capitalizar(grupo)} <span className="h-px flex-1 bg-border" aria-hidden />
+              </h3>
+            )}
             <div className="grid gap-3 sm:grid-cols-2">
               {classes.map((c) => {
                 const ativo = e.classe === c.id;
@@ -442,7 +478,7 @@ export function PassoAtributos({ sistema, e, carregando, sugerir, editar, sugest
                 <span className="titulo text-xs text-ambar">{a.abrev}</span>
               </label>
               <div className="mt-1 flex items-center gap-1">
-                <button type="button" onClick={() => passo(a.id, -1)} className="h-9 w-8 shrink-0 rounded-md border border-border text-muted hover:text-ambar" aria-label={`Diminuir ${a.nome}`}>
+                <button type="button" onClick={() => passo(a.id, -1)} className="h-10 w-9 shrink-0 rounded-md border border-border text-lg text-muted hover:border-ambar/60 hover:text-ambar sm:h-9 sm:w-8 sm:text-base" aria-label={`Diminuir ${a.nome}`}>
                   −
                 </button>
                 <input
@@ -454,9 +490,9 @@ export function PassoAtributos({ sistema, e, carregando, sugerir, editar, sugest
                   value={valor}
                   placeholder="—"
                   onChange={(ev) => editar(a.id, ev.target.value)}
-                  className="campo h-9 min-w-0 px-1 text-center text-lg tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                  className="campo h-10 min-w-0 px-1 sm:h-9 text-center text-lg tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
                 />
-                <button type="button" onClick={() => passo(a.id, 1)} className="h-9 w-8 shrink-0 rounded-md border border-border text-muted hover:text-ambar" aria-label={`Aumentar ${a.nome}`}>
+                <button type="button" onClick={() => passo(a.id, 1)} className="h-10 w-9 shrink-0 rounded-md border border-border text-lg text-muted hover:border-ambar/60 hover:text-ambar sm:h-9 sm:w-8 sm:text-base" aria-label={`Aumentar ${a.nome}`}>
                   +
                 </button>
               </div>
@@ -527,7 +563,7 @@ export function PassoPericias({ sistema, e, atualizar }: PropsPasso) {
                     disabled={fixa || cheio}
                     title={fixa ? `Já vem de ${sistema.rotulos.classe.toLowerCase()}` : p.descricao}
                     onClick={() => alternar(p.id)}
-                    className={`rounded-full border px-3 py-1 text-sm transition disabled:cursor-not-allowed ${
+                    className={`min-h-10 rounded-full border px-3 py-1 text-sm transition disabled:cursor-not-allowed sm:min-h-8 ${
                       fixa
                         ? "border-musgo/60 bg-musgo/10 text-musgo"
                         : ativa
@@ -573,11 +609,14 @@ function CampoOpcao({ opcao, valores, mudar, destaque }: PropsCampo) {
       else if (!multipla) mudar([id]);
       else if (valores.length < max) mudar([...valores, id]);
     };
+    // listas longas de múltipla escolha (perícias do Vampiro) e opções sem descrição (atributos) viram botões compactos
+    const compacta = opcoes.every((o) => !o.descricao) || (multipla && opcoes.length > 8);
     return (
       <div>
         {multipla && (
-          <p className="mb-1.5 text-xs text-muted">
+          <p className={`mb-1.5 text-xs tabular-nums ${valores.length >= max ? "text-ambar" : "text-muted"}`}>
             {valores.length}/{max} escolhida{max === 1 ? "" : "s"}
+            {valores.length >= max && max > 1 ? " · tire uma para trocar" : ""}
           </p>
         )}
         {opcoes.length > 8 && (
@@ -585,22 +624,49 @@ function CampoOpcao({ opcao, valores, mudar, destaque }: PropsCampo) {
             <Busca valor={busca} mudar={setBusca} placeholder={`Buscar em ${opcao.rotulo.toLowerCase()}…`} />
           </div>
         )}
-        <div className="grid gap-2 sm:grid-cols-2">
-          {lista.map((o) => {
-            const ativo = valores.includes(o.id);
-            return (
-              <Cartao key={o.id} ativo={ativo} desativado={multipla && !ativo && valores.length >= max} onClick={() => alternar(o.id)}>
-                <p className="pr-6 font-semibold leading-tight text-pergaminho">{o.nome}</p>
-                {o.descricao && <p className="mt-0.5 text-xs text-muted">{o.descricao}</p>}
-                {parcial && combina(o) && (
-                  <span className="mt-1 inline-block">
-                    <Selo destaque>combina com {destaque}</Selo>
+        {compacta ? (
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+            {lista.map((o) => {
+              const ativo = valores.includes(o.id);
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  aria-pressed={ativo}
+                  disabled={multipla && !ativo && valores.length >= max}
+                  onClick={() => alternar(o.id)}
+                  title={o.descricao}
+                  className={`flex min-h-11 flex-col justify-center rounded-lg border px-3 py-1.5 text-left transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                    ativo ? "border-ambar bg-ambar/10 text-ambar" : "border-border bg-surface/60 text-pergaminho hover:border-ambar/50"
+                  }`}
+                >
+                  <span className="text-sm font-semibold leading-tight">
+                    {ativo && <span aria-hidden>✓ </span>}
+                    {o.nome}
                   </span>
-                )}
-              </Cartao>
-            );
-          })}
-        </div>
+                  {o.descricao && <span className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-muted">{o.descricao}</span>}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {lista.map((o) => {
+              const ativo = valores.includes(o.id);
+              return (
+                <Cartao key={o.id} ativo={ativo} desativado={multipla && !ativo && valores.length >= max} onClick={() => alternar(o.id)}>
+                  <p className="pr-6 font-semibold leading-tight text-pergaminho">{o.nome}</p>
+                  {o.descricao && <p className="mt-0.5 text-xs text-muted">{o.descricao}</p>}
+                  {parcial && combina(o) && (
+                    <span className="mt-1.5 self-start">
+                      <Selo destaque>combina com {destaque}</Selo>
+                    </span>
+                  )}
+                </Cartao>
+              );
+            })}
+          </div>
+        )}
         {lista.length === 0 && <Nada>Nada com esse nome.</Nada>}
       </div>
     );
@@ -649,17 +715,26 @@ export function PassoOpcoes({ sistema, e, atualizar, opcoes }: PropsPasso & { op
       <Titulo ajuda={`Os detalhes que fazem ${classe ? `este ${classe.nome.toLowerCase()}` : "este personagem"} ser diferente do resto. Os marcados com * são obrigatórios.`}>
         Escolhas de {sistema.nomeCurto}
       </Titulo>
-      <div className="space-y-6">
+      {/* uma linha separando cada pergunta: no Vampiro são mais de dez em sequência */}
+      <div className="divide-y divide-border/70">
         {opcoes.map((o) => (
-          <fieldset key={o.id}>
-            <legend className="mb-1 font-semibold text-pergaminho">
-              {o.rotulo}
-              {o.obrigatoria && <span className="ml-1 text-sangue">*</span>}
-              {o.classes?.length ? <span className="ml-2 align-middle text-[10px] uppercase tracking-wider text-ambar-forte">de {classe?.nome ?? "classe"}</span> : null}
-            </legend>
-            {o.ajuda && <p className="mb-2 text-xs text-muted">{o.ajuda}</p>}
-            <CampoOpcao opcao={o} destaque={anc?.nome} valores={e.extras[o.id] ?? []} mudar={(v) => atualizar({ extras: { ...e.extras, [o.id]: v } })} />
-          </fieldset>
+          <div key={o.id} className="py-5 first:pt-0 last:pb-0">
+            <fieldset>
+              <legend className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-pergaminho">
+                <span>
+                  {o.rotulo}
+                  {o.obrigatoria && (
+                    <span className="ml-1 text-sangue" title="obrigatório">
+                      *<span className="sr-only"> (obrigatório)</span>
+                    </span>
+                  )}
+                </span>
+                {o.classes?.length ? <Selo destaque>de {classe?.nome ?? "classe"}</Selo> : null}
+              </legend>
+              {o.ajuda && <p className="mb-2 text-xs leading-relaxed text-muted">{o.ajuda}</p>}
+              <CampoOpcao opcao={o} destaque={anc?.nome} valores={e.extras[o.id] ?? []} mudar={(v) => atualizar({ extras: { ...e.extras, [o.id]: v } })} />
+            </fieldset>
+          </div>
         ))}
       </div>
     </>

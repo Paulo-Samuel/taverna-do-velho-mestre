@@ -28,8 +28,8 @@ export default async function NovoPersonagem(props: PageProps<"/mesa/[id]/person
   const grupo = listarPersonagens(campanha.id).map((p) => p.ficha.nome);
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8">
-      <Link href={`/mesa/${campanha.id}`} className="text-xs text-muted hover:text-ambar">
+    <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
+      <Link href={`/mesa/${campanha.id}`} className="-my-2 inline-block py-2 text-xs text-muted hover:text-ambar">
         ← voltar para {campanha.nome}
       </Link>
       <h1 className="titulo mt-1 text-3xl text-pergaminho sm:text-4xl">Mais uma cadeira na mesa</h1>

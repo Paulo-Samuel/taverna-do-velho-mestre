@@ -98,12 +98,18 @@ export function Presenca({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
       <button
         type="button"
         onClick={() => setAberto((v) => !v)}
-        className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted hover:text-foreground"
+        className="flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-xs text-muted hover:bg-surface-2/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ambar"
         aria-expanded={aberto}
         aria-label={`${situacao}. ${mesa.presenca.length} na mesa`}
+        title={`${situacao} · ${mesa.presenca.length} na mesa`}
       >
-        <span className={`size-2 rounded-full ${mesa.conectado ? "bg-musgo" : "animate-pulse bg-sangue"}`} />
-        {mesa.presenca.length} na mesa
+        <span className={`size-2 shrink-0 rounded-full ${mesa.conectado ? "bg-musgo" : "animate-pulse bg-sangue"}`} />
+        {/* no celular só o número e um bonequinho, para não quebrar a linha do cabeçalho */}
+        <span className="tabular-nums">{mesa.presenca.length}</span>
+        <span className="opacity-70 grayscale sm:hidden" aria-hidden>
+          👤
+        </span>
+        <span className="hidden sm:inline">na mesa</span>
       </button>
 
       {aberto && (

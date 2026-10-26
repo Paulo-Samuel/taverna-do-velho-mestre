@@ -35,6 +35,18 @@ html {
   color-scheme: dark;
 }
 
+/* Foco de teclado sempre visível, em âmbar. Fica na camada base: quem usa focus:outline-none de propósito continua mandando. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--ambar);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: rgb(224 162 74 / 0.35);
+    color: var(--pergaminho);
+  }
+}
+
 body {
   /* grão de madeira + brilho de lareira no canto */
   background-image:

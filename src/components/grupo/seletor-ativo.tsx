@@ -48,7 +48,7 @@ export function SeletorAtivo({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) 
               aria-checked={eh}
               onClick={() => acoes.escolherPersonagem(p.id)}
               title={`${p.ficha.nome}${i < 9 ? ` (Alt+${i + 1})` : ""}${jaAgiu ? " · já agiu nesta rodada" : ""}`}
-              className={`relative flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 transition ${
+              className={`relative flex min-h-10 items-center gap-1.5 rounded-full border py-0.5 pl-0.5 transition focus-visible:outline-2 focus-visible:outline-ambar sm:min-h-0 ${
                 eh ? "border-ambar bg-ambar/10 pr-2.5 text-foreground" : "border-transparent pr-0.5 hover:border-border"
               }`}
             >

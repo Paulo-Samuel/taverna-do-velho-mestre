@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 
 export type Verbete = { id: string; nome: string; descricao: string; detalhe: string };
 
@@ -46,6 +46,25 @@ export function Catalogo({ itens }: { itens: ItemCatalogo[] }) {
     // com busca, some o sistema que não tem nada a ver (a não ser que o próprio nome bata)
     .filter((x) => !termo || x.classes.length || x.ancestralidades.length || chave(`${x.s.nome} ${x.s.descricao}`).includes(termo));
 
+  // qual cartão está na faixa do meio da tela, para acender o atalho dele
+  const [naTela, setNaTela] = useState<string | null>(null);
+  const idsVisiveis = visiveis.map((x) => x.s.id).join(",");
+  useEffect(() => {
+    const secoes = idsVisiveis
+      .split(",")
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => Boolean(el));
+    const obs = new IntersectionObserver(
+      (entradas) => {
+        const vista = entradas.find((e) => e.isIntersecting);
+        if (vista) setNaTela(vista.target.id);
+      },
+      { rootMargin: "-35% 0px -60% 0px" },
+    );
+    secoes.forEach((s) => obs.observe(s));
+    return () => obs.disconnect();
+  }, [idsVisiveis]);
+
   return (
     <>
       <div className="sticky top-0 z-10 -mx-4 mt-6 border-b border-border bg-background/90 px-4 py-3 backdrop-blur">
@@ -58,21 +77,46 @@ export function Catalogo({ itens }: { itens: ItemCatalogo[] }) {
             className="campo sm:max-w-md"
             aria-label="Procurar no catálogo"
           />
-          <label className="flex items-center gap-2 text-sm text-muted">
-            <input type="checkbox" checked={soProntos} onChange={(e) => setSoProntos(e.target.checked)} className="accent-[var(--ambar)]" />
+          <label className="flex min-h-10 cursor-pointer items-center gap-2 text-sm text-muted hover:text-foreground">
+            <input type="checkbox" checked={soProntos} onChange={(e) => setSoProntos(e.target.checked)} className="size-4 accent-[var(--ambar)]" />
             Só os prontos para jogar
           </label>
+          {termo && (
+            <p className="text-sm text-muted sm:ml-auto" aria-live="polite">
+              {visiveis.length} {visiveis.length === 1 ? "sistema" : "sistemas"} com “{busca.trim()}”
+            </p>
+          )}
         </div>
-        <nav aria-label="Sistemas" className="mt-2 flex gap-1.5 overflow-x-auto pb-1 text-xs">
+        {/* atalhos: pulam para o cartão e acendem o sistema que está na tela */}
+        <nav aria-label="Ir para o sistema" className="-mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1 pt-0.5 pb-1">
           {visiveis.map(({ s }) => (
-            <a key={s.id} href={`#${s.id}`} className="etiqueta shrink-0 hover:border-ambar hover:text-ambar">
+            <a
+              key={s.id}
+              href={`#${s.id}`}
+              aria-current={naTela === s.id ? "location" : undefined}
+              className={`inline-flex min-h-9 shrink-0 items-center rounded-full border px-3 text-xs transition ${
+                naTela === s.id ? "border-ambar bg-ambar/10 text-ambar" : "border-border bg-surface-2 text-muted hover:border-ambar hover:text-ambar"
+              }`}
+            >
               {s.nomeCurto}
             </a>
           ))}
         </nav>
       </div>
 
-      {visiveis.length === 0 && <p className="cartao mt-6 p-6 text-muted">Nada com esse nome. Nem o bardo inventaria isso.</p>}
+      {visiveis.length === 0 && (
+        <div className="cartao mt-6 p-6 text-muted">
+          <p>Nada com esse nome. Nem o bardo inventaria isso.</p>
+          <button type="button" className="btn-borda mt-4 min-h-10" 
+            onClick={() => {
+              setBusca("");
+              setSoProntos(false);
+            }}
+          >
+            Limpar a busca
+          </button>
+        </div>
+      )}
 
       <div className="mt-6 space-y-6">
         {visiveis.map(({ s, classes, ancestralidades }) => (
@@ -86,9 +130,20 @@ export function Catalogo({ itens }: { itens: ItemCatalogo[] }) {
 function CartaoSistema({ s, classes, ancestralidades, buscando }: { s: ItemCatalogo; classes: Verbete[]; ancestralidades: Verbete[]; buscando: boolean }) {
   const [aberto, setAberto] = useState(false);
   const mostrar = aberto || buscando;
+  // no celular o botão desce para depois da descrição (no topo ele separava o nome do texto)
+  const comecar = (classe: string) =>
+    s.pronto ? (
+      <Link href={`/nova/avancada?sistema=${encodeURIComponent(s.id)}`} className={`btn-ambar min-h-10 ${classe}`}>
+        Começar campanha neste sistema
+      </Link>
+    ) : (
+      <span className={`btn-borda min-h-10 cursor-not-allowed opacity-50 ${classe}`} aria-disabled>
+        Ainda no forno
+      </span>
+    );
 
   return (
-    <section id={s.id} className="cartao scroll-mt-36 p-5">
+    <section id={s.id} className="cartao scroll-mt-52 p-5 sm:scroll-mt-40">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-1.5">
@@ -99,20 +154,13 @@ function CartaoSistema({ s, classes, ancestralidades, buscando }: { s: ItemCatal
           </div>
           <h2 className="titulo mt-2 text-2xl text-pergaminho">{s.nome}</h2>
         </div>
-        {s.pronto ? (
-          <Link href={`/nova/avancada?sistema=${encodeURIComponent(s.id)}`} className="btn-ambar w-full sm:w-auto">
-            Começar campanha neste sistema
-          </Link>
-        ) : (
-          <span className="btn-borda w-full cursor-not-allowed opacity-50 sm:w-auto" aria-disabled>
-            Ainda no forno
-          </span>
-        )}
+        <div className="hidden sm:block">{comecar("")}</div>
       </div>
 
       <p className="mt-2 text-muted">{s.descricao}</p>
 
-      <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+      {/* números numa faixa só: dá para comparar sistemas rolando a página sem ler cada cartão inteiro */}
+      <dl className="mt-3 flex flex-wrap gap-2 text-sm">
         <Numero rotulo={s.rotuloClasse} valor={s.classes.length} />
         <Numero rotulo={s.rotuloAncestralidade} valor={s.ancestralidades.length} />
         <Numero rotulo="Perícias" valor={s.pericias} />
@@ -124,20 +172,30 @@ function CartaoSistema({ s, classes, ancestralidades, buscando }: { s: ItemCatal
         </p>
       )}
 
-      <details className="mt-3 text-xs text-muted">
-        <summary className="cursor-pointer select-none hover:text-ambar">Licença: {s.licenca}</summary>
-        {s.atribuicao && <p className="mt-2 break-words leading-relaxed">{s.atribuicao}</p>}
+      <details className="mt-2 text-xs text-muted">
+        <summary className="cursor-pointer select-none py-1.5 hover:text-ambar">Licença: {s.licenca}</summary>
+        {s.atribuicao && <p className="mt-1 break-words leading-relaxed">{s.atribuicao}</p>}
       </details>
+      <div className="mt-3 sm:hidden">{comecar("w-full")}</div>
 
       {(s.classes.length > 0 || s.ancestralidades.length > 0) && (
-        <div className="mt-4 border-t border-border pt-4">
+        <div className="mt-3 border-t border-border pt-2">
           {!buscando && (
-            <button type="button" className="text-sm text-ambar hover:underline" onClick={() => setAberto((a) => !a)} aria-expanded={aberto}>
+            <button
+              type="button"
+              className="inline-flex min-h-10 items-center gap-1 text-sm text-ambar hover:underline"
+              onClick={() => setAberto((a) => !a)}
+              aria-expanded={aberto}
+              aria-controls={`lista-${s.id}`}
+            >
+              <span aria-hidden className={`inline-block transition-transform ${aberto ? "rotate-90" : ""}`}>
+                ▸
+              </span>
               {aberto ? "Esconder a lista" : `Ver ${s.rotuloClasse.toLowerCase()} e ${s.rotuloAncestralidade.toLowerCase()}`}
             </button>
           )}
           {mostrar && (
-            <div className="mt-3 grid gap-6 md:grid-cols-2">
+            <div id={`lista-${s.id}`} className="mt-3 grid gap-6 md:grid-cols-2">
               <Lista titulo={s.rotuloClasse} itens={classes} />
               <Lista titulo={s.rotuloAncestralidade} itens={ancestralidades} />
             </div>
@@ -149,10 +207,12 @@ function CartaoSistema({ s, classes, ancestralidades, buscando }: { s: ItemCatal
 }
 
 function Numero({ rotulo, valor }: { rotulo: string; valor: number }) {
+  // "Perícias 0" (Fate) só ocupa espaço
+  if (!valor) return null;
   return (
-    <div className="rounded-lg bg-surface-2 px-3 py-2">
-      <dt className="truncate text-xs uppercase tracking-wider text-muted">{rotulo}</dt>
-      <dd className="titulo text-xl text-ambar">{valor}</dd>
+    <div className="flex items-baseline gap-2 rounded-lg bg-surface-2 px-3 py-1.5">
+      <dt className="text-xs uppercase tracking-wider text-muted">{rotulo}</dt>
+      <dd className="titulo text-lg leading-none text-ambar">{valor}</dd>
     </div>
   );
 }

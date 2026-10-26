@@ -115,7 +115,7 @@ export function Musica({ musica }: { musica: Cena["musica"] }) {
           title={dica}
           aria-label={prefs.ligado ? "Desligar música" : "Ligar música"}
           aria-pressed={prefs.ligado}
-          className={`px-2 py-1.5 transition hover:text-ambar ${prefs.ligado ? "text-foreground" : "text-muted"}`}
+          className={`grid h-10 min-w-10 place-items-center px-2 transition hover:text-ambar sm:h-9 sm:min-w-9 ${prefs.ligado ? "text-foreground" : "text-muted"}`}
         >
           <IconeSom ligado={prefs.ligado} />
         </button>
@@ -125,7 +125,7 @@ export function Musica({ musica }: { musica: Cena["musica"] }) {
           title="Volume da música"
           aria-label="Volume da música"
           aria-expanded={aberto}
-          className="border-l border-border px-1.5 py-1.5 text-xs text-muted transition hover:text-ambar"
+          className="grid h-10 min-w-7 place-items-center border-l border-border px-1.5 text-xs text-muted transition hover:text-ambar sm:h-9"
         >
           <span aria-hidden>▾</span>
         </button>

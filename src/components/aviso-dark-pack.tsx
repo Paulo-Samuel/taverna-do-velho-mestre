@@ -7,7 +7,7 @@ export const DECLARACAO_DARK_PACK =
 
 export function AvisoDarkPack({ compacto = false }: { compacto?: boolean }) {
   return (
-    <div className={`flex items-center gap-3 ${compacto ? "text-[11px]" : "text-xs"} text-muted`}>
+    <div className={`flex items-center gap-3 ${compacto ? "text-[11.5px] leading-snug" : "text-xs leading-relaxed"} text-muted`}>
       {/* eslint-disable-next-line @next/next/no-img-element -- logo pequeno e fixo, sem otimização de imagem */}
       <img src="/darkpack.png" alt="Dark Pack" width={compacto ? 36 : 56} height={compacto ? 36 : 56} className="shrink-0" />
       <p>

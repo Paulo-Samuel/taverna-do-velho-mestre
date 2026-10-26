@@ -178,15 +178,18 @@ export function FormularioConfig({ ajustes, padroes }: { ajustes: AjustesMestre;
       </section>
 
       <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center gap-3 border-t border-border bg-background/90 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
-        <button type="submit" className="btn-ambar" disabled={salvando}>
+        <button type="submit" className="btn-ambar min-h-11" disabled={salvando}>
           {salvando ? "Salvando…" : "Salvar"}
         </button>
-        <button type="button" className="btn-borda" onClick={testar} disabled={testando}>
+        <button type="button" className="btn-borda min-h-11" onClick={testar} disabled={testando}>
           {testando ? "Chamando o mestre…" : "Testar conexão"}
         </button>
-        {salvo && <span className={`text-sm ${salvo.ok ? "text-musgo" : "text-sangue"}`}>{salvo.mensagem}</span>}
+        <span role="status" className={`text-sm ${salvo?.ok ? "text-musgo" : "text-sangue"}`}>
+          {salvo?.mensagem}
+        </span>
+        {/* junto do botão: no celular a barra gruda no rodapé e o aviso solto ficava longe dele */}
+        {efetivo === "cli" && <p className="basis-full text-xs text-muted">No modo Claude Code, o teste gasta um tiquinho do limite do seu plano.</p>}
       </div>
-      {efetivo === "cli" && <p className="-mt-5 text-xs text-muted">No modo Claude Code, o teste gasta um tiquinho do limite do seu plano.</p>}
 
       {teste && (
         <div className={`cartao surgir p-4 text-sm ${teste.ok ? "border-musgo/60" : "border-sangue/60"}`} role="status">
@@ -204,9 +207,17 @@ export function FormularioConfig({ ajustes, padroes }: { ajustes: AjustesMestre;
 function CartaoOpcao(props: { marcado: boolean; aoMarcar: () => void; valor: string; titulo: string; custo: string; texto: string }) {
   return (
     <label
-      className={`cartao flex cursor-pointer gap-3 p-4 transition ${props.marcado ? "border-ambar ring-1 ring-ambar/50" : "hover:border-ambar/50"}`}
+      className={`cartao flex cursor-pointer gap-3 p-4 transition has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ambar ${props.marcado ? "border-ambar ring-1 ring-ambar/50" : "hover:border-ambar/50"}`}
     >
-      <input type="radio" name="provedor" value={props.valor} checked={props.marcado} onChange={props.aoMarcar} className="mt-1 accent-[var(--ambar)]" />
+      {/* o cartão inteiro mostra o foco; o anel do próprio rádio sobraria */}
+      <input
+        type="radio"
+        name="provedor"
+        value={props.valor}
+        checked={props.marcado}
+        onChange={props.aoMarcar}
+        className="mt-1 size-4 shrink-0 accent-[var(--ambar)] focus-visible:outline-none"
+      />
       <span className="min-w-0">
         <span className="block font-semibold text-pergaminho">{props.titulo}</span>
         <span className="block text-xs uppercase tracking-wider text-ambar-forte">{props.custo}</span>
@@ -238,7 +249,7 @@ function StatusLogin({ binRef, ativo }: { binRef: React.RefObject<HTMLFormElemen
     <div className="cartao p-4 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="titulo text-base text-pergaminho">Login do Claude Code</p>
-        <button type="button" className="btn-borda px-3 py-1.5 text-xs" onClick={verificar} disabled={verificando}>
+        <button type="button" className="btn-borda min-h-10 px-3 py-1.5 text-xs" onClick={verificar} disabled={verificando}>
           {verificando ? "Perguntando…" : "Verificar de novo"}
         </button>
       </div>
