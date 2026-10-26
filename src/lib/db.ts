@@ -93,6 +93,9 @@ function abrir() {
     );
     PRAGMA user_version = ${VERSAO};
   `);
+  // colunas acrescentadas depois da v2 (bancos antigos não têm)
+  const colunasDiario = (conexao.prepare("SELECT name FROM pragma_table_info('diario')").all() as { name: string }[]).map((c) => c.name);
+  if (!colunasDiario.includes("dados")) conexao.exec("ALTER TABLE diario ADD COLUMN dados TEXT");
   return conexao;
 }
 
@@ -119,6 +122,13 @@ export type ConfigCampanha = {
    * "rodada": o mestre espera todos os personagens agirem (ou alguém forçar) antes de narrar.
    */
   modo?: "livre" | "rodada";
+  /**
+   * "historia" (padrão das campanhas novas): criação rápida, mesa em estilo de livro, ações sugeridas, jogador rola os dados.
+   * "avancado": escolha de sistema, ficha completa, mesa com painéis. Campanhas antigas sem o campo são "avancado".
+   */
+  modoJogo?: "historia" | "avancado";
+  /** quem rola os testes dos personagens: o próprio jogador (com o dado 3D) ou o servidor, na hora */
+  dados?: "jogador" | "automatico";
 };
 
 export type Campanha = {
@@ -176,7 +186,7 @@ type LinhaMensagem = {
   criada_em: string;
 };
 type LinhaFila = { id: number; personagem_id: number | null; autor: string; acao: string; criada_em: string };
-type LinhaDiario = { id: number; tipo: TipoDiario; titulo: string; texto: string; status: string; atualizado_em: string };
+type LinhaDiario = { id: number; tipo: TipoDiario; titulo: string; texto: string; status: string; dados: string | null; atualizado_em: string };
 
 const paraCampanha = (l: LinhaCampanha): Campanha => ({
   id: l.id,
@@ -214,6 +224,7 @@ const paraDiario = (l: LinhaDiario): EntradaDiario => ({
   titulo: l.titulo,
   texto: l.texto,
   status: l.status,
+  ...(l.dados ? { dados: JSON.parse(l.dados) } : {}),
   atualizadoEm: l.atualizado_em,
 });
 
@@ -316,6 +327,28 @@ export function listarMensagens(campanhaId: number, limite?: number): Mensagem[]
   return linhas.map(paraMensagem);
 }
 
+export function obterMensagem(id: number): Mensagem | null {
+  const l = db.prepare("SELECT * FROM mensagens WHERE id = ?").get(id) as LinhaMensagem | undefined;
+  return l ? paraMensagem(l) : null;
+}
+
+/** Troca o texto e os dados de uma mensagem (ex.: teste pendente que o jogador acabou de rolar). */
+export function atualizarMensagem(id: number, texto: string, dados: unknown): Mensagem | null {
+  db.prepare("UPDATE mensagens SET texto = ?, dados = ? WHERE id = ?").run(texto, JSON.stringify(dados), id);
+  return obterMensagem(id);
+}
+
+/** Testes que o mestre pediu e que o jogador ainda não rolou (modo história). */
+export function testesPendentes(campanhaId: number): Mensagem[] {
+  return (
+    db
+      .prepare(
+        "SELECT * FROM mensagens WHERE campanha_id = ? AND tipo = 'dado' AND json_extract(dados, '$.tipo') = 'pedido_teste' AND json_extract(dados, '$.status') = 'pendente' ORDER BY id",
+      )
+      .all(campanhaId) as LinhaMensagem[]
+  ).map(paraMensagem);
+}
+
 /** Mensagens depois de um id (para o resumo incremental). */
 export function mensagensDepois(campanhaId: number, depoisDe: number): Mensagem[] {
   return (db.prepare("SELECT * FROM mensagens WHERE campanha_id = ? AND id > ? ORDER BY id").all(campanhaId, depoisDe) as LinhaMensagem[]).map(paraMensagem);
@@ -349,22 +382,32 @@ export function listarDiario(campanhaId: number): EntradaDiario[] {
   return (db.prepare("SELECT * FROM diario WHERE campanha_id = ? ORDER BY tipo, atualizado_em DESC").all(campanhaId) as LinhaDiario[]).map(paraDiario);
 }
 
-/** Cria ou atualiza (mesmo tipo + mesmo título, sem diferenciar maiúsculas) uma entrada do diário. */
-export function salvarEntradaDiario(campanhaId: number, e: { tipo: TipoDiario; titulo: string; texto?: string; status?: string }): EntradaDiario {
+/**
+ * Cria ou atualiza (mesmo tipo + mesmo título, sem diferenciar maiúsculas) uma entrada do diário.
+ * `dados` é mesclado com o que já existe; `pistas` (missões) acumula sem repetir.
+ */
+export function salvarEntradaDiario(
+  campanhaId: number,
+  e: { tipo: TipoDiario; titulo: string; texto?: string; status?: string; dados?: Record<string, unknown> },
+): EntradaDiario {
   const existente = db
     .prepare("SELECT * FROM diario WHERE campanha_id = ? AND tipo = ? AND lower(titulo) = lower(?)")
     .get(campanhaId, e.tipo, e.titulo) as LinhaDiario | undefined;
   if (existente) {
-    db.prepare("UPDATE diario SET texto = ?, status = ?, atualizado_em = datetime('now') WHERE id = ?").run(
+    const antigos = existente.dados ? (JSON.parse(existente.dados) as Record<string, unknown>) : {};
+    const novos = { ...antigos, ...(e.dados ?? {}) };
+    if (Array.isArray(antigos.pistas) && Array.isArray(e.dados?.pistas)) novos.pistas = [...new Set([...antigos.pistas, ...e.dados.pistas])];
+    db.prepare("UPDATE diario SET texto = ?, status = ?, dados = ?, atualizado_em = datetime('now') WHERE id = ?").run(
       e.texto ?? existente.texto,
       e.status ?? existente.status,
+      Object.keys(novos).length ? JSON.stringify(novos) : null,
       existente.id,
     );
     return paraDiario(db.prepare("SELECT * FROM diario WHERE id = ?").get(existente.id) as LinhaDiario);
   }
   const r = db
-    .prepare("INSERT INTO diario (campanha_id, tipo, titulo, texto, status) VALUES (?, ?, ?, ?, ?)")
-    .run(campanhaId, e.tipo, e.titulo, e.texto ?? "", e.status ?? "");
+    .prepare("INSERT INTO diario (campanha_id, tipo, titulo, texto, status, dados) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(campanhaId, e.tipo, e.titulo, e.texto ?? "", e.status ?? "", e.dados && Object.keys(e.dados).length ? JSON.stringify(e.dados) : null);
   return paraDiario(db.prepare("SELECT * FROM diario WHERE id = ?").get(Number(r.lastInsertRowid)) as LinhaDiario);
 }
 

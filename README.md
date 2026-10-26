@@ -6,6 +6,16 @@ turma passando o teclado ou com cada um no próprio celular pela rede de casa.
 O modelo narra e decide **quando** rolar; o código (`crypto.randomInt`) decide **o número** e aplica na ficha. O mestre não
 inventa resultado de dado, nem que queira.
 
+## Dois jeitos de jogar
+
+- **Modo história (padrão, em "Nova história")**: criação em 4 passos (nome, rosto, ofício, de onde você vem), sem regras à
+  vista. A aventura abre numa cena pronta; a mesa parece um livro (capítulos com local e momento, NPCs com nome colorido e voz
+  própria, falas em itálico), o mestre sugere 3 ações e, quando um teste importa, **você rola o d20 em 3D** e ele continua a
+  partir do resultado. Trilha sonora gerada no navegador conforme o humor da cena e um códex lateral com personagem, missões
+  (com pistas), pessoas e lugares. Regras em `src/lib/sistemas/historia.ts`.
+- **Modo avançado (`/nova/avancada`)**: escolha do sistema de regras (D&D 5e, Pathfinder 2e/1e, OSR, d100, Fate, Dungeon
+  World, Vampiro V5), ficha completa e mesa com painéis.
+
 ## Instalação
 
 Requer **Node 24+** (usa `node:sqlite`, sem dependência nativa).

@@ -3,6 +3,7 @@ import { obterCampanha } from "@/lib/db";
 import { estadoMesa } from "@/lib/mesa";
 import { acessoNaPagina } from "@/lib/rede/acesso";
 import { Mesa } from "./mesa";
+import { MesaHistoria } from "./mesa-historia";
 
 export const dynamic = "force-dynamic";
 
@@ -16,5 +17,10 @@ export default async function PaginaMesa(props: PageProps<"/mesa/[id]">) {
   const estado = estadoMesa(campanha.id);
   if (!estado) notFound();
   // ?inicio=1 (criação sem "vou adicionar mais personagens"): o mestre abre a cena assim que a mesa monta
-  return <Mesa estadoInicial={estado} comecarSozinho={inicio === "1" && estado.mensagens.length === 0} />;
+  const comecarSozinho = inicio === "1" && estado.mensagens.length === 0;
+  return estado.campanha.modoJogo === "historia" ? (
+    <MesaHistoria estadoInicial={estado} comecarSozinho={comecarSozinho} />
+  ) : (
+    <Mesa estadoInicial={estado} comecarSozinho={comecarSozinho} />
+  );
 }

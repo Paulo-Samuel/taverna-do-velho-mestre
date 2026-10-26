@@ -1,19 +1,27 @@
 import "server-only";
 import {
   adicionarMensagem,
+  atualizarMensagem,
   enfileirarAcao,
   lerAjuste,
   listarFila,
   listarPersonagens,
   mensagensDepois,
   obterCampanha,
+  obterMensagem,
+  obterPersonagem,
   retirarFila,
+  salvarCena,
+  salvarFicha,
   salvarResumo,
+  testesPendentes,
   type AcaoPendente,
 } from "../db";
-import { INICIO } from "../constantes";
+import { INICIO, RESULTADO_TESTE } from "../constantes";
 import { obterSistema } from "../sistemas";
+import type { ResultadoTeste } from "../sistemas/tipos";
 import { publicar } from "../tempo-real";
+import { visivel } from "../visivel";
 import { definirFerramentas, executarFerramenta, type ContextoFerramentas } from "./ferramentas";
 import { encerrarTurno, enderecoInterno, registrarTurno } from "./ponte";
 import { nomeDoPersonagem, promptDoResumo, promptDoSistema, promptDoTurno, SISTEMA_RESUMO, type AcaoDoTurno } from "./prompt";
@@ -112,6 +120,8 @@ export function cancelarTurno(campanhaId: number) {
 function prontoParaNarrar(campanhaId: number, forcar: boolean): boolean {
   const fila = listarFila(campanhaId);
   if (!fila.length) return false;
+  // modo história: o mestre espera os jogadores rolarem os testes que ele pediu
+  if (testesPendentes(campanhaId).length) return false;
   if (forcar || fila.some((a) => a.acao === INICIO)) return true;
   const campanha = obterCampanha(campanhaId);
   if (campanha?.config.modo !== "rodada") return true;
@@ -171,7 +181,18 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
   if (inicio) {
     publicar(campanhaId, { e: "mensagem", mensagem: adicionarMensagem(campanhaId, "sistema", "A aventura começa.") });
   }
+  // sugestões do turno anterior perdem a validade assim que alguém age
+  if (campanha.cena?.sugestoes?.length) {
+    campanha.cena = { ...campanha.cena, sugestoes: [] };
+    salvarCena(campanhaId, campanha.cena);
+    publicar(campanhaId, { e: "cena", cena: campanha.cena });
+  }
   for (const a of acoes.filter((x) => x.acao !== INICIO)) {
+    // resultado de teste rolado pelo jogador: o cartão do dado já está no chat, vai só para o mestre
+    if (a.acao.startsWith(RESULTADO_TESTE)) {
+      doTurno.push({ personagem: nomeDoPersonagem(personagens, a.personagemId), autor: a.autor, acao: `(resultado do teste pedido) ${a.acao.slice(RESULTADO_TESTE.length)}` });
+      continue;
+    }
     const mensagem = adicionarMensagem(campanhaId, "jogador", a.acao, { personagemId: a.personagemId, autor: a.autor || null });
     publicar(campanhaId, { e: "mensagem", mensagem });
     doTurno.push({ personagem: nomeDoPersonagem(personagens, a.personagemId), autor: a.autor, acao: a.acao });
@@ -210,6 +231,45 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
     fecharTrecho();
     encerrarTurno(token);
   }
+}
+
+/**
+ * O jogador rola um teste que o mestre pediu (modo história). O servidor sorteia o dado, atualiza o cartão para
+ * todos e, quando não sobra nenhum teste pendente, manda os resultados para o mestre continuar a narração.
+ */
+export function rolarTestePendente(campanhaId: number, mensagemId: number, autor: string): ResultadoTeste {
+  const m = obterMensagem(mensagemId);
+  const dados = (m?.dados ?? {}) as Record<string, unknown>;
+  if (!m || dados.tipo !== "pedido_teste") throw new Error("Esse teste não existe.");
+  if (dados.status !== "pendente") throw new Error("Esse teste já foi rolado.");
+  const campanha = obterCampanha(campanhaId);
+  const p = m.personagemId ? obterPersonagem(m.personagemId) : null;
+  if (!campanha || !p || p.campanhaId !== campanhaId) throw new Error("Esse teste não é desta mesa.");
+
+  const sistema = obterSistema(campanha.sistema);
+  const r = sistema.resolverTeste(p.ficha, {
+    teste: String(dados.testePedido ?? dados.teste),
+    alvo: typeof dados.alvo === "number" ? dados.alvo : null,
+    motivo: String(dados.motivo ?? ""),
+  });
+  const texto = `${p.ficha.nome} · ${r.teste} — ${r.motivo}: ${r.expressao} → ${r.total}${r.alvo !== null ? ` vs ${r.alvo}` : ""} · ${r.rotuloGrau}`;
+  const atualizada = atualizarMensagem(m.id, texto, { ...dados, status: "resolvido", resultado: r, roladoPor: autor || null });
+  if (atualizada) publicar(campanhaId, { e: "mensagem_atualizada", mensagem: atualizada });
+
+  // ganchos do sistema (ex.: Despertar do VtM sobe a Fome), como nos testes automáticos
+  try {
+    const nova = sistema.aposTeste?.(p.ficha, r);
+    if (nova) {
+      salvarFicha(p.id, nova);
+      publicar(campanhaId, { e: "personagem", personagem: visivel(sistema, { ...p, ficha: nova }) });
+    }
+  } catch (e) {
+    console.warn(`[taverna] aposTeste falhou (${sistema.id}):`, e);
+  }
+
+  const perigoso = dados.perigoso ? " (teste perigoso: a falha custa caro)" : "";
+  enviarAcao(campanhaId, { personagemId: p.id, autor, acao: `${RESULTADO_TESTE}${texto}${perigoso}` });
+  return r;
 }
 
 async function atualizarResumo(campanhaId: number) {

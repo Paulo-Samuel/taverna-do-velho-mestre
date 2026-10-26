@@ -28,7 +28,7 @@ export type PropsFormulario = {
   sistemas: SistemaPublico[];
   /** sistema fixo (personagem novo numa mesa existente); sem isso o jogador escolhe o sistema */
   sistemaFixo?: string;
-  /** sistema já marcado ao abrir (vindo do catálogo, /nova?sistema=); o jogador ainda pode trocar */
+  /** sistema já marcado ao abrir (vindo do catálogo, /nova/avancada?sistema=); o jogador ainda pode trocar */
   sistemaInicial?: string;
   /** server action que recebe o FormData */
   acao: (estado: EstadoFormulario, form: FormData) => Promise<EstadoFormulario>;

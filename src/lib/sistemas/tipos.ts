@@ -96,6 +96,8 @@ export type ClasseDef = {
   papel?: string;
   /** livro/fonte aberta de onde vem (ex.: "SRD 5.2", "Player Core", "APG") */
   fonte?: string;
+  /** emoji/ícone para cartões (modo história) */
+  icone?: string;
 };
 
 export type AncestralidadeDef = {
@@ -242,13 +244,25 @@ export type Combatente = {
   aliado?: boolean;
 };
 
+/** Humores da trilha sonora gerada no navegador (modo história). */
+export type HumorMusical = "taverna" | "calmo" | "exploracao" | "misterio" | "tensao" | "combate" | "triste" | "vitoria" | "sombrio";
+
+/** Ação que o mestre sugere ao jogador (botões acima do campo de ação no modo história). */
+export type SugestaoAcao = { texto: string; pericia?: string };
+
 export type Cena = {
+  /** título da cena, mostrado em letra gótica no modo história ("Salão Comum") */
+  titulo?: string;
   local?: string;
   momento?: string;
   clima?: string;
   /** descrição curta do que está acontecendo agora */
   situacao?: string;
   combate?: { ativo: boolean; rodada: number; vez: number; ordem: Combatente[] } | null;
+  /** trilha sonora: humor e energia da cena */
+  musica?: { humor: HumorMusical; energia: "baixa" | "media" | "alta" } | null;
+  /** ações sugeridas pelo mestre para o próximo passo; somem quando alguém age */
+  sugestoes?: SugestaoAcao[];
 };
 
 export type TipoDiario = "missao" | "npc" | "local" | "item" | "nota";
@@ -260,5 +274,10 @@ export type EntradaDiario = {
   texto: string;
   /** missão: "aberta" | "concluida" | "falhou"; npc: "aliado" | "neutro" | "hostil" | "morto"... */
   status: string;
+  /**
+   * detalhes estruturados: npc {aparencia, voz, jeito, desejo, temperamento, relacao};
+   * missao {objetivo, recompensa, pistas: string[]}; outros tipos livres
+   */
+  dados?: Record<string, unknown>;
   atualizadoEm: string;
 };

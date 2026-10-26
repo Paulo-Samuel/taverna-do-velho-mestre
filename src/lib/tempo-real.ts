@@ -19,6 +19,8 @@ export type Jogador = {
 
 export type EventoMesa =
   | { e: "mensagem"; mensagem: Mensagem }
+  /** uma mensagem que já existia mudou (ex.: teste pendente que o jogador rolou) */
+  | { e: "mensagem_atualizada"; mensagem: Mensagem }
   /** pedaço da narração do mestre enquanto ele escreve */
   | { e: "texto"; texto: string }
   | { e: "personagem"; personagem: PersonagemVisivel }

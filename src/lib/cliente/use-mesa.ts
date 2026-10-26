@@ -6,6 +6,7 @@ import type { EstadoMesa, PersonagemVisivel } from "@/lib/mesa";
 import type { Cena, EntradaDiario } from "@/lib/sistemas/tipos";
 import type { EventoMesa, Jogador } from "@/lib/tempo-real";
 import * as identidade from "./identidade";
+import { RESULTADO_TESTE } from "@/lib/constantes";
 
 // Estado vivo de uma mesa no navegador: começa com o estado do servidor e segue o fluxo de eventos (SSE).
 
@@ -41,7 +42,16 @@ export type AcoesMesa = {
   limparErro: () => void;
   /** registra uma mensagem recebida fora do fluxo (ex.: resposta de uma rota) sem duplicar */
   receberMensagem: (m: Mensagem) => void;
+  /**
+   * Rola um teste que o mestre pediu (mensagem 'dado' com dados.tipo "pedido_teste" e status "pendente").
+   * O servidor sorteia o d20 e devolve o resultado (ResultadoTeste) para a animação do dado; a mensagem
+   * atualizada chega a todos pelo fluxo de eventos e o mestre continua sozinho quando não houver mais testes pendentes.
+   */
+  rolarTeste: (mensagemId: number) => Promise<{ natural: number | null; total: number; dados: number[]; grau: string; rotuloGrau: string } | null>;
 };
+
+/** A fila mostrada esconde as ações internas (resultado de teste rolado pelo jogador). */
+const semInternas = (fila: AcaoPendente[]) => fila.filter((a) => !a.acao.startsWith(RESULTADO_TESTE));
 
 function deEstado(e: EstadoMesa) {
   return {
@@ -51,7 +61,7 @@ function deEstado(e: EstadoMesa) {
     mensagens: e.mensagens,
     cena: e.cena,
     diario: e.diario,
-    fila: e.fila,
+    fila: semInternas(e.fila),
     ocupado: e.ocupado,
     presenca: e.presenca,
     provedor: e.provedor,
@@ -91,6 +101,10 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
         if (ev.mensagem.tipo === "dado") setNovas((s) => new Set(s).add(ev.mensagem.id));
         setBase((b) => (b.mensagens.some((m) => m.id === ev.mensagem.id) ? b : { ...b, mensagens: [...b.mensagens, ev.mensagem] }));
         break;
+      case "mensagem_atualizada":
+        if (ev.mensagem.tipo === "dado") setNovas((s) => new Set(s).add(ev.mensagem.id));
+        setBase((b) => ({ ...b, mensagens: b.mensagens.map((m) => (m.id === ev.mensagem.id ? ev.mensagem : m)) }));
+        break;
       case "texto":
         setAoVivo((t) => t + ev.texto);
         break;
@@ -110,7 +124,7 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
         setBase((b) => ({ ...b, diario: ev.entradas }));
         break;
       case "estado":
-        setBase((b) => ({ ...b, ocupado: ev.ocupado, fila: ev.fila }));
+        setBase((b) => ({ ...b, ocupado: ev.ocupado, fila: semInternas(ev.fila) }));
         if (!ev.ocupado) setAoVivo("");
         break;
       case "presenca":
@@ -215,6 +229,23 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
       [avisarPresenca],
     ),
     limparErro: useCallback(() => setErro(null), []),
+    rolarTeste: useCallback(
+      async (mensagemId: number) => {
+        setErro(null);
+        const resp = await fetch(`/api/campanhas/${id}/rolar`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mensagemId, autor: euRef.current.apelido }),
+        });
+        const corpo = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          setErro(corpo.erro ?? `Erro ${resp.status}`);
+          return null;
+        }
+        return corpo.resultado ?? null;
+      },
+      [id],
+    ),
     receberMensagem: useCallback((m: Mensagem) => aplicar({ e: "mensagem", mensagem: m }), [aplicar]),
   };
 

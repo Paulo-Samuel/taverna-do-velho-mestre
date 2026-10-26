@@ -37,6 +37,12 @@ repo e ícone `assets\taverna.ico`. `iniciar-taverna.cmd` faz o mesmo com duplo 
   configure o app para usar a conta de outra pessoa.
 - `.env.local` e `data/` (banco com campanhas e fichas) ficam fora do git.
 
+## Modo história (padrão) x modo avançado
+
+`campanha.config.modoJogo` decide a mesa: "historia" usa `src/app/mesa/[id]/mesa-historia.tsx` e `src/components/historia/*`
+(dado 3D com three.js, música gerada com Web Audio, retratos em SVG, códex); "avancado" usa `mesa.tsx`. No modo história o
+mestre chama `pedir_teste` e o jogador rola pela rota `/api/campanhas/[id]/rolar`; `sugerir_acoes` mostra as opções.
+
 ## Mapa do código
 
 - `src/lib/sistemas/` — sistemas de regras (contrato em `tipos.ts`; um arquivo por sistema + pasta de dados).

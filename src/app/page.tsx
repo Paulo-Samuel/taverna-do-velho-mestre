@@ -79,10 +79,10 @@ export default function Inicio() {
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link href="/nova" className="btn-ambar">
-              Nova campanha
+              Nova história
             </Link>
-            <Link href="/sistemas" className="btn-borda">
-              Ver os sistemas
+            <Link href="/nova/avancada" className="btn-borda" title="Escolha o sistema de regras (D&D, Pathfinder, Vampiro...) e monte a ficha completa">
+              Modo avançado
             </Link>
           </div>
         </div>

@@ -1,6 +1,17 @@
 import "server-only";
 import { z } from "zod";
-import { adicionarMensagem, listarDiario, obterCampanha, salvarCena, salvarEntradaDiario, salvarFicha, type Campanha, type Personagem } from "../db";
+import {
+  adicionarMensagem,
+  listarDiario,
+  obterCampanha,
+  salvarCena,
+  salvarEntradaDiario,
+  salvarFicha,
+  testesPendentes,
+  type Campanha,
+  type Personagem,
+} from "../db";
+import { ajustarReputacao } from "../sistemas/historia";
 import { descreverRolagem, rolar } from "../dados";
 import { acharPorNome, normalizar, sinal } from "../sistemas/comum";
 import type { Cena, Combatente, Ficha, Sistema, TipoDiario } from "../sistemas/tipos";
@@ -62,6 +73,9 @@ export function definirFerramentas(ctx: ContextoFerramentas): DefFerramenta[] {
     required: ["nome"],
     additionalProperties: false,
   };
+
+  const modoHistoria = ctx.campanha.config.modoJogo === "historia";
+  const jogadorRola = jogadorRolaOsDados(ctx.campanha);
 
   const lista: DefFerramenta[] = [
     {
@@ -152,6 +166,17 @@ export function definirFerramentas(ctx: ContextoFerramentas): DefFerramenta[] {
       input_schema: {
         type: "object",
         properties: {
+          titulo: { type: "string", description: "Título curto da cena, como capítulo de livro: \"Salão Comum\", \"A Ponte Quebrada\"." },
+          musica: {
+            type: "object",
+            properties: {
+              humor: { type: "string", enum: ["taverna", "calmo", "exploracao", "misterio", "tensao", "combate", "triste", "vitoria", "sombrio"] },
+              energia: { type: "string", enum: ["baixa", "media", "alta"] },
+            },
+            required: ["humor"],
+            additionalProperties: false,
+            description: "Trilha sonora que toca para os jogadores. Mude quando o clima da cena mudar.",
+          },
           local: { type: "string", description: "Onde o grupo está, curto: \"Porão da Taverna do Javali\"." },
           momento: { type: "string", description: "\"Madrugada\", \"Fim de tarde, 3º dia\"..." },
           clima: { type: "string", description: "\"Garoa fria\", \"Calor de rachar\"..." },
@@ -208,12 +233,85 @@ export function definirFerramentas(ctx: ContextoFerramentas): DefFerramenta[] {
             type: "string",
             description: "missao: aberta | concluida | falhou. npc: aliado | neutro | hostil | morto. Outros tipos: livre ou vazio.",
           },
+          aparencia: { type: "string", description: "npc: aparência marcante em poucas palavras." },
+          voz: { type: "string", description: "npc: como soa (rouca, cantada, sussurrada, sotaque...)." },
+          jeito: { type: "string", description: "npc: tiques, gestos, jeito de falar e de se mover." },
+          desejo: { type: "string", description: "npc: o que ele quer de verdade." },
+          temperamento: { type: "string", description: "npc: calmo, explosivo, desconfiado, bajulador..." },
+          relacao: { type: "string", description: "npc: o que pensa do grupo agora." },
+          objetivo: { type: "string", description: "missao: o que precisa ser feito." },
+          recompensa: { type: "string", description: "missao: o que foi prometido." },
+          pistas: { type: "array", items: { type: "string" }, description: "missao: pistas novas descobertas (acumulam)." },
         },
         required: ["tipo", "titulo"],
         additionalProperties: false,
       },
     },
   ];
+
+  if (jogadorRola) {
+    // modo em que o jogador rola: o mestre pede o teste e espera; o servidor só sorteia quando o jogador clica
+    const i = lista.findIndex((f) => f.name === "teste");
+    lista.splice(i, 1, {
+      name: "pedir_teste",
+      description: `Pede um teste a um personagem do jogador (${ctx.sistema.nomeCurto}). Quem rola é o JOGADOR, clicando no dado na tela; depois você recebe o resultado como nova mensagem e continua. Use só quando o resultado for incerto e importar. Depois de pedir, TERMINE a narração do turno com suspense, sem contar o resultado e sem narrar o que vem depois. No máximo um teste por personagem por turno. Testes comuns: ${ctx.sistema.testesSugeridos.join(", ")}.`,
+      input_schema: {
+        type: "object",
+        properties: {
+          personagem: campoPersonagem,
+          teste: { type: "string", description: "Perícia ou tipo de teste." },
+          alvo: { type: "integer", description: "Dificuldade (CD)." },
+          perigoso: { type: "boolean", description: "true se a falha machuca ou custa caro (o jogador vê o aviso antes de rolar)." },
+          motivo: { type: "string", description: "Frase curta do que está sendo tentado, mostrada no cartão do dado." },
+        },
+        required: ["teste", "alvo", "motivo"],
+        additionalProperties: false,
+      },
+    });
+  }
+
+  if (modoHistoria) {
+    lista.push({
+      name: "sugerir_acoes",
+      description:
+        "Mostra ao jogador 3 ações sugeridas como botões (ele também pode escrever a própria). Chame ao FIM de todo turno: uma ousada/arriscada, uma cautelosa ou social e uma curiosa/investigativa, escritas como o personagem faria (\"Agarrar o pano do Greg e exigir saber quem deixou a carta\"). Indique a perícia provável quando houver.",
+      input_schema: {
+        type: "object",
+        properties: {
+          acoes: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: { texto: { type: "string" }, pericia: { type: "string" } },
+              required: ["texto"],
+              additionalProperties: false,
+            },
+            description: "2 a 4 ações curtas (até ~15 palavras cada).",
+          },
+        },
+        required: ["acoes"],
+        additionalProperties: false,
+      },
+    });
+  }
+
+  if (ctx.sistema.id === "historia") {
+    lista.push({
+      name: "ajustar_reputacao",
+      description: "Muda a reputação de um personagem quando uma escolha moral pesa: bravura, honra, misericordia, generosidade, justica, lealdade (−10 a +10).",
+      input_schema: {
+        type: "object",
+        properties: {
+          personagem: campoPersonagem,
+          eixo: { type: "string", enum: ["bravura", "honra", "misericordia", "generosidade", "justica", "lealdade"] },
+          variacao: { type: "integer", description: "+1 a +3 para atos marcantes; negativo para o contrário." },
+          motivo: { type: "string" },
+        },
+        required: ["eixo", "variacao", "motivo"],
+        additionalProperties: false,
+      },
+    });
+  }
 
   if (marcos) {
     lista.push({
@@ -267,7 +365,30 @@ const ENTRADAS = {
   conceder_xp: z.object({ personagens: varios, quantidade: z.number().int().min(0).max(1_000_000), motivo: z.string().default("") }),
   subir_nivel: z.object({ personagem: z.string().optional(), motivo: z.string().default("") }),
   descansar: z.object({ personagens: varios, tipo: z.enum(["curto", "longo"]) }),
+  pedir_teste: z.object({
+    personagem: z.string().optional(),
+    teste: z.string().min(1),
+    alvo: z.number().int(),
+    perigoso: z.boolean().optional(),
+    motivo: z.string().default(""),
+  }),
+  sugerir_acoes: z.object({
+    acoes: z.array(z.object({ texto: z.string().trim().min(1).max(200), pericia: z.string().max(40).optional() })).max(6),
+  }),
+  ajustar_reputacao: z.object({
+    personagem: z.string().optional(),
+    eixo: z.string().min(1),
+    variacao: z.number().int().min(-10).max(10),
+    motivo: z.string().default(""),
+  }),
   atualizar_cena: z.object({
+    titulo: z.string().optional(),
+    musica: z
+      .object({
+        humor: z.enum(["taverna", "calmo", "exploracao", "misterio", "tensao", "combate", "triste", "vitoria", "sombrio"]),
+        energia: z.enum(["baixa", "media", "alta"]).default("media"),
+      })
+      .optional(),
     local: z.string().optional(),
     momento: z.string().optional(),
     clima: z.string().optional(),
@@ -290,8 +411,22 @@ const ENTRADAS = {
     titulo: z.string().trim().min(1).max(120),
     texto: z.string().max(1000).optional(),
     status: z.string().max(40).optional(),
+    aparencia: z.string().max(300).optional(),
+    voz: z.string().max(200).optional(),
+    jeito: z.string().max(300).optional(),
+    desejo: z.string().max(300).optional(),
+    temperamento: z.string().max(100).optional(),
+    relacao: z.string().max(200).optional(),
+    objetivo: z.string().max(300).optional(),
+    recompensa: z.string().max(200).optional(),
+    pistas: z.array(z.string().max(300)).optional(),
   }),
 };
+
+/** Quem rola os testes nesta campanha: no modo história, por padrão, o próprio jogador. */
+export function jogadorRolaOsDados(c: Campanha): boolean {
+  return (c.config.dados ?? (c.config.modoJogo === "historia" ? "jogador" : "automatico")) === "jogador";
+}
 
 export function acharPersonagem(ctx: ContextoFerramentas, nome?: string): Personagem {
   if (!ctx.personagens.length) throw new Error("A mesa não tem personagens.");
@@ -628,8 +763,10 @@ function atualizarCombate(ctx: ContextoFerramentas, combate: Combate, e: NonNull
 
 function executarCena(ctx: ContextoFerramentas, e: z.infer<typeof ENTRADAS.atualizar_cena>) {
   const cena = cenaAtual(ctx);
+  const tituloAntes = `${cena.titulo ?? ""}|${cena.local ?? ""}`;
+  if (e.musica) cena.musica = e.musica;
   // string vazia apaga o campo; omitido mantém
-  for (const campo of ["local", "momento", "clima", "situacao"] as const) {
+  for (const campo of ["titulo", "local", "momento", "clima", "situacao"] as const) {
     const v = e[campo];
     if (v === undefined) continue;
     if (v.trim()) cena[campo] = v.trim();
@@ -675,6 +812,15 @@ function executarCena(ctx: ContextoFerramentas, e: z.infer<typeof ENTRADAS.atual
     if (cena.combate?.ativo) sincronizarPersonagens(ctx, cena.combate);
   }
 
+  // mudou de lugar ou de título: vira um cabeçalho de capítulo no meio da história
+  if ((e.titulo !== undefined || e.local !== undefined) && `${cena.titulo ?? ""}|${cena.local ?? ""}` !== tituloAntes && (cena.titulo || cena.local)) {
+    registrarDado(ctx, [cena.local, cena.momento, cena.titulo].filter(Boolean).join(" · "), {
+      tipo: "cena_titulo",
+      titulo: cena.titulo ?? null,
+      local: cena.local ?? null,
+      momento: cena.momento ?? null,
+    });
+  }
   gravarCena(ctx, cena);
   const combate = cena.combate?.ativo ? cena.combate : null;
   const deEmPe = combate?.ordem.filter((x) => !x.aliado && podeAgir(x)).map((x) => x.nome) ?? [];
@@ -867,11 +1013,15 @@ export async function executarFerramenta(ctx: ContextoFerramentas, nome: string,
   if (nome === "anotar_diario") {
     const e = ENTRADAS.anotar_diario.parse(entradaBruta);
     const antes = listarDiario(ctx.campanha.id).find((x) => x.tipo === e.tipo && x.titulo.toLowerCase() === e.titulo.toLowerCase());
+    // detalhes estruturados (personalidade do NPC, objetivo e pistas da missão) vão em `dados`
+    const campos = ["aparencia", "voz", "jeito", "desejo", "temperamento", "relacao", "objetivo", "recompensa", "pistas"] as const;
+    const dados = Object.fromEntries(campos.filter((c) => e[c] !== undefined && e[c] !== "").map((c) => [c, e[c]]));
     const entrada = salvarEntradaDiario(ctx.campanha.id, {
       tipo: e.tipo,
       titulo: e.titulo,
       texto: e.texto?.trim(),
       status: normalizarStatus(e.tipo, e.status) ?? (antes ? undefined : e.tipo === "missao" ? "aberta" : undefined),
+      ...(Object.keys(dados).length ? { dados } : {}),
     });
     publicar(ctx.campanha.id, { e: "diario", entradas: listarDiario(ctx.campanha.id) });
     // missão nova ou com status novo merece aviso no chat; o resto fica só no diário
@@ -880,6 +1030,57 @@ export async function executarFerramenta(ctx: ContextoFerramentas, nome: string,
       registrarDado(ctx, `${rotulo}: ${entrada.titulo}`, { tipo: "diario", entrada, rotulo, resumo: `${rotulo}: ${entrada.titulo}` });
     }
     return { entrada, novo: !antes };
+  }
+
+  if (nome === "pedir_teste") {
+    const e = ENTRADAS.pedir_teste.parse(entradaBruta);
+    const p = acharPersonagem(ctx, e.personagem);
+    if (testesPendentes(ctx.campanha.id).some((m) => m.personagemId === p.id)) {
+      throw new Error(`${p.ficha.nome} já tem um teste esperando o jogador rolar. Termine o turno.`);
+    }
+    // prévia só para mostrar o bônus no cartão; o dado de verdade é sorteado quando o jogador clica
+    const previa = ctx.sistema.resolverTeste(p.ficha, { teste: e.teste, alvo: e.alvo, motivo: e.motivo });
+    const dados = {
+      tipo: "pedido_teste",
+      status: "pendente",
+      personagem: p.ficha.nome,
+      personagemId: p.id,
+      teste: previa.teste,
+      testePedido: e.teste,
+      alvo: e.alvo,
+      bonus: previa.bonus,
+      perigoso: Boolean(e.perigoso),
+      motivo: e.motivo,
+      sistema: ctx.sistema.id,
+    };
+    registrarDado(ctx, `${p.ficha.nome} precisa rolar ${previa.teste} (CD ${e.alvo}) — ${e.motivo}`, dados, p.id);
+    return {
+      pendente: true,
+      personagem: p.ficha.nome,
+      teste: previa.teste,
+      alvo: e.alvo,
+      instrucao:
+        "O jogador vai rolar o dado agora. Termine a narração deste turno com suspense, sem revelar o resultado nem narrar o que acontece depois. O resultado chega no próximo turno.",
+    };
+  }
+
+  if (nome === "sugerir_acoes") {
+    const e = ENTRADAS.sugerir_acoes.parse(entradaBruta);
+    const cena = cenaAtual(ctx);
+    cena.sugestoes = e.acoes.slice(0, 4).map((a) => ({ texto: a.texto, ...(a.pericia ? { pericia: a.pericia } : {}) }));
+    gravarCena(ctx, cena);
+    return { ok: true, sugestoes: cena.sugestoes.length };
+  }
+
+  if (nome === "ajustar_reputacao") {
+    const e = ENTRADAS.ajustar_reputacao.parse(entradaBruta);
+    const p = acharPersonagem(ctx, e.personagem);
+    const r = ajustarReputacao(p.ficha, e.eixo, e.variacao);
+    p.ficha = r.ficha;
+    persistirPersonagem(ctx, p);
+    const dados = { tipo: "reputacao", personagem: p.ficha.nome, eixo: r.eixo, variacao: e.variacao, valor: r.valor, motivo: e.motivo };
+    registrarDado(ctx, `${p.ficha.nome}: ${r.eixo} ${e.variacao > 0 ? "+" : ""}${e.variacao} — ${e.motivo}`, dados, p.id);
+    return dados;
   }
 
   throw new Error(`Ferramenta desconhecida: ${nome}`);

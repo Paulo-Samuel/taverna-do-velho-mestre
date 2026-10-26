@@ -61,6 +61,19 @@ const REGRAS_DO_MESTRE = `Você é o Velho Mestre da Taverna: o narrador e juiz 
 5. Houve vitória, missão cumprida ou marco? → \`conceder_xp\` (ou \`subir_nivel\`). Descansaram em segurança? → \`descansar\`.
 6. A narração termina dizendo de quem é a vez, sem decidir nada pelos personagens?`;
 
+/** Regras extras do modo história (padrão das campanhas novas): têm prioridade sobre as gerais. */
+const MODO_HISTORIA = `## MODO HISTÓRIA (vale mais que as regras acima quando houver conflito)
+O jogador vê a aventura como um livro: texto corrido, sem fichas nem números à vista. Escreva para ser LIDO com prazer.
+- Narração de 2 a 4 parágrafos por turno, prosa viva e concreta, com ritmo de romance de fantasia. Falas sempre entre aspas, cada NPC com voz própria e reconhecível (use a voz, o jeito e o desejo anotados no diário).
+- Chame NPCs e lugares pelo nome; quando um NPC novo e nomeado aparecer, registre com \`anotar_diario\` tipo "npc" preenchendo aparencia, voz, jeito, desejo e temperamento. Missões vão com objetivo, recompensa e pistas (as pistas acumulam).
+- Testes: o JOGADOR rola. Use \`pedir_teste\` (no lugar de \`teste\`) só quando o resultado for incerto e importar; marque perigoso quando a falha machuca. Depois de pedir, TERMINE o turno no momento de suspense, sem contar o resultado. No turno seguinte chega "(resultado do teste pedido)": narre a consequência a partir dele (sucesso, falha, crítico) e siga a cena.
+- Ao mudar de lugar ou de clima da cena, chame \`atualizar_cena\` com titulo (como capítulo: "Salão Comum", "A Trilha do Brejo"), local, momento e musica (humor e energia que combinam: taverna, calmo, exploracao, misterio, tensao, combate, triste, vitoria, sombrio).
+- Ao FIM de TODO turno (inclusive quando pedir teste), chame \`sugerir_acoes\` com 3 ações em primeira pessoa implícita, específicas da cena e escritas como o personagem faria: uma ousada, uma cautelosa ou social, uma curiosa. O jogador também pode escrever a própria.
+- Abertura ("[início da campanha]"): comece numa cena viva e concreta ligada à história do personagem, com um gancho forte nas primeiras linhas (uma carta, uma dívida, um cadáver, uma proposta). Chame \`atualizar_cena\` (titulo, local, momento, musica) antes de narrar e \`anotar_diario\` com a missão e os NPCs que aparecerem.
+- Recompense escolhas morais com \`ajustar_reputacao\` quando o sistema tiver reputação.
+- ORDEM DE CADA TURNO (a tela mostra tudo nessa ordem): 1) \`atualizar_cena\` se mudou o lugar ou o clima; 2) a narração; 3) \`pedir_teste\`, se precisar, DEPOIS da narração; 4) uma frase curta de suspense; 5) \`sugerir_acoes\`. Ferramentas de registro (\`anotar_diario\`, \`alterar_ficha\`, \`conceder_xp\`) podem vir quando o fato acontece.
+- Tudo o que você escreve vai direto para o livro: NUNCA comente as ferramentas nem resuma fora da ficção ("anotei no diário", "você falhou no teste, então..."). Depois da última ferramenta, ou termine com a narração ou não escreva mais nada.`;
+
 const MODOS = {
   livre:
     "Modo livre: cada ação chega quando o jogador manda (às vezes várias juntas). Responda só ao que foi declarado e devolva a palavra; não espere todos agirem para seguir a ficção.",
@@ -82,7 +95,17 @@ export function diarioCompacto(entradas: EntradaDiario[]): string {
       .filter((e) => e.tipo === tipo)
       .sort((a, b) => Number(tipo === "missao" && b.status === "aberta") - Number(tipo === "missao" && a.status === "aberta") || b.atualizadoEm.localeCompare(a.atualizadoEm));
     if (!doTipo.length) continue;
-    const linhas = doTipo.slice(0, MAX_POR_TIPO).map((e) => `  - ${e.titulo}${e.status ? ` [${e.status}]` : ""}${e.texto ? `: ${encurtar(e.texto.replace(/\s+/g, " "), 140)}` : ""}`);
+    const linhas = doTipo.slice(0, MAX_POR_TIPO).map((e) => {
+      // personalidade do NPC e pistas da missão mantêm a voz e a trama consistentes entre turnos
+      const d = (e.dados ?? {}) as Record<string, unknown>;
+      const extras =
+        tipo === "npc"
+          ? ["voz", "jeito", "desejo", "temperamento", "relacao"].filter((k) => d[k]).map((k) => `${k}: ${encurtar(String(d[k]), 80)}`)
+          : tipo === "missao"
+            ? [d.objetivo && `objetivo: ${encurtar(String(d.objetivo), 100)}`, Array.isArray(d.pistas) && d.pistas.length && `pistas: ${d.pistas.slice(-4).join("; ")}`].filter(Boolean)
+            : [];
+      return `  - ${e.titulo}${e.status ? ` [${e.status}]` : ""}${e.texto ? `: ${encurtar(e.texto.replace(/\s+/g, " "), 140)}` : ""}${extras.length ? ` (${extras.join(" · ")})` : ""}`;
+    });
     const resto = doTipo.length - MAX_POR_TIPO;
     blocos.push(`- ${ROTULOS_DIARIO[tipo]}:\n${linhas.join("\n")}${resto > 0 ? `\n  - (+${resto} mais antigos)` : ""}`);
   }
@@ -127,7 +150,7 @@ export function promptDoSistema(c: Campanha, sistema: Sistema, personagens: Pers
   } catch (e) {
     console.warn("[taverna] diário indisponível para o prompt:", e);
   }
-  return `${REGRAS_DO_MESTRE}
+  return `${REGRAS_DO_MESTRE}${c.config?.modoJogo === "historia" ? `\n\n${MODO_HISTORIA}` : ""}
 
 ## Regras do sistema
 ${sistema.regrasParaMestre}

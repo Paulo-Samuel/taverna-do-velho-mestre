@@ -115,6 +115,9 @@ async function executar({ sistema, prompt, ferramentas, ponte, aoEvento, sinal }
   filho.stdin.end(prompt, "utf8");
 
   let resultado: { texto: string; erro: string | null } | null = null;
+  // cada bloco de texto novo (depois de uma ferramenta) vira parágrafo novo, sem grudar no anterior
+  let jaEscreveu = false;
+  let blocoNovo = false;
 
   try {
     for await (const linhaBruta of createInterface({ input: filho.stdout })) {
@@ -128,8 +131,12 @@ async function executar({ sistema, prompt, ferramentas, ponte, aoEvento, sinal }
         continue;
       }
 
-      if (ev.type === "stream_event" && ev.event?.type === "content_block_delta" && ev.event.delta?.type === "text_delta") {
-        aoEvento?.({ tipo: "texto", texto: ev.event.delta.text });
+      if (ev.type === "stream_event" && ev.event?.type === "content_block_start" && ev.event.content_block?.type === "text") {
+        blocoNovo = jaEscreveu;
+      } else if (ev.type === "stream_event" && ev.event?.type === "content_block_delta" && ev.event.delta?.type === "text_delta") {
+        aoEvento?.({ tipo: "texto", texto: (blocoNovo ? "\n\n" : "") + ev.event.delta.text });
+        blocoNovo = false;
+        jaEscreveu = true;
       } else if (ev.type === "rate_limit_event") {
         const info = ev.rate_limit_info ?? {};
         aoEvento?.({

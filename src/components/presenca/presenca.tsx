@@ -156,7 +156,10 @@ export function Presenca({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
         </div>
       )}
 
-      {mesa.eu.clienteId && !mesa.eu.apelido && <BoasVindas aoSalvar={acoes.mudarApelido} />}
+      {/* só pergunta o apelido para quem chegou pela rede; na máquina da taverna joga-se sem cerimônia */}
+      {mesa.eu.clienteId && !mesa.eu.apelido && mesa.presenca.some((j) => j.clienteId === mesa.eu.clienteId && !j.local) && (
+        <BoasVindas aoSalvar={acoes.mudarApelido} />
+      )}
     </div>
   );
 }

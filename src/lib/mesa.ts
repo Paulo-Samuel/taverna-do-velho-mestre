@@ -11,6 +11,7 @@ import {
   type Personagem,
 } from "./db";
 import { mesaOcupada, provedorAtual } from "./mestre";
+import { jogadorRolaOsDados } from "./mestre/ferramentas";
 import { obterSistema } from "./sistemas";
 import { publico } from "./sistemas/comum";
 import type { Cena, EntradaDiario, SistemaPublico } from "./sistemas/tipos";
@@ -22,7 +23,14 @@ export type { PersonagemVisivel };
 // Estado completo de uma mesa, como o cliente recebe ao abrir a página (e de novo em cada evento "recarregar").
 
 export type EstadoMesa = {
-  campanha: Pick<Campanha, "id" | "nome" | "sistema" | "cenario" | "tom"> & { modo: "livre" | "rodada"; temPin: boolean };
+  campanha: Pick<Campanha, "id" | "nome" | "sistema" | "cenario" | "tom"> & {
+    modo: "livre" | "rodada";
+    temPin: boolean;
+    /** "historia": mesa em estilo de livro; "avancado": mesa com painéis */
+    modoJogo: "historia" | "avancado";
+    /** o jogador rola os próprios testes (dado 3D) */
+    jogadorRola: boolean;
+  };
   sistema: SistemaPublico;
   personagens: PersonagemVisivel[];
   mensagens: Mensagem[];
@@ -42,7 +50,11 @@ export function estadoMesa(campanhaId: number): EstadoMesa | null {
   if (!c) return null;
   const sistema = obterSistema(c.sistema);
   return {
-    campanha: { id: c.id, nome: c.nome, sistema: c.sistema, cenario: c.cenario, tom: c.tom, modo: c.config.modo ?? "livre", temPin: Boolean(c.config.pin) },
+    campanha: { id: c.id, nome: c.nome, sistema: c.sistema, cenario: c.cenario, tom: c.tom, modo: c.config.modo ?? "livre",
+      temPin: Boolean(c.config.pin),
+      modoJogo: c.config.modoJogo ?? "avancado",
+      jogadorRola: jogadorRolaOsDados(c),
+    },
     sistema: publico(sistema),
     personagens: listarPersonagens(c.id).map((p) => visivel(sistema, p)),
     mensagens: listarMensagens(c.id, MENSAGENS_INICIAIS),

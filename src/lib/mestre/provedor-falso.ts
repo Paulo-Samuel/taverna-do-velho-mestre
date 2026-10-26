@@ -92,6 +92,65 @@ export const provedorFalso: Provedor = {
     const combate = combateDoSistema(sistema);
     const escala = escalaDe(ferramentas);
 
+    // modo história: cena com título e música, NPC com personalidade, teste rolado pelo jogador e ações sugeridas
+    if (tem("pedir_teste") || tem("sugerir_acoes")) {
+      const sugerir = () =>
+        usar("sugerir_acoes", {
+          acoes: [
+            { texto: "Agarrar o taverneiro pela gola e exigir a verdade", pericia: "Intimidação" },
+            { texto: "Pagar uma bebida e puxar conversa com calma", pericia: "Persuasão" },
+            { texto: "Examinar o lacre da carta antes de qualquer coisa", pericia: "Investigação" },
+          ],
+        });
+      if (inicio) {
+        await usar("atualizar_cena", {
+          titulo: "Salão Comum",
+          local: "Taverna do Javali Torto",
+          momento: "Manhã",
+          musica: { humor: "taverna", energia: "baixa" },
+        });
+        await usar("anotar_diario", {
+          tipo: "npc",
+          titulo: "Bruno Três-Dedos",
+          texto: "Taverneiro, ex-soldado, sabe mais do que conta.",
+          aparencia: "careca, avental manchado, falta dois dedos na mão esquerda",
+          voz: "rouca e baixa",
+          jeito: "limpa o balcão quando está nervoso",
+          desejo: "pagar a dívida com o cartel sem sujar as mãos",
+          temperamento: "desconfiado",
+          relacao: "neutro",
+        });
+        await usar("anotar_diario", {
+          tipo: "missao",
+          titulo: "A carta do cartel",
+          texto: "Alguém deixou uma carta lacrada para você.",
+          objetivo: "Descobrir quem mandou a carta e o que ela exige",
+          pistas: ["O lacre tem uma serpente enrolada"],
+        });
+        await diga(
+          "Um pano úmido estala no balcão a um palmo do seu nariz. **Bruno Três-Dedos** te encara com a paciência de quem já enterrou gente mais simpática.\n\n\"Acorda. Deixaram isso pra você antes do sol nascer\", ele diz, empurrando um envelope com lacre de serpente.",
+        );
+        await sugerir();
+        return;
+      }
+      if (prompt.includes("(resultado do teste pedido)")) {
+        const sucesso = /Sucesso/.test(prompt.slice(prompt.lastIndexOf("(resultado do teste pedido)")));
+        await diga(
+          sucesso
+            ? "Bruno solta o pano devagar. \"Tá bom, tá bom\", ele resmunga. \"Foi um sujeito magro, lábio cortado. Cheirava a cravo.\""
+            : "Bruno nem pisca. \"Sai do meu balcão antes que eu te sirva de petisco pros ratos.\" Metade da taverna agora olha para você.",
+        );
+        await usar("anotar_diario", { tipo: "missao", titulo: "A carta do cartel", pistas: [sucesso ? "O mensageiro tinha lábio cortado e cheirava a cravo" : "Bruno se recusou a falar"] });
+        await sugerir();
+        return;
+      }
+      await diga(`Você decide: ${acao || "agir"}. O salão inteiro parece prender a respiração.\n\n`);
+      await usar("pedir_teste", { personagem, teste: "Intimidação", alvo: 12, perigoso: false, motivo: "Arrancar a verdade do taverneiro" });
+      await diga("Bruno aperta o pano entre os dedos que sobraram. Os olhos dele não desviam dos seus...");
+      await sugerir();
+      return;
+    }
+
     if (inicio) {
       await usar("atualizar_cena", {
         local: "Taverna do Javali Caolho",

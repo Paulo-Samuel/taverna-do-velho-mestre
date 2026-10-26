@@ -38,13 +38,20 @@ export function criarProvedorApi(opcoes: OpcoesApi = {}): Provedor {
       }));
       const mensagens: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: prompt }];
       let falhasJson = 0;
+      // texto de uma rodada nova (depois das ferramentas) começa parágrafo novo, sem grudar no anterior
+      let jaEscreveu = false;
 
       for (let rodada = 0; rodada < MAX_RODADAS; rodada++) {
         const stream = api().beta.messages.stream(
           { ...base(sistema), tools, messages: mensagens } as Anthropic.Beta.MessageCreateParamsStreaming,
           { signal: sinal },
         );
-        stream.on("text", (texto) => emitir({ tipo: "texto", texto }));
+        let primeiroDaRodada = true;
+        stream.on("text", (texto) => {
+          emitir({ tipo: "texto", texto: (primeiroDaRodada && jaEscreveu ? "\n\n" : "") + texto });
+          primeiroDaRodada = false;
+          jaEscreveu = true;
+        });
 
         let mensagem: Anthropic.Beta.BetaMessage;
         try {

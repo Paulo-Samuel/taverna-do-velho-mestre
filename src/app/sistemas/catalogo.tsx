@@ -100,7 +100,7 @@ function CartaoSistema({ s, classes, ancestralidades, buscando }: { s: ItemCatal
           <h2 className="titulo mt-2 text-2xl text-pergaminho">{s.nome}</h2>
         </div>
         {s.pronto ? (
-          <Link href={`/nova?sistema=${encodeURIComponent(s.id)}`} className="btn-ambar w-full sm:w-auto">
+          <Link href={`/nova/avancada?sistema=${encodeURIComponent(s.id)}`} className="btn-ambar w-full sm:w-auto">
             Começar campanha neste sistema
           </Link>
         ) : (
