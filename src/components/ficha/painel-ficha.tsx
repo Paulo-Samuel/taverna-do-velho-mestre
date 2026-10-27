@@ -14,6 +14,7 @@ import {
   useAjusteFicha,
   type AjusteFicha,
 } from "./ajuste-ficha";
+import { BotaoGastarXp } from "./gastar-xp";
 
 // Ficha de um personagem, desenhada a partir dos blocos que o sistema calcula no servidor.
 // Nada aqui conhece regra de sistema: só sabe desenhar barras, grades, etiquetas, listas e textos.
@@ -256,17 +257,19 @@ type PropsCartao = {
   ajuste?: AjusteFicha;
   /** conteúdo extra no fim (anotações do jogador) */
   rodape?: ReactNode;
+  /** botão ao lado do XP (Vampiro: "Gastar XP"); com ele a linha de XP aparece mesmo zerada */
+  acaoXp?: ReactNode;
 };
 
 /** Cabeçalho + blocos. Usado na mesa (PainelFicha) e na prévia do formulário de criação. */
-export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste, rodape }: PropsCartao) {
+export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste, rodape, acaoXp }: PropsCartao) {
   const classe = sistema.classes.find((c) => c.id === ficha.classe)?.nome ?? ficha.classe;
   const anc = sistema.ancestralidades.find((a) => a.id === ficha.ancestralidade)?.nome ?? ficha.ancestralidade;
   const antecedente = sistema.antecedentes?.find((a) => a.id === ficha.antecedente)?.nome;
 
   const proximo = progresso?.xpProximoNivel ?? null;
   const base = progresso?.xpNivelAtual ?? 0;
-  const mostrarXp = proximo !== null || ficha.xp > 0;
+  const mostrarXp = proximo !== null || ficha.xp > 0 || Boolean(acaoXp);
   const pctXp = proximo !== null && proximo > base ? Math.max(0, Math.min(100, ((ficha.xp - base) / (proximo - base)) * 100)) : 0;
 
   const visiveis = blocosComAjuste(blocos, ajuste);
@@ -300,8 +303,9 @@ export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste
         </div>
         {mostrarXp && (
           <div className="mt-2">
-            <div className="mb-0.5 flex justify-between text-[11px] text-muted">
+            <div className="mb-0.5 flex items-center justify-between gap-2 text-[11px] text-muted">
               <span>XP {ficha.xp.toLocaleString("pt-BR")}</span>
+              {acaoXp}
               {proximo !== null &&
                 (ficha.xp >= proximo ? (
                   <span className="text-ambar">pronto para subir!</span>
@@ -386,6 +390,7 @@ function FichaDaMesa({ personagem, sistema, editavel = true, ocupado = false }: 
       jogador={personagem.jogador}
       progresso={progresso}
       ajuste={editavel ? ajuste : undefined}
+      acaoXp={editavel && sistema.id === "vtm5" ? <BotaoGastarXp personagem={personagem} /> : undefined}
       rodape={
         editavel ? (
           <Secao titulo="Minhas anotações" aberta={false}>

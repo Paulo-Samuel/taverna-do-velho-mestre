@@ -1,55 +1,13 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
+import { SugestoesCompactas } from "@/components/chat/sugestoes-compactas";
 import type { SugestaoAcao } from "@/lib/sistemas/tipos";
 
-// Rodapé da mesa do modo história: as ações que o mestre sugeriu (lista vertical clicável) e o campo
-// "Ou escreva sua própria ação…". Enter envia; Shift+Enter quebra a linha.
-
-/** As ações sugeridas pelo mestre, como opções clicáveis (usada também na mesa avançada). */
-export function ListaSugestoes({
-  sugestoes,
-  desabilitado,
-  aoEscolher,
-  discretas = false,
-}: {
-  sugestoes: SugestaoAcao[];
-  desabilitado?: boolean;
-  aoEscolher: (texto: string) => void;
-  /** leitor cena a cena: ainda não chegou ao fim da cena, as sugestões ficam apagadinhas (mas clicáveis; por filtro, porque o "surgir" prende a opacidade) */
-  discretas?: boolean;
-}) {
-  return (
-    <ul
-      className={`surgir mb-2 space-y-1.5 transition-[filter] motion-reduce:transition-none ${discretas ? "brightness-[.6] saturate-50 hover:brightness-100 hover:saturate-100 focus-within:brightness-100 focus-within:saturate-100" : ""}`}
-      aria-label="Ações sugeridas"
-      data-sugestoes={discretas ? "discretas" : "destaque"}
-    >
-      {sugestoes.map((s, i) => (
-        <li key={`${i}-${s.texto}`}>
-          <button
-            type="button"
-            disabled={desabilitado}
-            onClick={() => aoEscolher(s.texto)}
-            className="group flex min-h-11 w-full items-center gap-3 rounded-lg border border-border/80 bg-surface/70 px-3 py-1.5 text-left text-[0.95rem] sm:py-2 sm:text-base transition hover:border-ambar/70 hover:bg-surface-2 focus-visible:border-ambar focus-visible:outline-none disabled:opacity-50"
-          >
-            <span className="shrink-0 text-ambar/80 transition group-hover:translate-x-0.5 group-hover:text-ambar motion-reduce:transition-none" aria-hidden>
-              ➶
-            </span>
-            <span className="min-w-0 flex-1 leading-snug text-foreground/90 group-hover:text-foreground">{s.texto}</span>
-            {s.pericia && <span className="shrink-0 text-xs text-muted">{s.pericia}</span>}
-            {/* atalho de teclado (1, 2, 3): só onde há teclado de verdade */}
-            {i < 9 && (
-              <kbd className="hidden shrink-0 rounded border border-border/80 px-1.5 text-[10px] leading-4 text-muted [@media(pointer:fine)]:inline" aria-hidden>
-                {i + 1}
-              </kbd>
-            )}
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
+// Rodapé da mesa do modo história, enxuto para o palco ganhar altura: as ações que o mestre sugeriu (linhas baixas no desktop,
+// uma linha que abre no celular) e o campo "O que fulano faz?", de uma linha que cresce, com o retrato do personagem ao lado.
+// O espaço das sugestões fica reservado enquanto há personagem (com um recado no lugar quando não há sugestão), para o palco
+// não mudar de tamanho a cada turno e as páginas não se refazerem no meio da leitura. Enter envia; Shift+Enter quebra a linha.
 
 export function PainelAcao({
   sugestoes,
@@ -59,7 +17,9 @@ export function PainelAcao({
   placeholder,
   rotuloCampo,
   enviar,
-  topo,
+  inicio,
+  recado,
+  reservar = true,
   campoRef,
   preencher,
   sugestoesDiscretas = false,
@@ -72,8 +32,12 @@ export function PainelAcao({
   placeholder: string;
   rotuloCampo: string;
   enviar: (texto: string) => Promise<boolean>;
-  /** linha acima do campo (personagem ativo, estado do mestre) */
-  topo?: ReactNode;
+  /** à esquerda do campo (o retrato do personagem ativo) */
+  inicio?: ReactNode;
+  /** o que aparece no espaço das sugestões quando não há sugestão (mestre narrando, esperando o grupo...) */
+  recado?: ReactNode;
+  /** guarda o espaço das sugestões mesmo sem elas (há personagem para agir) */
+  reservar?: boolean;
   campoRef?: React.RefObject<HTMLTextAreaElement | null>;
   /** põe um texto no campo (ex.: a ação devolvida depois de desfazer o turno); `n` muda a cada pedido */
   preencher?: { texto: string; n: number } | null;
@@ -106,9 +70,16 @@ export function PainelAcao({
 
   return (
     <div>
-      {ver && <ListaSugestoes sugestoes={sugestoes} desabilitado={enviando} discretas={sugestoesDiscretas} aoEscolher={(t) => void mandar(t, false)} />}
-
-      {topo}
+      {(ver || reservar) && (
+        // três linhas de sugestão no desktop (3 × 28 + 2 × 3), uma no celular; encostadas no campo
+        <div className="mb-2 flex min-h-10 flex-col justify-end sm:min-h-[90px]" data-vaga-sugestoes>
+          {ver ? (
+            <SugestoesCompactas sugestoes={sugestoes} desabilitado={enviando} discretas={sugestoesDiscretas} aoEscolher={(t) => void mandar(t, false)} />
+          ) : (
+            <div className="flex min-h-10 items-center justify-center gap-3 text-center text-[13px] italic text-muted sm:min-h-7">{recado}</div>
+          )}
+        </div>
+      )}
 
       {bloqueio ? (
         // a barra inteira leva ao dado (alvo grande no celular); sem destino, é só o aviso
@@ -116,7 +87,7 @@ export function PainelAcao({
           <button
             type="button"
             onClick={aoIrParaBloqueio}
-            className="surgir group flex min-h-12 w-full items-center justify-between gap-3 rounded-lg border border-ambar/60 bg-ambar/10 px-3 py-2 text-left text-sm shadow-[0_0_24px_-12px_var(--ambar)] transition hover:border-ambar hover:bg-ambar/15 focus-visible:border-ambar focus-visible:outline-none"
+            className="surgir group flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-ambar/60 bg-ambar/10 px-3 py-1.5 text-left text-sm shadow-[0_0_24px_-12px_var(--ambar)] transition hover:border-ambar hover:bg-ambar/15 focus-visible:border-ambar focus-visible:outline-none"
           >
             <span className="min-w-0 text-ambar">
               <span aria-hidden>🎲 </span>
@@ -127,7 +98,7 @@ export function PainelAcao({
             </span>
           </button>
         ) : (
-          <div className="flex min-h-12 items-center gap-3 rounded-lg border border-ambar/50 bg-ambar/10 px-3 py-2 text-sm text-ambar" role="status">
+          <div className="flex min-h-11 items-center gap-3 rounded-lg border border-ambar/50 bg-ambar/10 px-3 py-1.5 text-sm text-ambar" role="status">
             <span aria-hidden>🎲</span> {bloqueio}
           </div>
         )
@@ -139,6 +110,7 @@ export function PainelAcao({
             void mandar(texto, true);
           }}
         >
+          {inicio}
           <textarea
             ref={campo}
             value={texto}
@@ -153,10 +125,10 @@ export function PainelAcao({
             maxLength={2000}
             aria-label={rotuloCampo}
             placeholder={placeholder}
-            className="campo field-sizing-content max-h-40 min-h-12 flex-1 resize-none py-3 leading-snug"
+            className="campo field-sizing-content max-h-36 min-h-11 flex-1 resize-none bg-surface-2/80 py-2.5 leading-snug"
           />
           <button
-            className="grid size-12 shrink-0 place-items-center rounded-md bg-ambar text-xl text-[#1a120c] shadow-[0_0_24px_-6px_var(--ambar)] transition hover:bg-[#f0b762] disabled:cursor-not-allowed disabled:opacity-40"
+            className="grid size-11 shrink-0 place-items-center rounded-md bg-ambar text-lg text-[#1a120c] shadow-[0_0_24px_-6px_var(--ambar)] transition hover:bg-[#f0b762] disabled:cursor-not-allowed disabled:opacity-40"
             disabled={!texto.trim() || enviando}
             aria-label={enviando ? "Enviando a ação" : "Enviar ação"}
             title="Enviar (Enter · Shift+Enter quebra a linha)"

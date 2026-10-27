@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-// "↶ Desfazer" e "↻ Outra resposta" embaixo da última narração do mestre (as duas mesas).
+// "↶ Desfazer" e "↻ Outra resposta" embaixo da última narração do mestre (as duas mesas; no leitor cena a cena, compactos na barra).
 // Apagam coisa, então pedem um segundo clique ("Tem certeza? Clique de novo") antes de chamar /api/campanhas/[id]/desfazer.
 // O servidor publica "recarregar" para todos; aqui só devolvemos a resposta para a mesa pôr a ação de volta no campo.
 
@@ -61,7 +61,8 @@ export function AcoesTurno({
     }
   }
 
-  const botao = (qual: Qual, icone: string, rotulo: string, dica: string) => {
+  /** curto: o rótulo da barra do leitor, onde o espaço é pouco (o title e o aria-label levam o nome inteiro) */
+  const botao = (qual: Qual, icone: string, rotulo: string, dica: string, curto = rotulo) => {
     const conf = armado === qual;
     return (
       <button
@@ -80,11 +81,11 @@ export function AcoesTurno({
         </span>
         {compacto ? (
           conf ? (
-            <span>
-              <span className="max-sm:hidden">Tem certeza? </span>Clique de novo
+            <span className="whitespace-nowrap">
+              <span className="max-sm:hidden">Clique </span>de novo
             </span>
           ) : (
-            <span className="max-sm:sr-only">{rotulo}</span>
+            <span className="whitespace-nowrap lowercase max-sm:sr-only">{curto}</span>
           )
         ) : (
           <span>{conf ? "Tem certeza? Clique de novo" : rotulo}</span>
@@ -96,7 +97,7 @@ export function AcoesTurno({
   return (
     <div className={`flex flex-wrap items-center gap-1 ${className}`} role="group" aria-label="Voltar o último turno do mestre">
       {botao("desfazer", "↶", "Desfazer", "Apaga a última resposta do mestre e devolve a sua ação ao campo, para reescrever")}
-      {botao("refazer", "↻", "Outra resposta", "O mestre responde de novo às mesmas ações (a resposta atual some)")}
+      {botao("refazer", "↻", "Outra resposta", "O mestre responde de novo às mesmas ações (a resposta atual some)", "Outra")}
     </div>
   );
 }

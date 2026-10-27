@@ -102,7 +102,7 @@ export function calcularLimites(unidades: Unidade[], total: number, paginas: num
 }
 
 /** Parágrafo com menos que isso da altura da página não é partido entre duas páginas. */
-const FRACAO_INTEIRO = 0.5;
+const FRACAO_INTEIRO = 0.26;
 
 /** Marca os parágrafos pequenos com data-inteiro (a altura somada dos pedaços não depende de onde ele quebra: não entra em laço). */
 export function marcarParagrafos(fluxo: HTMLElement, alturaPagina: number) {

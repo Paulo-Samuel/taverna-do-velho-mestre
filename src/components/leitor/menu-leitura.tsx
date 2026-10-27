@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { salvarPreferenciasLeitor, useMenosMovimento, usePreferenciasLeitor, type ModoLeitura } from "./preferencias";
+import { ESCALAS_FONTE, salvarPreferenciasLeitor, useMenosMovimento, usePreferenciasLeitor, type ModoLeitura } from "./preferencias";
 import { suportaRevelar } from "./use-revelar";
 
 // Botão do cabeçalho das mesas: escolhe como ler a história ("📖 Cena a cena" ou "📜 Rolagem") e liga/desliga o texto se
-// revelando aos poucos. Preferência deste navegador (localStorage).
+// revelando aos poucos e o tamanho da letra (A− / A+). Preferência deste navegador (localStorage).
 
 function Icone({ modo }: { modo: ModoLeitura }) {
   return modo === "cenas" ? (
@@ -24,13 +24,15 @@ function Icone({ modo }: { modo: ModoLeitura }) {
 }
 
 const OPCOES: [ModoLeitura, string, string, string][] = [
-  ["cenas", "📖", "Cena a cena", "Uma cena por vez, em páginas. Nada de rolar."],
-  ["rolagem", "📜", "Rolagem", "A conversa inteira numa coluna só, como antigamente."],
+  ["cenas", "📖", "Cena a cena", "Só a cena atual, em páginas. Nada de rolar."],
+  ["rolagem", "📜", "Rolagem", "A história inteira numa coluna só, para reler o que passou."],
 ];
+
+const DICAS_FONTE = ["Miúda, para quem tem olho de águia.", "A de sempre.", "Mais folgada.", "Grande, para ler de longe da tela."];
 
 /** acima: o menu abre para cima (botão no pé de um painel); esquerda: alinhado pela esquerda do botão (botão no canto esquerdo). */
 export function MenuLeitura({ className = "", acima = false, esquerda = false }: { className?: string; acima?: boolean; esquerda?: boolean }) {
-  const { modo, animar } = usePreferenciasLeitor();
+  const { modo, animar, fonte } = usePreferenciasLeitor();
   const menos = useMenosMovimento();
   const [aberto, setAberto] = useState(false);
   const caixa = useRef<HTMLDivElement>(null);
@@ -91,6 +93,42 @@ export function MenuLeitura({ className = "", acima = false, esquerda = false }:
                 </span>
               </button>
             ))}
+          </div>
+          {/* tamanho da letra da narração: vale para os dois modos */}
+          <div className="mt-3 flex items-center gap-2 border-t border-border pt-2.5 text-xs" data-tamanho-letra>
+            <span className="min-w-0 flex-1">
+              Tamanho da letra
+              <span className="block text-[11px] leading-snug text-muted">{DICAS_FONTE[fonte]}</span>
+            </span>
+            <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Tamanho da letra">
+              <button
+                type="button"
+                onClick={() => salvarPreferenciasLeitor({ fonte: fonte - 1 })}
+                disabled={fonte <= 0}
+                aria-label="Diminuir a letra"
+                title="Diminuir a letra"
+                className="grid size-9 place-items-center rounded-md border border-border text-xs hover:border-ambar/60 hover:text-ambar disabled:opacity-35"
+                data-letra="menor"
+              >
+                A−
+              </button>
+              <span className="flex items-center gap-1 px-0.5" aria-hidden>
+                {ESCALAS_FONTE.map((_, i) => (
+                  <span key={i} className={`size-1.5 rounded-full ${i === fonte ? "bg-ambar" : i < fonte ? "bg-ambar/45" : "bg-muted/35"}`} />
+                ))}
+              </span>
+              <button
+                type="button"
+                onClick={() => salvarPreferenciasLeitor({ fonte: fonte + 1 })}
+                disabled={fonte >= ESCALAS_FONTE.length - 1}
+                aria-label="Aumentar a letra"
+                title="Aumentar a letra"
+                className="grid size-9 place-items-center rounded-md border border-border text-base hover:border-ambar/60 hover:text-ambar disabled:opacity-35"
+                data-letra="maior"
+              >
+                A+
+              </button>
+            </div>
           </div>
           <label className={`mt-3 flex items-start gap-2 border-t border-border pt-2.5 text-xs ${modo !== "cenas" ? "opacity-50" : ""}`}>
             <input

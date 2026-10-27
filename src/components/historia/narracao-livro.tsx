@@ -1,9 +1,11 @@
 "use client";
 
 import { Fragment, useMemo, type ReactNode } from "react";
+import { Ornamento } from "@/components/leitor/prosa";
 
 // Narração do mestre como texto de livro: parágrafos, **negrito**, *itálico*, falas entre aspas em itálico e
-// nomes de NPCs e personagens coloridos (cada nome com a sua cor fixa, ver cores.ts).
+// nomes de NPCs e personagens coloridos (cada nome com a sua cor fixa, ver cores.ts). A tipografia (tamanho, entrelinha,
+// medida) é a do leitor (.leitor-prosa, src/components/leitor/prosa.tsx), a mesma nos dois modos de leitura.
 
 export type Destaque = { regex: RegExp | null; cores: Map<string, string> };
 
@@ -54,9 +56,9 @@ export function trecho(texto: string, d: Destaque, chave: string): ReactNode[] {
         </strong>
       );
     if (t.startsWith("*")) return <em key={k}>{comNomes(t.slice(1, -1), d, k)}</em>;
-    // fala entre aspas: itálico, com as aspas originais
+    // fala entre aspas: itálico numa cor um pouco mais quente, com as aspas originais
     return (
-      <em key={k} className="text-pergaminho">
+      <em key={k} className="leitor-fala">
         {t[0]}
         {comNomes(t.slice(1, -1), d, k)}
         {t[t.length - 1]}
@@ -76,14 +78,12 @@ export function NarracaoLivro({ texto, destaque, escrevendo = false }: { texto: 
     [texto],
   );
   return (
-    <div className="narracao-livro text-[1.08rem] leading-[1.8] text-foreground/95 sm:text-[1.15rem]" data-fixavel>
+    <div className="narracao-livro leitor-prosa text-foreground/90" data-fixavel>
       {paragrafos.map((p, i) =>
         /^(-{3,}|\*{3,}|_{3,})$/.test(p) ? (
-          <p key={i} className="my-5 text-center text-sm tracking-[0.6em] text-muted" aria-hidden>
-            ✦✦✦
-          </p>
+          <Ornamento key={i} simbolo="✦" />
         ) : (
-          <p key={i} className={`mb-4 last:mb-0 ${escrevendo && i === paragrafos.length - 1 ? "cursor" : ""}`}>
+          <p key={i} className={escrevendo && i === paragrafos.length - 1 ? "cursor" : undefined}>
             {trecho(p, destaque, String(i))}
           </p>
         ),

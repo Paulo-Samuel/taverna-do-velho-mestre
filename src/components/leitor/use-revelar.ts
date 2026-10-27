@@ -7,8 +7,10 @@ import { calcularLimites, listarUnidades, marcarParagrafos, paginaDoX, textosDas
 // O texto inteiro já está no DOM desde o começo (a página não muda de tamanho enquanto revela); o que ainda não foi "dito" fica
 // transparente por um destaque CSS (CSS Custom Highlight API: ::highlight(leitor-oculto) { color: transparent }), atualizado a cada
 // quadro sem re-renderizar o React. Cartões (dado, pedido de teste) ficam escondidos até o texto chegar neles.
-// A posição revelada é guardada por turno: voltar a uma cena já lida mostra tudo, e o texto que ainda chega (streaming) continua
-// de onde parou. Sem suporte ao destaque, com a animação desligada ou com menos movimento, tudo aparece de uma vez.
+// A posição revelada é guardada por turno: o texto que ainda chega (streaming) continua de onde parou, e desfazer/outra resposta
+// recomeça a contagem. Sem suporte ao destaque, com a animação desligada ou com menos movimento, tudo aparece de uma vez.
+// Também cuida da composição da página: texto curto fica no meio do palco (folga em cima, --folga), a capitular só aparece quando
+// o texto chega nela, e virar a página tem uma transição curtinha (deslizar ou "virar a folha"), sem movimento para quem pediu menos.
 
 /** Caracteres por segundo da narração. */
 const CPS = 58;
@@ -18,7 +20,21 @@ const PAUSA_PARAGRAFO = 0.35;
 const PAUSA_CARTAO = 0.35;
 const NOME_DESTAQUE = "leitor-oculto";
 
-type Medida = { chave: string; unidades: Unidade[]; total: number; limites: number[]; passo: number; base: number };
+type Medida = {
+  chave: string;
+  unidades: Unidade[];
+  total: number;
+  limites: number[];
+  passo: number;
+  base: number;
+  /** parágrafos com capitular e a posição da primeira letra deles no fio */
+  capitulares: { el: HTMLElement; inicio: number }[];
+};
+
+export type Transicao = "deslizar" | "virar";
+
+/** Fração do espaço livre que vai para cima quando o texto cabe com folga (um pouco acima do meio: o centro ótico). */
+const FRACAO_FOLGA = 0.4;
 
 export type Layout = { chave: string; paginas: number; textos: string[] };
 
@@ -53,6 +69,8 @@ export function useRevelar({
   animar,
   lidoAoAbrir,
   aoPaginaExterna,
+  transicao = "deslizar",
+  centralizar = true,
 }: {
   /** turno à vista */
   chave: string;
@@ -63,13 +81,17 @@ export function useRevelar({
   lidoAoAbrir: boolean;
   /** o visor rolou sozinho (foco andou para outra página, cartão cresceu e mudou de página): a página passa a ser esta */
   aoPaginaExterna: (k: number) => void;
+  /** como a página troca */
+  transicao?: Transicao;
+  /** texto que cabe numa página só fica no meio do palco */
+  centralizar?: boolean;
 }) {
   /** o visor (overflow escondido, rola de página em página) e o fluxo de colunas dentro dele */
   const visor = useRef<HTMLDivElement>(null);
   const fluxo = useRef<HTMLDivElement>(null);
   const posicoes = useRef(new Map<string, number>());
   const medida = useRef<Medida | null>(null);
-  const params = useRef({ chave, pagina, animar, lidoAoAbrir, aoPaginaExterna });
+  const params = useRef({ chave, pagina, animar, lidoAoAbrir, aoPaginaExterna, transicao, centralizar });
   const [layout, setLayout] = useState<Layout>({ chave: "", paginas: 1, textos: [] });
   const [completa, setCompleta] = useState(true);
   const [terminou, setTerminou] = useState(true);
@@ -77,6 +99,10 @@ export function useRevelar({
   const aplicado = useRef<{ medida: Medida | null; pos: number }>({ medida: null, pos: -1 });
   const rolagem = useRef<{ alvo: number; ate: number } | null>(null);
   const seguir = useRef<{ el: HTMLElement; ate: number } | null>(null);
+  /** a transição de página em andamento (medir espera ela acabar: o transform mexe nas coordenadas) */
+  const animando = useRef<Animation | null>(null);
+  /** o medir mais novo, para medir de novo no quadro seguinte (de dentro do próprio medir) */
+  const remedir = useRef<() => void>(() => {});
 
   const lerPos = useCallback((m: Medida) => {
     const e = params.current;
@@ -92,6 +118,10 @@ export function useRevelar({
   const aplicar = useCallback((m: Medida, pos: number) => {
     if (aplicado.current.medida === m && aplicado.current.pos === pos) return;
     aplicado.current = { medida: m, pos };
+    for (const c of m.capitulares) {
+      const oculta = c.inicio >= pos;
+      if (oculta !== c.el.hasAttribute("data-oculta")) c.el.toggleAttribute("data-oculta", oculta);
+    }
     for (const u of m.unidades) {
       if (u.tipo !== "cartao") continue;
       const oculto = u.inicio >= pos;
@@ -127,33 +157,53 @@ export function useRevelar({
     }
   }, []);
 
-  /** Leva o visor à página (sem animação quando a pessoa pediu menos movimento). */
-  const encaixar = useCallback((suave: boolean) => {
+  /** Leva o visor à página, de uma vez (a transição fica por conta do animarPagina). */
+  const encaixar = useCallback(() => {
     const v = visor.current;
     const m = medida.current;
     if (!v || !m) return;
     const alvo = paginaReal(m, params.current.pagina) * m.passo;
     if (Math.abs(v.scrollLeft - alvo) < 1) return;
-    const reduzido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     rolagem.current = { alvo, ate: Date.now() + 900 };
-    v.scrollTo({ left: alvo, behavior: suave && !reduzido ? "smooth" : "auto" });
+    v.scrollTo({ left: alvo, behavior: "auto" });
   }, []);
 
   /** Mede o fluxo: marca parágrafos pequenos, conta as páginas, monta o fio e os limites. */
   const medir = useCallback(() => {
     const f = fluxo.current;
     const v = visor.current;
-    if (!f || !v || !v.clientWidth) return;
+    if (!f || !v || !v.clientWidth || animando.current) return;
     const passo = v.clientWidth + VAO;
     const cs = getComputedStyle(f);
-    const alturaPagina = f.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    // a folga de cima (texto curto no meio) entra no padding: a página útil não conta com ela
+    const folgaAtual = parseFloat(f.style.getPropertyValue("--folga")) || 0;
+    const alturaPagina = f.clientHeight - (parseFloat(cs.paddingTop) - folgaAtual) - parseFloat(cs.paddingBottom);
     marcarParagrafos(f, alturaPagina);
     const paginas = Math.max(1, Math.round((v.scrollWidth + VAO) / passo));
+    // texto que cabe numa página só: o espaço que sobra vai um pouco para cima, para ele não ficar grudado no topo
+    let folga = 0;
+    const primeiro = f.firstElementChild;
+    const ultimo = f.lastElementChild;
+    if (paginas === 1 && params.current.centralizar && primeiro && ultimo) {
+      const topo = primeiro.getBoundingClientRect().top - parseFloat(getComputedStyle(primeiro).marginTop);
+      const fundo = ultimo.getBoundingClientRect().bottom + parseFloat(getComputedStyle(ultimo).marginBottom);
+      const livre = alturaPagina - (fundo - topo);
+      if (livre > 24) folga = Math.round(livre * FRACAO_FOLGA);
+    }
+    if (Math.abs(folga - folgaAtual) > 1) {
+      f.style.setProperty("--folga", `${folga}px`);
+      // a folga mudou a página: mede de novo antes de pintar (estável: com a folga nova o texto continua cabendo)
+      if (paginas > 1 || folga < folgaAtual) requestAnimationFrame(() => remedir.current());
+    }
     const { unidades, total } = listarUnidades(f);
     const base = f.getBoundingClientRect().left;
     const limites = calcularLimites(unidades, total, paginas, base, passo);
+    const capitulares = [...f.querySelectorAll<HTMLElement>("[data-capitular]")].flatMap((el) => {
+      const u = unidades.find((x) => x.tipo === "texto" && el.contains(x.no));
+      return u ? [{ el, inicio: u.inicio }] : [];
+    });
     const chaveAtual = params.current.chave;
-    const m: Medida = { chave: chaveAtual, unidades, total, limites, passo, base };
+    const m: Medida = { chave: chaveAtual, unidades, total, limites, passo, base, capitulares };
     medida.current = m;
     const textos = textosDasPaginas(unidades, limites);
     setLayout((l) =>
@@ -175,21 +225,59 @@ export function useRevelar({
         return;
       }
     }
-    encaixar(false);
+    encaixar();
   }, [lerPos, aplicar, atualizarVisivel, encaixar]);
 
+  /** A transição de página: a folha nova entra deslizando (ou virando, no modo história) do lado de onde veio. */
+  const animarPagina = useCallback(
+    (dir: 1 | -1) => {
+      const v = visor.current;
+      if (!v || typeof v.animate !== "function" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const virar = params.current.transicao === "virar";
+      const origem = dir > 0 ? "left center" : "right center";
+      const quadros: Keyframe[] = virar
+        ? [
+            { opacity: 0, transform: `perspective(1600px) rotateY(${dir * -11}deg) translateX(${dir * 14}px)`, transformOrigin: origem },
+            { opacity: 1, transform: "none", transformOrigin: origem },
+          ]
+        : [
+            { opacity: 0, transform: `translateX(${dir * 22}px)` },
+            { opacity: 1, transform: "none" },
+          ];
+      const a = v.animate(quadros, { duration: virar ? 440 : 280, easing: "cubic-bezier(.2,.7,.25,1)" });
+      animando.current = a;
+      const fim = () => {
+        if (animando.current !== a) return;
+        animando.current = null;
+        medir();
+      };
+      a.addEventListener("finish", fim);
+      a.addEventListener("cancel", fim);
+    },
+    [medir],
+  );
+
   // parâmetros novos a cada render; mede depois de cada render (o conteúdo do turno pode ter mudado)
-  const paginaAnterior = useRef({ chave, pagina });
+  const paginaAnterior = useRef({ chave, pagina: paginaReal(null, pagina) });
   useLayoutEffect(() => {
-    params.current = { chave, pagina, animar, lidoAoAbrir, aoPaginaExterna };
-    const mudouPagina = paginaAnterior.current.chave === chave && paginaAnterior.current.pagina !== pagina;
-    paginaAnterior.current = { chave, pagina };
+    params.current = { chave, pagina, animar, lidoAoAbrir, aoPaginaExterna, transicao, centralizar };
+    const real = paginaReal(medida.current?.chave === chave ? medida.current : null, pagina);
+    const antes = paginaAnterior.current;
+    const mudouPagina = antes.chave === chave && antes.pagina !== real;
+    const mudouCena = antes.chave !== chave;
+    paginaAnterior.current = { chave, pagina: real };
+    // troca de página no meio da transição anterior: corta a anterior para medir e encaixar já
+    if (mudouPagina || mudouCena) animando.current?.cancel();
     medir();
-    if (mudouPagina) encaixar(true);
+    if (mudouPagina) animarPagina(real > antes.pagina ? 1 : -1);
+    // cena nova: entra com um esmaecer curto (só opacidade: não mexe nas medidas)
+    else if (mudouCena && fluxo.current && typeof fluxo.current.animate === "function" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+      fluxo.current.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 360, easing: "ease-out" });
   });
 
   // mudanças que não passam pelo React: tamanho da janela, fontes chegando, cartões crescendo, tema
   useEffect(() => {
+    remedir.current = medir;
     const f = fluxo.current;
     const v = visor.current;
     if (!f || !v) return;
@@ -232,7 +320,7 @@ export function useRevelar({
         rolagem.current = null;
         const k = Math.round(v.scrollLeft / m.passo);
         if (k !== paginaReal(m, params.current.pagina)) params.current.aoPaginaExterna(k);
-        else encaixar(false);
+        else encaixar();
       }, 140);
     };
     v.addEventListener("scroll", rolou, { passive: true });

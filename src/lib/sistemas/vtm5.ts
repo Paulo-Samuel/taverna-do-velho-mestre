@@ -45,8 +45,9 @@ import type { BlocoFicha, Ficha, OpcaoCriacao, Sistema } from "./tipos";
 //   nivel = Potência de Sangue (0 a 10) · pv/pvMax = Saúde (Vigor + 3) · dinheiro = vantagem Recursos (0 a 5) · defesa 0
 //   recursos: vontade (Força de Vontade), humanidade, fome (0 a 5) e mancha (Manchas; máx = caixas vazias de Humanidade).
 //   A Mancha também fica espelhada em extras.mancha. Disciplinas em extras.disciplinas ({ id: pontos }).
-// XP: V5 gasta XP em características, não em níveis. xpParaNivel devolve null (o XP é só registro) e o gasto em atributos,
-// perícias e disciplinas é narrativo/manual. subirNivel aumenta a Potência de Sangue (o que no livro vem com a idade e a diablerie).
+// XP: V5 gasta XP em características, não em níveis. xpParaNivel devolve null; o jogador gasta o XP na própria ficha
+// (vtm5/xp.ts, rota /personagens/[pid]/xp) e o histórico fica em extras.gastosXp. Rituais e fórmulas em extras.rituais / extras.formulas
+// ([{nome, nivel}]). subirNivel aumenta a Potência de Sangue sem cobrar (o que no livro vem com a idade e a diablerie).
 
 const MATRIZ_ATRIBUTOS = [4, 3, 3, 3, 2, 2, 2, 2, 1];
 
@@ -74,8 +75,34 @@ function claPermite(cla: ClaVtm, disciplina: string): boolean {
   return !donos || donos.includes(cla.id);
 }
 
+/** Rituais (Feitiçaria de Sangue) ou fórmulas (Alquimia de Sangue-ralo) comprados: extras.rituais / extras.formulas. */
+export function conhecimentosDe(ficha: Ficha, id: "rituais" | "formulas"): { nome: string; nivel: number }[] {
+  const v = ficha.extras[id];
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((x) => (x && typeof x === "object" ? (x as { nome?: unknown; nivel?: unknown }) : null))
+    .filter((x): x is { nome: string; nivel: number } => Boolean(x && typeof x.nome === "string" && x.nome.trim() && typeof x.nivel === "number"))
+    .map((x) => ({ nome: x.nome.trim(), nivel: limitar(Math.round(x.nivel), 1, 5) }));
+}
+
+const textoConhecimentos = (ficha: Ficha, id: "rituais" | "formulas") => conhecimentosDe(ficha, id).map((r) => `${r.nome} ${pontos(r.nivel)}`);
+
+/** O que muda nos efeitos quando a Potência de Sangue vai de `antes` para `depois` (texto curto por efeito). */
+export function mudancasPotencia(antes: number, depois: number): string[] {
+  const ef0 = POTENCIA[limitar(antes, 0, 10)];
+  const ef = POTENCIA[limitar(depois, 0, 10)];
+  return [
+    ef.surto !== ef0.surto ? `Surto +${ef.surto}` : "",
+    ef.cura !== ef0.cura ? `cura ${ef.cura} por Despertar` : "",
+    ef.bonusPoder !== ef0.bonusPoder ? `+${ef.bonusPoder} dados em disciplinas` : "",
+    ef.rerrolagem !== ef0.rerrolagem ? `rerrola Despertar de disciplinas até nível ${ef.rerrolagem}` : "",
+    ef.gravidade !== ef0.gravidade ? `perdição ${depois > antes ? "mais forte" : "mais fraca"} (gravidade ${ef.gravidade})` : "",
+    ef.alimento !== ef0.alimento ? `alimentação: ${ef.alimento}` : "",
+  ].filter(Boolean);
+}
+
 /** Recalcula máximos derivados (Saúde, Força de Vontade, caixas de Mancha) sem mexer no que foi gasto. */
-function sincronizar(ficha: Ficha) {
+export function sincronizar(ficha: Ficha) {
   const aut = ficha.atributos.autocontrole ?? 1;
   const det = ficha.atributos.determinacao ?? 1;
   ficha.pvMax = (ficha.atributos.vigor ?? 1) + 3;
@@ -282,7 +309,8 @@ FORÇA DE VONTADE (recurso "vontade") — gaste 1 para rerrolar até 3 dados nor
 DANO — Saúde = Vigor + 3 (pv). Superficial: vampiros dividem por 2 (arredonde para cima) ANTES de aplicar com alterar_ficha pv −N. Agravado (fogo, sol, garras e presas de lobisomem, alguns poderes) entra inteiro: aplique e anote a condição "agravado N" (só cura com noites de descanso e muito sangue). Armas somam dano à margem de sucesso do ataque (soco +0, faca +1, espada/taco +2, pistola +2, espingarda +4). Mortais e lacaios caem rápido (Saúde 3–7).
 TORPOR E MORTE FINAL — Saúde 0 por dano superficial = torpor (o servidor marca "inconsciente": trate como torpor, dias a anos). Saúde 0 por dano agravado, estaca no coração + fogo/sol, decapitação = Morte Final. Estaca no coração paralisa, não mata.
 CONFLITO — sem rodadas rígidas: descreva a situação, cada um declara, resolva por ordem lógica (atirador antes do soco, Celeridade antes de todos). "Iniciativa" só se a mesa pedir ordem. Ataque: atacante vs. defesa do alvo (Destreza + Atletismo para esquivar, Força + Briga para bloquear); margem = dano.
-POTÊNCIA DE SANGUE (nível da ficha) — dá dados de Surto, cura por Despertar, bônus em disciplinas e gravidade da perdição (veja a ficha). Sobe com o tempo e a diablerie (subir_nivel). XP: dê 1–3 por sessão (conceder_xp é só registro); o jogador gasta em atributos, perícias e disciplinas, e o mestre anota à mão.
+POTÊNCIA DE SANGUE (nível da ficha) — dá dados de Surto, cura por Despertar, bônus em disciplinas e gravidade da perdição (veja a ficha). Sobe com o tempo e a diablerie (subir_nivel, sem custo) ou com XP que o jogador gasta.
+XP — você só CONCEDE (conceder_xp): 1 a 3 por sessão (o máximo quando o personagem perseguiu a Ambição, pôs as Convicções à prova ou fez uma cena memorável), um pouco mais no fim de um arco. O jogador GASTA sozinho na ficha (botão "Gastar XP"), pela tabela do livro: atributo novo nível ×5, perícia ×3, especialidade 3, disciplina do clã ×5, de fora ×7 (Caitiff ×6), ritual/fórmula nível ×3, vantagem 3 por ponto, Potência ×10. Cada compra vira uma linha no chat e a ficha nova chega no próximo turno; não altere a ficha para "aplicar" XP. Pode lembrar o jogador de gastar, e disciplina de fora do clã pede justificativa na história (beber o sangue de quem a tem, um mentor): cobre isso em cena.
 VITAE E LAÇOS — beber sangue de vampiro três vezes, em noites diferentes, cria Laço de Sangue: devoção artificial ao doador. Vitae dada a mortais cria carniçais. Diablerie (beber a alma de outro vampiro) é crime capital e mancha a aura.
 COMO MESTRAR V5
 - Horror pessoal: o monstro é o personagem. Cada noite traz uma tentação e um preço; deixe-o escolher e cobre depois. O caminho humano custa caro; o fácil é monstruoso.
@@ -427,6 +455,8 @@ export const vtm5: Sistema = {
       `Perícias: ${pericias || "nenhuma"}`,
       lista("especialidades") ? `Especialidades: ${lista("especialidades")}` : "",
       `Disciplinas: ${disciplinas || "nenhuma"}`,
+      textoConhecimentos(ficha, "rituais").length ? `Rituais de Feitiçaria de Sangue: ${textoConhecimentos(ficha, "rituais").join(", ")}` : "",
+      textoConhecimentos(ficha, "formulas").length ? `Fórmulas de Alquimia: ${textoConhecimentos(ficha, "formulas").join(", ")}` : "",
       `Potência de Sangue ${potenciaDe(ficha)}: ${textoPotencia(ficha)}`,
       `Perdição (gravidade ${ef.gravidade}): ${cla.perdicao}`,
       `Compulsão do clã: ${cla.compulsao ? `${cla.compulsao.nome} — ${cla.compulsao.efeito}` : "nenhuma (use as genéricas)"}`,
@@ -494,6 +524,8 @@ export const vtm5: Sistema = {
     if (esp.length) blocos.push({ tipo: "etiquetas", titulo: "Especialidades", itens: esp });
     const disc = Object.entries(disciplinasDe(ficha)).filter(([, v]) => v > 0);
     blocos.push({ tipo: "etiquetas", titulo: "Disciplinas", itens: disc.length ? disc.map(([id, v]) => `${nomeDisciplina(id)} ${pontos(v)}`) : ["nenhuma"] });
+    if (textoConhecimentos(ficha, "rituais").length) blocos.push({ tipo: "etiquetas", titulo: "Rituais", itens: textoConhecimentos(ficha, "rituais") });
+    if (textoConhecimentos(ficha, "formulas").length) blocos.push({ tipo: "etiquetas", titulo: "Fórmulas", itens: textoConhecimentos(ficha, "formulas") });
     blocos.push({
       tipo: "texto",
       titulo: `Clã: ${cla.nome}`,
@@ -530,21 +562,12 @@ export const vtm5: Sistema = {
     sincronizar(ficha);
     const antes = potenciaDe(ficha);
     if (antes >= 10) return { ficha, resumo: `${ficha.nome} já tem Potência de Sangue 10. Mais grosso que isso, só o sangue dos Antediluvianos.` };
-    const ef0 = POTENCIA[antes];
     ficha.nivel = antes + 1;
-    const ef = POTENCIA[ficha.nivel];
-    const mudou = [
-      ef.surto !== ef0.surto ? `Surto +${ef.surto}` : "",
-      ef.cura !== ef0.cura ? `cura ${ef.cura} por Despertar` : "",
-      ef.bonusPoder !== ef0.bonusPoder ? `+${ef.bonusPoder} dados em disciplinas` : "",
-      ef.rerrolagem !== ef0.rerrolagem ? `rerrola Despertar de disciplinas até nível ${ef.rerrolagem}` : "",
-      ef.gravidade !== ef0.gravidade ? `perdição mais forte (gravidade ${ef.gravidade})` : "",
-      ef.alimento !== ef0.alimento ? `alimentação: ${ef.alimento}` : "",
-    ].filter(Boolean);
+    const mudou = mudancasPotencia(antes, ficha.nivel);
     const ralo = claDe(ficha).id === "sangue_ralo" && antes === 0 ? " O sangue ralo engrossou: converse com o mestre (pela regra, deixaria de ser Sangue-ralo)." : "";
     return {
       ficha,
-      resumo: `${ficha.nome}: Potência de Sangue ${antes} → ${ficha.nivel}. ${mudou.length ? `${mudou.join(" · ")}.` : "O sangue pesa mais, mas nada muda nas contas desta vez."}${ralo} (XP gasto em atributos, perícias e disciplinas é anotado à mão pelo mestre.)`,
+      resumo: `${ficha.nome}: Potência de Sangue ${antes} → ${ficha.nivel}. ${mudou.length ? `${mudou.join(" · ")}.` : "O sangue pesa mais, mas nada muda nas contas desta vez."}${ralo} (Isto veio de graça, pela idade ou diablerie. O XP o próprio jogador gasta na ficha, no botão "Gastar XP".)`,
     };
   },
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { AcoesTurno, acaoParaCampo, avisoDoDesfeito, type Desfeito } from "@/components/chat/acoes-turno";
 import { AjudaAtalhos, rolarPedido, useAtalhos } from "@/components/chat/atalhos";
 import { CartaoDado } from "@/components/chat/cartao-dado";
@@ -10,7 +10,8 @@ import { SugestoesCompactas } from "@/components/chat/sugestoes-compactas";
 import { Anteriormente } from "@/components/historia/anteriormente";
 import { AcaoTopo, ATALHOS_LEITOR, LeitorCenas, type BlocoCauda, type ControleLeitor, type Prosa } from "@/components/leitor/leitor-cenas";
 import { MenuLeitura } from "@/components/leitor/menu-leitura";
-import { usePreferenciasLeitor } from "@/components/leitor/preferencias";
+import { useEscalaLeitor, usePreferenciasLeitor } from "@/components/leitor/preferencias";
+import { AberturaCapitulo, EstiloProsa, Ornamento } from "@/components/leitor/prosa";
 import { dadosDoPedido, PedidoTeste } from "@/components/historia/pedido-teste";
 import { PainelCena } from "@/components/cena/painel-cena";
 import { Diario } from "@/components/diario/diario";
@@ -47,8 +48,8 @@ const NOMES_JANELAS: Record<string, string> = { five_hour: "janela de 5 h", seve
 /** Distância do fim (px) a partir da qual o leitor "subiu para reler" e a rolagem automática para de puxar. */
 const LONGE_DO_FIM = 160;
 
-/** Coluna de leitura: narração, ações, dados e o campo de ação alinhados pela mesma largura (~68 caracteres). */
-const COLUNA = "mx-auto w-full max-w-[42rem]";
+/** Coluna de leitura: narração, ações, dados e o campo de ação alinhados pela mesma medida (~65 caracteres, cresce com a letra). */
+const COLUNA = "leitor-medida mx-auto box-content";
 
 // **negrito**, *itálico* e falas entre aspas (estas em itálico, com as aspas originais)
 const MARCAS = /(\*\*[^*\n]+\*\*|\*[^*\n]+\*|"[^"\n]+"|“[^”\n]+”)/g;
@@ -74,15 +75,16 @@ function trechoNarracao(p: string): ReactNode {
     ) : t.startsWith("*") ? (
       <em key={j}>{linhas(t.slice(1, -1))}</em>
     ) : (
-      <em key={j} className="text-pergaminho">
+      <em key={j} className="leitor-fala">
         {t}
       </em>
     ),
   );
 }
 
-const CLASSE_NARRACAO = "text-[1.06rem] leading-[1.8] text-foreground/95 sm:text-[1.12rem]";
-const SEPARADOR_NARRACAO = <p className="ornamento-trio my-5 text-center text-sm tracking-[0.6em] text-ambar/50" aria-hidden />;
+// tamanho, entrelinha e medida vêm do .leitor-prosa (src/components/leitor/prosa.tsx), iguais nos dois modos de leitura
+const CLASSE_NARRACAO = "text-foreground/90";
+const SEPARADOR_NARRACAO = <Ornamento />;
 const PROSA: Prosa = { classe: CLASSE_NARRACAO, inline: (t) => trechoNarracao(t), separador: SEPARADOR_NARRACAO };
 
 /** Markdown mínimo do mestre, em prosa de livro: parágrafos, **negrito**, *itálico*, falas e separadores (---). */
@@ -93,12 +95,12 @@ export function Narracao({ texto, escrevendo = false }: { texto: string; escreve
     .map((p) => p.replace(/^#{1,6}\s+/, "").trim())
     .filter(Boolean);
   return (
-    <div className={CLASSE_NARRACAO} data-fixavel>
+    <div className={`leitor-prosa ${CLASSE_NARRACAO}`} data-fixavel>
       {paragrafos.map((p, i) =>
         /^(-{3,}|\*{3,}|_{3,})$/.test(p) ? (
           <Fragment key={i}>{SEPARADOR_NARRACAO}</Fragment>
         ) : (
-          <p key={i} className={`mb-4 last:mb-0 ${escrevendo && i === paragrafos.length - 1 ? "cursor" : ""}`}>
+          <p key={i} className={escrevendo && i === paragrafos.length - 1 ? "cursor" : undefined}>
             {trechoNarracao(p)}
           </p>
         ),
@@ -162,7 +164,7 @@ function Lateral({
       </div>
       <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-5 pt-4 sm:px-5">
         {aba === "ficha" &&
-          (ativo ? <PainelFicha personagem={ativo} sistema={mesa.sistema} /> : <p className="text-sm text-muted">Nenhum personagem nesta mesa.</p>)}
+          (ativo ? <PainelFicha personagem={ativo} sistema={mesa.sistema} ocupado={mesa.ocupado} /> :<p className="text-sm text-muted">Nenhum personagem nesta mesa.</p>)}
         {aba === "grupo" && <PainelGrupo mesa={mesa} acoes={acoes} />}
         {aba === "cena" && <PainelCena cena={mesa.cena} sistema={mesa.sistema} />}
         {aba === "diario" && <Diario entradas={mesa.diario} fatos={fatos} />}
@@ -233,6 +235,7 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
   const [ajuda, setAjuda] = useState(false);
   // leitor cena a cena (padrão) ou rolagem contínua
   const { modo } = usePreferenciasLeitor();
+  const escala = useEscalaLeitor();
   const cenas = modo === "cenas";
   const leitor = useRef<ControleLeitor>(null);
   /** no leitor cena a cena: a pessoa está na última página da cena atual, toda à vista (as sugestões ganham destaque) */
@@ -352,8 +355,8 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
     pararVoz();
     if (!(await acoes.enviarAcao(texto))) return;
     if (sugerida === undefined) setAcao("");
-    if (cenas) leitor.current?.irParaAgora();
-    else irParaOFim(true);
+    // no leitor cena a cena a ação vira a cena nova sozinha
+    if (!cenas) irParaOFim(true);
     // hot-seat no modo rodada: a vez passa para o próximo que ainda não agiu (na ordem do grupo)
     if (!rodada || !ativo || texto.startsWith("((")) return;
     const ja = new Set(agiram).add(ativo.id);
@@ -426,8 +429,10 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
     );
   }
 
-  /** Cartões que não são narração nem ação: pedido de teste, dado, aviso do sistema. */
+  /** Cartões que não são narração nem ação: abertura de capítulo, pedido de teste, dado, aviso do sistema. */
   function desenharItem(m: Mensagem) {
+    const d = (m.dados ?? {}) as { tipo?: string; titulo?: string | null; local?: string | null; momento?: string | null };
+    if (m.tipo === "dado" && d.tipo === "cena_titulo") return <AberturaCapitulo key={m.id} titulo={d.titulo} local={d.local} momento={d.momento} />;
     if (m.tipo === "dado" && dadosDoPedido(m).tipo === "pedido_teste")
       return <PedidoTeste key={m.id} mensagem={m} personagem={personagemDe(pidDoPedido(m))} podeRolar={podeRolarPara(pidDoPedido(m))} rolar={acoes.rolarTeste} />;
     if (m.tipo === "dado")
@@ -564,7 +569,8 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
   ) : null;
 
   return (
-    <div data-tema={temaDoSistema(mesa.sistema.id)} className="fundo-tema fixed inset-0 z-30 flex flex-col overflow-hidden text-foreground">
+    <div data-tema={temaDoSistema(mesa.sistema.id)} className="fundo-tema fixed inset-0 z-30 flex flex-col overflow-hidden text-foreground" style={escala as CSSProperties}>
+      <EstiloProsa />
       <header className="relative z-20 shrink-0 border-b border-border/70 bg-background/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-1 px-2 sm:gap-2 sm:px-4">
           <Link
@@ -641,13 +647,19 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
 
       <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 lg:gap-6 lg:px-4">
         <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* a coluna de prosa: um véu da superfície do tema atrás do texto, sem caixa (a textura do tema continua aparecendo) */}
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{ background: "radial-gradient(ellipse 48% 75% at 50% 42%, color-mix(in srgb, var(--surface) 55%, transparent), transparent 78%)" }}
+            aria-hidden
+          />
           <Anteriormente
             campanhaId={mesa.campanha.id}
             nome={mesa.campanha.nome}
             mensagens={mesa.mensagens}
             cena={mesa.cena}
             diario={mesa.diario}
-            aoContinuar={() => (cenas ? leitor.current?.irParaAgora() : irParaOFim(true))}
+            aoContinuar={() => !cenas && irParaOFim(true)}
           />
           {cenas ? (
             <LeitorCenas
@@ -661,7 +673,8 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
               item={desenharItem}
               cauda={cauda}
               vazio={telaVazia}
-              largura="max-w-[39rem]"
+              largura="leitor-medida"
+              linkReler={`/mesa/${mesa.campanha.id}/livro`}
               ferramentas={(t) =>
                 podeDesfazer && ultimoMestre !== null && t.itens.some((m) => m.id === ultimoMestre) ? (
                   <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={setAviso} compacto />
@@ -705,7 +718,7 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
           )}
 
           <form
-            className="relative shrink-0 border-t border-border/70 bg-background/90 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2.5 backdrop-blur"
+            className="relative shrink-0 border-t border-border/50 bg-background/85 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur"
             onSubmit={(e) => {
               e.preventDefault();
               void enviar();
@@ -720,24 +733,59 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
                 {mesa.aoVivo || mesa.ocupado ? "O mestre está narrando ↓" : "Voltar ao fim ↓"}
               </button>
             )}
+            {/* aviso curto (vez de quem, turno desfeito) flutua por cima do palco, sem empurrar nada */}
+            {aviso && (
+              <p
+                className="surgir pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 max-w-[calc(100%-2rem)] -translate-x-1/2 truncate rounded-full border border-ambar/50 bg-surface/95 px-4 py-1.5 text-sm text-ambar shadow-lg"
+                role="status"
+              >
+                {aviso}
+              </p>
+            )}
             <div className={`${COLUNA} px-4 sm:px-6`}>
-              {mostrarSugestoes && <SugestoesCompactas sugestoes={sugestoes} discretas={cenas && !noFimDaCena} aoEscolher={(t) => void enviar(t)} />}
-              <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+              {/* espaço das sugestões reservado (três linhas baixas no desktop, uma no celular): o palco não muda de altura a cada turno */}
+              {ativo && (
+                <div className="mb-1 flex min-h-10 flex-col justify-end sm:min-h-[90px]" data-vaga-sugestoes>
+                  {mostrarSugestoes ? (
+                    <SugestoesCompactas sugestoes={sugestoes} discretas={cenas && !noFimDaCena} aoEscolher={(t) => void enviar(t)} />
+                  ) : (
+                    <div className="flex min-h-10 items-center justify-center gap-3 text-center text-[13px] italic text-muted sm:min-h-7">
+                      {mesa.ocupado ? (
+                        <>
+                          <span>O mestre coça a barba e escreve…</span>
+                          <button
+                            type="button"
+                            className="min-h-9 rounded-md px-2 not-italic text-muted hover:bg-sangue/10 hover:text-sangue sm:min-h-7"
+                            onClick={() => acoes.controle("cancelar")}
+                            title="Interromper o mestre"
+                          >
+                            ■ interromper
+                          </button>
+                        </>
+                      ) : meuPendente ? (
+                        "Primeiro o dado. As ideias voltam depois."
+                      ) : minhaNaFila ? (
+                        `${ativo.ficha.nome} já está na fila. O mestre espera o resto.`
+                      ) : pendentes.length > 0 ? (
+                        "Esperando alguém rolar o dado."
+                      ) : (
+                        "O mestre não sugeriu nada. Improvise, que ele adora."
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="mb-1 flex min-h-7 flex-wrap items-center gap-2 text-xs">
                 <SeletorAtivo mesa={mesa} acoes={acoes} />
                 <RoladorDados campanhaId={mesa.campanha.id} sistema={mesa.sistema} personagem={ativo} autor={mesa.eu.apelido} aoRolar={acoes.receberMensagem} />
-                {mesa.ocupado && (
+                {mesa.ocupado && !ativo && (
                   <button type="button" className="ml-auto min-h-10 px-1 text-muted hover:text-sangue sm:min-h-0" onClick={() => acoes.controle("cancelar")}>
                     Interromper o mestre
                   </button>
                 )}
               </div>
-              {aviso && (
-                <p className="surgir mb-2 text-xs text-ambar" role="status">
-                  {aviso}
-                </p>
-              )}
               {meuPendente ? (
-                <div className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-ambar/50 bg-ambar/10 px-3 py-1 text-sm" role="status">
+                <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-ambar/50 bg-ambar/10 px-3 py-1 text-sm" role="status">
                   <span className="text-ambar">🎲 Role o dado primeiro: o mestre não aceita fiado.</span>
                   <button type="button" onClick={irParaDado} className="min-h-10 shrink-0 rounded-md px-2 text-xs text-muted hover:text-ambar hover:underline">
                     ir para o dado ↑
@@ -766,9 +814,9 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
                           : // curto para caber em 2 linhas no celular
                             `O que ${ativo.ficha.nome} faz? · ((assim)) fala fora do jogo`
                     }
-                    className="campo field-sizing-content max-h-40 min-h-12 flex-1 resize-none py-3 leading-snug"
+                    className="campo field-sizing-content max-h-36 min-h-11 flex-1 resize-none py-2.5 leading-snug"
                   />
-                  <button className="btn-ambar h-12 shrink-0 px-4" disabled={!acao.trim()} title="Enviar (Enter) · Shift+Enter quebra a linha">
+                  <button className="btn-ambar h-11 shrink-0 px-4" disabled={!acao.trim()} title="Enviar (Enter) · Shift+Enter quebra a linha">
                     Agir
                   </button>
                 </div>

@@ -1,15 +1,21 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore, type CSSProperties } from "react";
 
-// Preferências locais do leitor (deste navegador): cena a cena ou rolagem contínua, e o texto se revelando aos poucos.
-// localStorage pode não existir (aba anônima, bloqueio): tudo em try/catch, com o padrão "cena a cena, animado".
+// Preferências locais do leitor (deste navegador): cena a cena ou rolagem contínua, o texto se revelando aos poucos e o tamanho
+// da letra. localStorage pode não existir (aba anônima, bloqueio): tudo em try/catch, com o padrão "cena a cena, animado, letra média".
 
 export type ModoLeitura = "cenas" | "rolagem";
-export type PreferenciasLeitor = { modo: ModoLeitura; animar: boolean };
+export type PreferenciasLeitor = { modo: ModoLeitura; animar: boolean; /** passo do tamanho da letra (índice de ESCALAS_FONTE) */ fonte: number };
+
+/** Multiplicadores do tamanho da letra da narração (A− / A+ no menu de leitura). */
+export const ESCALAS_FONTE = [0.88, 1, 1.12, 1.25];
+const FONTE_PADRAO = 1;
 
 const CHAVE = "taverna:leitor";
-const PADRAO: PreferenciasLeitor = { modo: "cenas", animar: true };
+const PADRAO: PreferenciasLeitor = { modo: "cenas", animar: true, fonte: FONTE_PADRAO };
+
+const fonteValida = (f: unknown) => (typeof f === "number" && Number.isInteger(f) && f >= 0 && f < ESCALAS_FONTE.length ? f : FONTE_PADRAO);
 
 let atual: PreferenciasLeitor | null = null;
 const ouvintes = new Set<() => void>();
@@ -18,7 +24,7 @@ function ler(): PreferenciasLeitor {
   if (atual) return atual;
   try {
     const bruto = JSON.parse(localStorage.getItem(CHAVE) ?? "null") as Partial<PreferenciasLeitor> | null;
-    atual = { modo: bruto?.modo === "rolagem" ? "rolagem" : "cenas", animar: bruto?.animar !== false };
+    atual = { modo: bruto?.modo === "rolagem" ? "rolagem" : "cenas", animar: bruto?.animar !== false, fonte: fonteValida(bruto?.fonte) };
   } catch {
     atual = PADRAO;
   }
@@ -27,6 +33,7 @@ function ler(): PreferenciasLeitor {
 
 export function salvarPreferenciasLeitor(mudancas: Partial<PreferenciasLeitor>) {
   atual = { ...ler(), ...mudancas };
+  atual.fonte = fonteValida(atual.fonte);
   try {
     localStorage.setItem(CHAVE, JSON.stringify(atual));
   } catch {
@@ -52,6 +59,12 @@ function assinar(f: () => void) {
 
 export function usePreferenciasLeitor(): PreferenciasLeitor {
   return useSyncExternalStore(assinar, ler, () => PADRAO);
+}
+
+/** Estilo com a escala da letra (--leitor-escala), para pôr na raiz da mesa: vale para o leitor cena a cena e para a rolagem. */
+export function useEscalaLeitor(): CSSProperties {
+  const { fonte } = usePreferenciasLeitor();
+  return { "--leitor-escala": ESCALAS_FONTE[fonte] } as CSSProperties;
 }
 
 const CONSULTA_MOVIMENTO = "(prefers-reduced-motion: reduce)";

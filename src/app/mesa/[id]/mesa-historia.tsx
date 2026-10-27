@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { AcoesTurno, acaoParaCampo, avisoDoDesfeito, type Desfeito } from "@/components/chat/acoes-turno";
 import { AjudaAtalhos, rolarPedido, useAtalhos } from "@/components/chat/atalhos";
 import { Anteriormente } from "@/components/historia/anteriormente";
@@ -22,7 +22,8 @@ import { PedidoTeste, dadosDoPedido } from "@/components/historia/pedido-teste";
 import { Retrato } from "@/components/historia/retrato";
 import { AcaoTopo, ATALHOS_LEITOR, LeitorCenas, type BlocoCauda, type ControleLeitor, type Prosa } from "@/components/leitor/leitor-cenas";
 import { MenuLeitura } from "@/components/leitor/menu-leitura";
-import { usePreferenciasLeitor } from "@/components/leitor/preferencias";
+import { useEscalaLeitor, usePreferenciasLeitor } from "@/components/leitor/preferencias";
+import { EstiloProsa, Ornamento } from "@/components/leitor/prosa";
 import { Presenca } from "@/components/presenca/presenca";
 import { Convite } from "@/components/presenca/convite";
 import { BotaoVoz, Ouvir, useLeituraAutomatica } from "@/components/voz/voz";
@@ -98,6 +99,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   const [ajuda, setAjuda] = useState(false);
   // leitor cena a cena (padrão) ou rolagem contínua
   const { modo } = usePreferenciasLeitor();
+  const escala = useEscalaLeitor();
   const cenas = modo === "cenas";
   const leitor = useRef<ControleLeitor>(null);
   /** no leitor cena a cena: a pessoa está na última página da cena atual, toda à vista (as sugestões ganham destaque) */
@@ -226,8 +228,8 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
     pararVoz();
     if (!(await acoes.enviarAcao(texto))) return false;
     longeRef.current = false;
-    if (cenas) leitor.current?.irParaAgora();
-    else irParaOFim(true);
+    // no leitor cena a cena a ação vira a cena nova sozinha
+    if (!cenas) irParaOFim(true);
     // hot-seat no modo rodada: a vez passa para o próximo que ainda não agiu (na ordem do grupo)
     if (!rodada || !ativo || texto.startsWith("((")) return true;
     const ja = new Set(filaVisivel.filter((a) => a.acao !== INICIO && a.personagemId !== null).map((a) => a.personagemId as number)).add(ativo.id);
@@ -304,18 +306,14 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
 
   const prosa = useMemo<Prosa>(
     () => ({
-      classe: "narracao-livro text-[1.08rem] leading-[1.8] text-foreground/95 sm:text-[1.15rem]",
+      classe: "narracao-livro text-foreground/90",
       inline: (t, k) => trecho(t, destaque, k),
-      separador: (
-        <p className="my-5 text-center text-sm tracking-[0.6em] text-muted" aria-hidden>
-          ✦✦✦
-        </p>
-      ),
+      separador: <Ornamento simbolo="✦" />,
     }),
     [destaque],
   );
 
-  /** A ação no topo da cena, discreta: retrato, nome na cor do personagem, o teste que ela virou e o texto em itálico. */
+  /** A ação no topo da cena, discreta: retrato, nome em versalete na cor do personagem, a ação em itálico e o teste que ela virou. */
   function acaoTopo(m: Mensagem) {
     const p = personagemDe(m.personagemId);
     const nome = p?.ficha.nome ?? (m.personagemId ? "Personagem que saiu" : null);
@@ -324,7 +322,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
       <AcaoTopo
         nome={nome}
         cor={nome ? corDoNome(nome) : undefined}
-        icone={p ? <Retrato ficha={p.ficha} tamanho={20} /> : undefined}
+        icone={p ? <Retrato ficha={p.ficha} tamanho={22} className="rounded-full" /> : undefined}
         autor={m.autor}
         texto={m.texto}
         detalhe={
@@ -481,8 +479,9 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   ) : null;
 
   return (
-    <div className="fixed inset-0 z-30 flex flex-col overflow-hidden text-foreground">
+    <div className="fixed inset-0 z-30 flex flex-col overflow-hidden text-foreground" style={{ ...escala, "--fonte-capitular": fonteGotica.style.fontFamily } as CSSProperties}>
       <CeuEstrelado />
+      <EstiloProsa />
 
       {/* cabeçalho fino: campanha, presença, convite e ajustes (no celular os dois moram no códex), som e códex */}
       <header className="relative z-20 border-b border-border/40 bg-background/85">
@@ -568,8 +567,12 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
 
       <AjudaAtalhos aberta={ajuda} aoFechar={() => setAjuda(false)} extras={[["C", "abre e fecha o códex"], ...(cenas ? ATALHOS_LEITOR : [])]} />
 
-      {/* o livro */}
+      {/* o livro: uma luz de vela suave atrás da coluna de texto e a vinheta nas bordas dão o ar de página */}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+        <div
+          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_42%_62%_at_50%_44%,rgba(241,228,196,0.055),transparent_72%),radial-gradient(ellipse_80%_90%_at_50%_50%,transparent_55%,rgba(0,0,0,0.35))]"
+          aria-hidden
+        />
         <Anteriormente
           campanhaId={mesa.campanha.id}
           nome={mesa.campanha.nome}
@@ -579,8 +582,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
           livro
           aoContinuar={() => {
             longeRef.current = false;
-            if (cenas) leitor.current?.irParaAgora();
-            else irParaOFim(true);
+            if (!cenas) irParaOFim(true);
           }}
         />
         {cenas ? (
@@ -595,7 +597,9 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
             item={(m) => (m.tipo === "dado" || m.tipo === "sistema" ? desenhar(m) : null)}
             cauda={cauda}
             vazio={telaVazia}
-            largura="max-w-[672px]"
+            largura="leitor-medida"
+            linkReler={`/mesa/${mesa.campanha.id}/livro`}
+            transicao="virar"
             ferramentas={(t) =>
               podeDesfazer && ultimoMestre !== null && t.itens.some((m) => m.id === ultimoMestre) ? (
                 <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={setAviso} compacto />
@@ -606,7 +610,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
         ) : (
           <>
             <div ref={rolador} onScroll={aoRolar} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-              <div ref={conteudo} className="mx-auto max-w-[720px] px-4 pb-10 pt-4 sm:px-6 sm:pt-8">
+              <div ref={conteudo} className="leitor-medida mx-auto box-content px-5 pb-10 pt-4 sm:px-6 sm:pt-8">
                 {telaVazia}
 
                 {mesa.mensagens.map(desenhar)}
@@ -640,87 +644,103 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
         )}
       </div>
 
-      {/* rodapé: sugestões, campo de ação e aviso */}
-      <footer className="relative z-10 border-t border-border/40 bg-background/75 backdrop-blur">
-        <div className="mx-auto max-h-[55dvh] max-w-[720px] overflow-y-auto px-4 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-3 sm:px-6">
+      {/* rodapé enxuto: sugestões (espaço reservado), campo de ação com o retrato e o aviso flutuando por cima */}
+      <footer className="relative z-10 border-t border-border/30 bg-background/70 backdrop-blur">
+        {aviso && (
+          <p
+            className="surgir pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 max-w-[calc(100%-2rem)] -translate-x-1/2 truncate rounded-full border border-ambar/50 bg-surface/95 px-4 py-1.5 text-sm text-ambar shadow-lg"
+            role="status"
+          >
+            {aviso}
+          </p>
+        )}
+        <div className="leitor-medida mx-auto box-content px-4 pb-[max(env(safe-area-inset-bottom),0.4rem)] pt-2 sm:px-6 sm:pt-2.5">
           <PainelAcao
             sugestoes={sugestoes}
             mostrarSugestoes={!mesa.ocupado && pendentes.length === 0 && Boolean(ativo) && !minhaNaFila}
             bloqueio={meuPendente ? (testeMeu ? `Teste de ${testeMeu}: role o dado antes de agir` : "Role o dado antes de agir") : null}
             aoIrParaBloqueio={irParaDado}
             sugestoesDiscretas={cenas && !noFimDaCena}
+            reservar={Boolean(ativo)}
+            recado={
+              mesa.ocupado ? (
+                <>
+                  <span>O mestre está escrevendo…</span>
+                  <button
+                    type="button"
+                    className="min-h-9 rounded-md px-2 not-italic text-muted hover:bg-sangue/10 hover:text-sangue sm:min-h-7"
+                    onClick={() => void acoes.controle("cancelar")}
+                    title="Interromper o mestre"
+                  >
+                    ■ interromper
+                  </button>
+                </>
+              ) : meuPendente ? (
+                "Primeiro o dado. As ideias voltam depois."
+              ) : minhaNaFila ? (
+                `${ativo?.ficha.nome ?? "Sua ação"} já agiu. O mestre espera o resto do grupo.`
+              ) : pendentes.length > 0 ? (
+                "Esperando alguém rolar o dado."
+              ) : (
+                "O mestre não sugeriu nada. Improvise, que ele adora."
+              )
+            }
             placeholder={
               ativo
                 ? minhaNaFila
                   ? `${ativo.ficha.nome} já agiu. Quer complementar?`
-                  : "Ou escreva sua própria ação…"
+                  : `O que ${ativo.ficha.nome} faz?`
                 : "Fale com o mestre fora do jogo ((assim)), ou crie um personagem."
             }
             rotuloCampo={ativo ? `Ação de ${ativo.ficha.nome}` : "Mensagem ao mestre"}
             enviar={enviar}
             campoRef={campo}
             preencher={preencher}
-            topo={
-              <div className="mb-2 flex min-h-10 items-center gap-2 text-xs sm:min-h-8">
-                {ativo ? (
-                  <>
-                    {/* o personagem abre a ficha; com mais gente no grupo, o ⇄ ao lado troca de personagem */}
-                    <button
-                      type="button"
-                      onClick={() => abrirCodex("personagem")}
-                      className="flex min-h-10 min-w-0 items-center gap-1.5 rounded-full border border-border/70 py-0.5 pl-0.5 pr-2.5 hover:border-ambar/60 sm:min-h-8"
-                      aria-label={`Ficha de ${ativo.ficha.nome}`}
-                      title="Ver a ficha (C)"
-                    >
-                      <Retrato ficha={ativo.ficha} tamanho={28} />
-                      <span className="truncate font-semibold" style={{ color: corDoNome(ativo.ficha.nome) }}>
-                        {ativo.ficha.nome}
-                      </span>
-                      <span className="shrink-0 tabular-nums text-muted" title={mesa.sistema.rotulos.pv}>
-                        ♥ {ativo.ficha.pv}/{ativo.ficha.pvMax}
-                      </span>
-                      <span className="hidden shrink-0 text-muted sm:inline">· ficha</span>
-                    </button>
-                    {mesa.personagens.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => abrirCodex("grupo")}
-                        className="grid size-10 shrink-0 place-items-center rounded-full border border-border/70 text-muted hover:border-ambar/60 hover:text-ambar sm:size-8"
-                        aria-label="Trocar de personagem"
-                        title="Trocar de personagem"
-                      >
-                        ⇄
-                      </button>
-                    )}
-                  </>
-                ) : mesa.personagens.length > 0 ? (
-                  <button type="button" className="min-h-10 text-ambar hover:underline sm:min-h-8" onClick={() => abrirCodex("grupo")}>
-                    Escolher personagem
-                  </button>
-                ) : (
-                  <Link href={linkNovo} className="min-h-10 content-center text-ambar hover:underline sm:min-h-8">
-                    + Criar personagem
-                  </Link>
-                )}
-                {aviso && (
-                  <span className="surgir min-w-0 truncate text-ambar" role="status">
-                    {aviso}
-                  </span>
-                )}
-                {mesa.ocupado && (
+            inicio={
+              ativo ? (
+                <div className="flex shrink-0 items-center gap-1">
+                  {/* o retrato abre a ficha (com a vida embaixo); com mais gente no grupo, o ⇄ troca de personagem */}
                   <button
                     type="button"
-                    className="ml-auto min-h-10 shrink-0 rounded-md px-2 py-1 text-muted hover:bg-sangue/10 hover:text-sangue sm:min-h-8"
-                    onClick={() => void acoes.controle("cancelar")}
-                    title="Interromper o mestre"
+                    onClick={() => abrirCodex("personagem")}
+                    className="relative grid size-11 place-items-center rounded-md border border-border/70 transition hover:border-ambar/60"
+                    aria-label={`Ficha de ${ativo.ficha.nome} (${mesa.sistema.rotulos.pv} ${ativo.ficha.pv} de ${ativo.ficha.pvMax})`}
+                    title={`${ativo.ficha.nome} · ${mesa.sistema.rotulos.pv} ${ativo.ficha.pv}/${ativo.ficha.pvMax} · ver a ficha (C)`}
                   >
-                    ■ interromper
+                    <Retrato ficha={ativo.ficha} tamanho={38} className="rounded" />
+                    <span
+                      className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-full border border-border bg-background px-1 text-[9.5px] leading-[14px] tabular-nums ${
+                        ativo.ficha.pvMax > 0 && ativo.ficha.pv <= ativo.ficha.pvMax / 4 ? "text-sangue" : "text-muted"
+                      }`}
+                      aria-hidden
+                    >
+                      ♥{ativo.ficha.pv}
+                    </span>
                   </button>
-                )}
-              </div>
+                  {mesa.personagens.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => abrirCodex("grupo")}
+                      className="grid h-11 w-7 place-items-center rounded-md text-muted hover:text-ambar"
+                      aria-label="Trocar de personagem"
+                      title="Trocar de personagem"
+                    >
+                      ⇄
+                    </button>
+                  )}
+                </div>
+              ) : mesa.personagens.length > 0 ? (
+                <button type="button" className="h-11 shrink-0 rounded-md border border-border/70 px-3 text-sm text-ambar hover:border-ambar/60" onClick={() => abrirCodex("grupo")}>
+                  Escolher personagem
+                </button>
+              ) : (
+                <Link href={linkNovo} className="grid h-11 shrink-0 place-items-center rounded-md border border-border/70 px-3 text-sm text-ambar hover:border-ambar/60">
+                  + Personagem
+                </Link>
+              )
             }
           />
-          <p className="mt-2 text-center text-[11px] text-muted/70">
+          <p className="mt-1.5 text-center text-[10.5px] leading-4 text-muted/60">
             Os personagens são IA. As respostas são ficção.
             <button type="button" onClick={() => setAjuda(true)} className="ml-2 hidden underline-offset-2 hover:text-ambar hover:underline [@media(pointer:fine)]:inline">
               Atalhos: <kbd className="rounded border border-border/70 px-1">?</kbd>

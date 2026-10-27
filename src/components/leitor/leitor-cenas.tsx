@@ -1,22 +1,26 @@
 "use client";
 
+import Link from "next/link";
 import { Fragment, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { emCampoDeTexto } from "@/components/chat/atalhos";
 import { Ouvir } from "@/components/voz/voz";
 import type { Mensagem } from "@/lib/db";
 import { VAO } from "./paginacao";
 import { useMenosMovimento, usePreferenciasLeitor } from "./preferencias";
+import { capitularCabe, EstiloProsa } from "./prosa";
 import { agruparTurnos, dividirParagrafos, SEPARADOR, type Turno } from "./turnos";
-import { suportaRevelar, useRevelar } from "./use-revelar";
+import { suportaRevelar, useRevelar, type Transicao } from "./use-revelar";
 
 // Leitor cena a cena das duas mesas (modo história e avançado), no lugar da conversa que rola.
-// O palco mostra só o turno à vista: a ação do jogador discreta no topo, a narração se revelando aos poucos, os cartões de dado e
-// de pedido de teste no ponto em que o mestre os pôs. Turno que não cabe vira páginas (o navegador quebra em colunas, ver
-// paginacao.ts); embaixo, a navegação: ◂ cena anterior, "Cena 12 de 15", as páginas, ouvir a página e "continuar ▸".
-// Cada mesa entrega como desenhar a prosa, a ação e os cartões; o leitor cuida de agrupar, paginar, revelar e navegar.
+// O palco é sempre a cena atual (o último turno): a ação do jogador discreta no topo, a narração se revelando aos poucos, os
+// cartões de dado e de pedido de teste no ponto em que o mestre os pôs. Cena que não cabe vira páginas (o navegador quebra em
+// colunas, ver paginacao.ts); embaixo, uma barra mínima: os pontinhos das páginas no meio, "continuar ▸" e ouvir à direita, e
+// à esquerda o "reler a história" (o Livro da campanha) e, no fim da cena, desfazer/outra resposta. Cenas antigas não voltam
+// ao palco: para reler há o Livro e o modo 📜 Rolagem do menu de leitura.
+// Cada mesa entrega como desenhar a prosa, a ação e os cartões; o leitor cuida de agrupar, paginar, revelar e virar a página.
 
 export type Prosa = {
-  /** classes do bloco de narração (fonte, tamanho, entrelinha) */
+  /** classes extras do bloco de narração (cor do texto); o tamanho e a entrelinha vêm do .leitor-prosa */
   classe: string;
   /** a marcação inline de um parágrafo (negrito, itálico, falas, nomes coloridos) */
   inline: (texto: string, chave: string) => ReactNode;
@@ -28,14 +32,13 @@ export type Prosa = {
 export type BlocoCauda = { chave: string; no: ReactNode };
 
 export type ControleLeitor = {
-  /** abre a cena e a página onde está a mensagem (ex.: o pedido de teste) e depois chama `depois` */
+  /** abre a página onde está a mensagem da cena atual (ex.: o pedido de teste) e depois chama `depois` */
   irParaMensagem: (id: number, depois?: () => void) => void;
-  irParaAgora: () => void;
 };
 
 /** Atalhos do leitor, para a lista do "?". */
 export const ATALHOS_LEITOR: [string, string][] = [
-  ["← →", "vira a página (cena a cena)"],
+  ["← →", "vira a página da cena"],
   ["Espaço", "mostra o texto todo ou vira a página"],
 ];
 
@@ -46,10 +49,15 @@ const ESTILO = `
 .leitor-topo,.leitor-grudar{break-after:avoid}
 .leitor-fluxo [data-cartao]{transition:opacity .45s ease}
 .leitor-fluxo [data-leitor-oculto]{visibility:hidden;opacity:0}
-@media (prefers-reduced-motion:reduce){.leitor-fluxo [data-cartao]{transition:none}}
+@keyframes leitor-chamar{0%,100%{opacity:.55;transform:none}50%{opacity:1;transform:translateX(2px)}}
+.leitor-chamar{animation:leitor-chamar 2.2s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.leitor-fluxo [data-cartao]{transition:none}.leitor-chamar{animation:none}}
 `;
 
-/** Ação de jogador no topo da cena: nome e texto em itálico, discretos. Fala fora do jogo ((assim)) vira nota. */
+/**
+ * Ação de jogador no topo da cena: uma linha fina com o retrato, o nome em versalete e a ação em itálico, sem competir com a
+ * narração. Fala fora do jogo ((assim)) vira nota.
+ */
 export function AcaoTopo({
   nome,
   cor,
@@ -68,36 +76,61 @@ export function AcaoTopo({
   const t = texto.trim();
   if (t.startsWith("((") || !nome)
     return (
-      <p className="mb-2 text-center text-sm italic text-muted">
+      <p className="text-center text-sm italic text-muted">
         <span className="not-italic text-muted/80">{autor || nome || "Alguém"}, fora do jogo:</span> {t.replace(/^\(\(|\)\)$/g, "").trim()}
       </p>
     );
   return (
-    <div className="mb-2 border-l-2 border-ambar/40 pl-3" title={t.length > 180 ? t : undefined}>
-      <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
-        {icone}
-        <span className={`truncate font-semibold tracking-wide ${cor ? "" : "text-ambar"}`} style={cor ? { color: cor } : undefined}>
+    <div className="flex min-w-0 items-start gap-2.5 text-[0.92rem] leading-snug" title={t.length > 160 ? t : undefined}>
+      {icone && <span className="mt-px shrink-0 opacity-90">{icone}</span>}
+      <p className="line-clamp-2 min-w-0 flex-1 break-words text-foreground/65">
+        <span
+          className={`font-semibold tracking-[0.06em] [font-variant-caps:all-small-caps] ${cor ? "" : "text-ambar"}`}
+          style={cor ? { color: cor } : undefined}
+        >
           {nome}
         </span>
-        {autor && autor !== nome && <span className="truncate">· {autor}</span>}
-        {detalhe && <span className="ml-auto shrink-0">{detalhe}</span>}
+        {autor && autor !== nome && <span className="text-xs text-muted"> ({autor})</span>}
+        <span className="mx-1.5 text-muted/60" aria-hidden>
+          —
+        </span>
+        <span className="italic">{t}</span>
       </p>
-      <p className="mt-0.5 line-clamp-3 whitespace-pre-wrap break-words text-[0.95rem] italic leading-snug text-foreground/75">{t}</p>
+      {detalhe && <span className="mt-0.5 shrink-0 text-xs">{detalhe}</span>}
     </div>
   );
 }
 
-function BlocoNarracao({ texto, chave, prosa, escrevendo }: { texto: string; chave: string; prosa: Prosa; escrevendo: boolean }) {
+function BlocoNarracao({
+  texto,
+  chave,
+  prosa,
+  escrevendo,
+  capitular,
+}: {
+  texto: string;
+  chave: string;
+  prosa: Prosa;
+  escrevendo: boolean;
+  /** primeiro bloco da cena: o primeiro parágrafo ganha capitular (se couber) */
+  capitular: boolean;
+}) {
   const paragrafos = dividirParagrafos(texto);
+  const comCapitular = capitular && paragrafos.length > 0 && capitularCabe(paragrafos[0]);
   return (
-    <div className={`${prosa.classe} my-5 first:mt-0`} data-fixavel>
+    <div className={`leitor-prosa ${prosa.classe} my-6 first:mt-0`} data-fixavel>
       {paragrafos.map((p, i) =>
         SEPARADOR.test(p) ? (
           <div key={i} data-cartao aria-hidden className="leitor-grudar">
             {prosa.separador}
           </div>
         ) : (
-          <p key={i} data-revelar className={`mb-4 last:mb-0 ${escrevendo && i === paragrafos.length - 1 ? "cursor" : ""}`}>
+          <p
+            key={i}
+            data-revelar
+            data-capitular={comCapitular && i === 0 ? "" : undefined}
+            className={`${comCapitular && i === 0 ? "leitor-capitular" : ""} ${escrevendo && i === paragrafos.length - 1 ? "cursor" : ""}`}
+          >
             {prosa.inline(p, `${chave}-${i}`)}
           </p>
         ),
@@ -107,7 +140,15 @@ function BlocoNarracao({ texto, chave, prosa, escrevendo }: { texto: string; cha
   );
 }
 
-const contem = (t: Turno, id: number) => t.acoes.some((m) => m.id === id) || t.itens.some((m) => m.id === id);
+/** Ícone do "reler a história" (rolo de pergaminho). */
+function IconeReler() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M7 4h11a2 2 0 0 1 0 4H7M7 4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h11a2 2 0 0 0 0-4H7" fill="currentColor" fillOpacity={0.12} />
+      <path d="M9 11h6M9 13.5h4" />
+    </svg>
+  );
+}
 
 export function LeitorCenas({
   ref,
@@ -123,13 +164,15 @@ export function LeitorCenas({
   largura,
   ferramentas,
   aoMudarFim,
+  linkReler,
+  transicao = "deslizar",
 }: {
   ref?: Ref<ControleLeitor>;
   mensagens: Mensagem[];
   /** narração chegando agora (streaming) */
   aoVivo: string;
   ocupado: boolean;
-  /** há ações na fila esperando o mestre (fora a abertura e os testes): o "agora" vira uma cena nova */
+  /** há ações na fila esperando o mestre (fora a abertura e os testes): o palco vira uma cena nova */
   esperandoNovoTurno: boolean;
   prosa: Prosa;
   /** uma linha de ação de jogador, para o topo da cena */
@@ -139,47 +182,43 @@ export function LeitorCenas({
   cauda: BlocoCauda[];
   /** mesa vazia (antes da abertura) */
   vazio?: ReactNode;
-  /** classes de largura da coluna (a mesma do campo de ação) */
+  /** classes de largura da coluna (a mesma do compositor) */
   largura: string;
-  /** botões da última narração (desfazer / outra resposta): na barra, no lugar do "continuar", no fim da cena atual */
+  /** botões da última narração (desfazer / outra resposta): à esquerda da barra, no fim da cena */
   ferramentas?: (turno: Turno) => ReactNode;
-  /** a pessoa chegou (ou saiu) do fim da cena atual: última página, toda à vista. As sugestões ganham destaque. */
+  /** a pessoa chegou (ou saiu) do fim da cena: última página, toda à vista. As sugestões ganham destaque. */
   aoMudarFim?: (noFim: boolean) => void;
+  /** endereço para reler a história inteira (o Livro da campanha) */
+  linkReler?: string;
+  /** como a página vira: deslizando (avançado) ou como folha de livro (modo história) */
+  transicao?: Transicao;
 }) {
   const turnos = useMemo(() => agruparTurnos(mensagens), [mensagens]);
   const chaveUltima = turnos.at(-1)?.chave ?? "";
 
-  // ação enviada esperando o mestre: o "agora" vira uma cena nova (fica até a ação virar mensagem, mesmo com o mestre já ocupado)
+  // ação enviada esperando o mestre: o palco vira uma cena nova (fica até a ação virar mensagem, mesmo com o mestre já ocupado)
   const [pendurado, setPendurado] = useState<string | null>(null);
   let pend = pendurado;
   if (pend !== null && (pend !== chaveUltima || (!ocupado && !esperandoNovoTurno))) pend = null;
   if (esperandoNovoTurno && !ocupado) pend = chaveUltima;
   if (pend !== pendurado) setPendurado(pend);
   const mostrarVazio = Boolean(vazio) && turnos.length === 0;
-  const exibidos: Turno[] = useMemo(
-    () => (pend !== null || turnos.length === 0 ? [...turnos, { chave: `novo-${chaveUltima}`, acoes: [], itens: [] }] : turnos),
+  const turno: Turno = useMemo(
+    () => (pend !== null || turnos.length === 0 ? { chave: `novo-${chaveUltima}`, acoes: [], itens: [] } : turnos[turnos.length - 1]),
     [turnos, pend, chaveUltima],
   );
 
-  // cena à vista (null = acompanha o agora) e página
-  const [visto, setVisto] = useState<number | null>(null);
-  if (visto !== null && visto >= exibidos.length - 1) setVisto(null);
-  const idx = visto === null || visto >= exibidos.length - 1 ? exibidos.length - 1 : visto;
-  const noAgora = idx === exibidos.length - 1;
-  const turno = exibidos[idx];
+  // página da cena atual; cena nova (ou a cena virou outra) começa da primeira
   const [pagina, setPagina] = useState(0);
   const [chaveVista, setChaveVista] = useState(turno.chave);
   if (turno.chave !== chaveVista) {
-    // cena nova chegou (ou a cena virou outra): começa da primeira página
     setChaveVista(turno.chave);
     setPagina(0);
   }
-  /** quantas mensagens havia quando a pessoa saiu do agora (para o aviso "O mestre continuou") */
-  const [saida, setSaida] = useState(0);
 
   // o que já estava na mesa ao abrir aparece inteiro; o que chega nesta sessão se revela
   const [iniciais] = useState(() => new Set(mensagens.map((m) => m.id)));
-  const lido = !turno.chave.startsWith("novo") && [...turno.acoes, ...turno.itens].every((m) => iniciais.has(m.id)) && !(noAgora && aoVivo);
+  const lido = !turno.chave.startsWith("novo") && [...turno.acoes, ...turno.itens].every((m) => iniciais.has(m.id)) && !aoVivo;
   const { animar } = usePreferenciasLeitor();
   const menos = useMenosMovimento();
   const anima = animar && !menos && suportaRevelar();
@@ -190,50 +229,33 @@ export function LeitorCenas({
     animar: anima,
     lidoAoAbrir: lido,
     aoPaginaExterna: setPagina,
+    transicao,
   });
   const medido = layout.chave === turno.chave;
   const paginas = medido ? layout.paginas : 1;
-  if (pagina < 0 && medido) setPagina(paginas - 1);
-  const paginaAtual = pagina < 0 ? paginas - 1 : Math.min(pagina, paginas - 1);
-  const ultimaPagina = paginaAtual >= paginas - 1;
-  const noFim = noAgora && ultimaPagina && completa;
+  const paginaAtual = Math.min(pagina, paginas - 1);
+  const maisPaginas = paginaAtual < paginas - 1;
+  const noFim = !maisPaginas && completa;
 
   useEffect(() => {
     aoMudarFim?.(noFim);
   }, [noFim, aoMudarFim]);
 
-  // ---------- navegação ----------
+  // ---------- páginas ----------
 
-  const irTurno = useCallback(
-    (i: number, pag: number) => {
-      const alvo = Math.max(0, Math.min(i, exibidos.length - 1));
-      if (alvo === exibidos.length - 1) setVisto(null);
-      else {
-        if (visto === null) setSaida(mensagens.length);
-        setVisto(alvo);
-      }
-      setChaveVista(exibidos[alvo].chave);
-      setPagina(pag);
-    },
-    [exibidos, visto, mensagens.length],
-  );
-  const irParaAgora = useCallback(() => irTurno(exibidos.length - 1, 0), [irTurno, exibidos.length]);
-
-  /** Espaço, →, clique à direita: primeiro mostra o resto da página; depois vira a página; no fim da cena, vai para a seguinte. */
+  /** Espaço, →, clique à direita: primeiro mostra o resto da página; depois vira a página. */
   const avancar = (direto = false) => {
     if (!completa) {
       revelarPagina();
       if (!direto) return;
     }
-    if (paginaAtual < paginas - 1) setPagina(paginaAtual + 1);
-    else if (!noAgora) irTurno(idx + 1, 0);
+    if (maisPaginas) setPagina(paginaAtual + 1);
   };
   const voltar = () => {
     if (paginaAtual > 0) setPagina(paginaAtual - 1);
-    else if (idx > 0) irTurno(idx - 1, -1);
   };
 
-  // ir até uma mensagem (o pedido de teste): troca de cena, espera medir, acha a página dela e dá por lido até lá
+  // ir até uma mensagem da cena (o pedido de teste): espera medir, acha a página dela e dá por lido até lá
   const pendente = useRef<{ id: number; depois?: () => void } | null>(null);
   const tentarPendente = useCallback(() => {
     const p = pendente.current;
@@ -250,13 +272,10 @@ export function LeitorCenas({
 
   useImperativeHandle(ref, () => ({
     irParaMensagem(id, depois) {
-      const i = exibidos.findIndex((t) => contem(t, id));
-      if (i < 0) return;
+      if (!turno.itens.some((m) => m.id === id)) return;
       pendente.current = { id, depois };
-      if (i !== idx) irTurno(i, 0);
-      else tentarPendente();
+      tentarPendente();
     },
-    irParaAgora,
   }));
 
   // teclado: ← → PageUp PageDown Espaço Enter (fora de campos de texto, botões e diálogos)
@@ -301,7 +320,7 @@ export function LeitorCenas({
     }
     const caixa = e.currentTarget.getBoundingClientRect();
     if (e.clientX >= caixa.left + caixa.width / 2) avancar();
-    else if (paginaAtual > 0) setPagina(paginaAtual - 1);
+    else voltar();
   }
   const toque = useRef<{ x: number; y: number } | null>(null);
   function aoSoltar(e: React.TouchEvent<HTMLDivElement>) {
@@ -318,16 +337,17 @@ export function LeitorCenas({
 
   // ---------- desenho ----------
 
-  const novidade = !noAgora && (mensagens.length > saida || Boolean(aoVivo));
-  const maisPaginas = paginaAtual < paginas - 1;
   const textoPagina = medido ? (layout.textos[paginaAtual] ?? "") : "";
   const extras = noFim && ferramentas ? ferramentas(turno) : null;
   const botaoNav =
-    "inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-md px-2 text-sm text-muted transition hover:text-ambar disabled:pointer-events-none disabled:opacity-30 sm:min-h-9";
+    "inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-md px-2 text-sm text-muted transition hover:text-ambar disabled:pointer-events-none disabled:opacity-0 sm:min-h-9";
+  // a capitular vai no primeiro parágrafo da primeira narração da cena
+  const primeiraNarracao = turno.itens.find((m) => m.tipo === "mestre")?.id ?? null;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col" data-leitor>
       <style>{ESTILO}</style>
+      <EstiloProsa />
       <div
         className="relative min-h-0 flex-1"
         onClick={aoClicar}
@@ -338,27 +358,31 @@ export function LeitorCenas({
         onTouchEnd={aoSoltar}
         data-palco
       >
-        <div className="absolute inset-0 px-4 sm:px-6">
+        <div className="absolute inset-0 px-5 sm:px-6">
           <div className={`relative mx-auto h-full w-full ${largura}`}>
             <div ref={visor} className="h-full overflow-hidden" data-visor>
               <div
                 ref={fluxo}
-                className="leitor-fluxo h-full pb-3 pt-4 sm:pt-6"
-                style={{ columnCount: 1, columnGap: VAO, columnFill: "auto" }}
+                className="leitor-fluxo h-full pb-4 [--respiro:1rem] sm:[--respiro:1.75rem]"
+                style={{ columnCount: 1, columnGap: VAO, columnFill: "auto", paddingTop: "calc(var(--respiro) + var(--folga, 0px))" }}
                 aria-live="off"
                 data-fluxo
               >
                 {!mostrarVazio && (
                   <>
                     {turno.acoes.length > 0 && (
-                      <div className="leitor-topo mb-4">
-                        {turno.acoes.map((m) => (
-                          <Fragment key={m.id}>{acao(m)}</Fragment>
-                        ))}
+                      <div className="leitor-topo mb-6 sm:mb-7">
+                        <div className="space-y-1.5">
+                          {turno.acoes.map((m) => (
+                            <Fragment key={m.id}>{acao(m)}</Fragment>
+                          ))}
+                        </div>
+                        <div className="mt-3 h-px bg-linear-to-r from-border/80 via-border/30 to-transparent" aria-hidden />
                       </div>
                     )}
                     {turno.itens.map((m) => {
-                      if (m.tipo === "mestre") return <BlocoNarracao key={m.id} texto={m.texto} chave={`m${m.id}`} prosa={prosa} escrevendo={false} />;
+                      if (m.tipo === "mestre")
+                        return <BlocoNarracao key={m.id} texto={m.texto} chave={`m${m.id}`} prosa={prosa} escrevendo={false} capitular={m.id === primeiraNarracao} />;
                       const no = item(m);
                       if (no === null || no === undefined || no === false) return null;
                       const grudar = (m.dados as { tipo?: string } | null)?.tipo === "cena_titulo";
@@ -368,14 +392,12 @@ export function LeitorCenas({
                         </div>
                       );
                     })}
-                    {noAgora && aoVivo && <BlocoNarracao texto={aoVivo} chave="vivo" prosa={prosa} escrevendo={terminou} />}
-                    {noAgora &&
-                      cauda.map((c) => (
-                        <div key={c.chave} data-cartao>
-                          {c.no}
-                        </div>
-                      ))}
-
+                    {aoVivo && <BlocoNarracao texto={aoVivo} chave="vivo" prosa={prosa} escrevendo={terminou} capitular={primeiraNarracao === null} />}
+                    {cauda.map((c) => (
+                      <div key={c.chave} data-cartao>
+                        {c.no}
+                      </div>
+                    ))}
                   </>
                 )}
               </div>
@@ -387,95 +409,75 @@ export function LeitorCenas({
             )}
           </div>
         </div>
-        {novidade && (
-          <button
-            type="button"
-            onClick={irParaAgora}
-            className="surgir absolute bottom-3 left-1/2 z-10 min-h-10 -translate-x-1/2 rounded-full border border-ambar/60 bg-surface/95 px-4 text-sm text-ambar shadow-lg backdrop-blur hover:bg-surface-2"
-          >
-            O mestre continuou ▸
-          </button>
-        )}
       </div>
 
       {!mostrarVazio && (
-        <nav aria-label="Cenas e páginas" className="relative shrink-0 px-4 sm:px-6" data-nav-leitor>
-          <div className={`mx-auto flex w-full ${largura} items-center gap-1 border-t border-border/40 py-1`}>
-            <button
-              type="button"
-              className={`${botaoNav} min-w-10 sm:min-w-32 sm:justify-start`}
-              onClick={() => irTurno(idx - 1, 0)}
-              disabled={idx === 0}
-              title="Cena anterior"
-              aria-label="Cena anterior"
-              data-cena-anterior
-            >
-              <span aria-hidden>◂</span>
-              <span className="hidden sm:inline">cena anterior</span>
-            </button>
-            <div className="flex min-h-10 min-w-0 flex-1 flex-col items-center justify-center leading-tight">
-              <p className="truncate text-[11px] uppercase tracking-[0.18em] text-muted" data-indicador-cena>
-                Cena {idx + 1} de {exibidos.length}
-                {!noAgora && (
-                  <>
-                    {" · "}
-                    <button type="button" onClick={irParaAgora} className="min-h-6 normal-case tracking-normal text-ambar hover:underline" data-voltar-agora>
-                      voltar ao agora
-                    </button>
-                  </>
-                )}
-              </p>
-              {paginas <= 1 ? (
-                <span className="h-5" aria-hidden />
-              ) : paginas <= 8 ? (
-                  <div className="flex items-center" role="group" aria-label={`Página ${paginaAtual + 1} de ${paginas}`} data-paginas={paginas}>
-                    {Array.from({ length: paginas }, (_, k) => (
-                      <button
-                        key={k}
-                        type="button"
-                        onClick={() => setPagina(k)}
-                        aria-label={`Página ${k + 1} de ${paginas}`}
-                        aria-current={k === paginaAtual ? "page" : undefined}
-                        className="grid size-5 place-items-center"
-                      >
-                        <span className={`size-1.5 rounded-full transition ${k === paginaAtual ? "scale-125 bg-ambar" : "bg-muted/50"}`} />
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="h-5 text-[11px] leading-5 tabular-nums text-muted" data-paginas={paginas}>
-                    página {paginaAtual + 1}/{paginas}
-                  </p>
-                )}
+        <nav aria-label="Páginas da cena" className="relative shrink-0 px-3 sm:px-6" data-nav-leitor>
+          <div className={`relative mx-auto grid w-full ${largura} grid-cols-[1fr_auto_1fr] items-center gap-1`}>
+            <div className="absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent via-border/50 to-transparent" aria-hidden />
+            <div className="flex min-w-0 flex-nowrap items-center gap-0.5 justify-self-start [&_[role=group]]:flex-nowrap">
+              {linkReler && (
+                <Link
+                  href={linkReler}
+                  className={`${botaoNav} -ml-1 text-muted/80`}
+                  title="Reler a história inteira (Livro da campanha). Também dá para ler tudo rolando: 📜 Rolagem, no menu de leitura."
+                  aria-label="Reler a história"
+                  data-reler
+                >
+                  <IconeReler />
+                  {!extras && <span className="hidden text-xs md:inline">reler</span>}
+                </Link>
+              )}
+              {extras}
             </div>
-            {textoPagina && <Ouvir id={`pagina-${turno.chave}-${paginaAtual}`} texto={textoPagina} fixo />}
-            <div className="flex min-w-10 justify-end sm:min-w-32">
+            <div className="flex min-h-10 items-center justify-self-center sm:min-h-9">
+              {paginas > 1 && (
+                <button type="button" className={`${botaoNav} min-w-8 px-1`} onClick={voltar} disabled={paginaAtual === 0} title="Página anterior (←)" aria-label="Página anterior">
+                  <span aria-hidden>◂</span>
+                </button>
+              )}
+              {paginas <= 1 ? null : paginas <= 8 ? (
+                <div className="flex items-center" role="group" aria-label={`Página ${paginaAtual + 1} de ${paginas}`} data-paginas={paginas}>
+                  {Array.from({ length: paginas }, (_, k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setPagina(k)}
+                      aria-label={`Página ${k + 1} de ${paginas}`}
+                      aria-current={k === paginaAtual ? "page" : undefined}
+                      className="group grid size-6 place-items-center"
+                    >
+                      <span
+                        className={`block rounded-full transition-all duration-300 ${
+                          k === paginaAtual ? "h-1.5 w-4 bg-ambar" : "size-1.5 bg-muted/40 group-hover:bg-muted/80"
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="px-1 text-[11px] tabular-nums tracking-wider text-muted" data-paginas={paginas}>
+                  {paginaAtual + 1} / {paginas}
+                </p>
+              )}
+            </div>
+            <div className="flex min-w-0 items-center justify-end gap-0.5 justify-self-end">
+              {textoPagina && <Ouvir id={`pagina-${turno.chave}-${paginaAtual}`} texto={textoPagina} fixo className="text-[11px]" />}
               {!completa ? (
-                <button type="button" className={botaoNav} onClick={revelarPagina} title="Mostrar o texto todo (Espaço)" aria-label="Mostrar o texto todo" data-mostrar-tudo>
-                  <span className="hidden sm:inline">mostrar tudo</span>
-                  <span aria-hidden>⏵⏵</span>
+                <button type="button" className={`${botaoNav} text-muted/80`} onClick={revelarPagina} title="Mostrar o texto todo (Espaço)" aria-label="Mostrar o texto todo" data-mostrar-tudo>
+                  <span className="hidden text-xs md:inline">mostrar tudo</span>
+                  <span aria-hidden className="text-xs">
+                    ⏵⏵
+                  </span>
                 </button>
               ) : maisPaginas ? (
-                <button
-                  type="button"
-                  className={`${botaoNav} font-semibold text-ambar hover:text-ambar`}
-                  onClick={() => avancar()}
-                  title="Próxima página (→ ou Espaço)"
-                  data-continuar
-                >
-                  <span>continuar</span>
-                  <span aria-hidden className="motion-safe:animate-pulse">
+                <button type="button" className={`${botaoNav} -mr-1 text-ambar hover:text-ambar`} onClick={() => avancar()} title="Próxima página (→ ou Espaço)" data-continuar>
+                  <span className="max-sm:sr-only">continuar</span>
+                  <span aria-hidden className="leitor-chamar inline-block text-base leading-none">
                     ▸
                   </span>
                 </button>
-              ) : !noAgora ? (
-                <button type="button" className={botaoNav} onClick={() => irTurno(idx + 1, 0)} title="Cena seguinte (→)" data-cena-seguinte>
-                  <span className="hidden sm:inline">cena seguinte</span>
-                  <span aria-hidden>▸</span>
-                </button>
-              ) : (
-                extras
-              )}
+              ) : null}
             </div>
           </div>
         </nav>
