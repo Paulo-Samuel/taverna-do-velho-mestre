@@ -62,11 +62,12 @@ export function useAtalhos(opcoes: OpcoesAtalhos) {
 }
 
 /** Clica no "Rolar o dado" do cartão de um pedido de teste (o cartão cuida da animação e da chamada). */
-export function rolarPedido(mensagemId: number | null | undefined): boolean {
+export function rolarPedido(mensagemId: number | null | undefined, rolarAte = true): boolean {
   if (!mensagemId) return false;
   const botao = document.querySelector<HTMLButtonElement>(`#pedido-${mensagemId} button[data-rolar]`);
   if (!botao || botao.disabled) return false;
-  botao.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+  // no leitor cena a cena quem leva até o cartão é o leitor (scrollIntoView bagunçaria as páginas)
+  if (rolarAte) botao.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
   botao.click();
   return true;
 }

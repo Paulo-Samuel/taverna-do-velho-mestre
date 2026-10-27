@@ -8,11 +8,23 @@ import type { SugestaoAcao } from "@/lib/sistemas/tipos";
 // Desktop: a lista sempre à vista, uma linha por sugestão (o texto inteiro aparece no foco e no title).
 // Clicar numa sugestão envia a ação na hora, como antes.
 
-export function SugestoesCompactas({ sugestoes, aoEscolher }: { sugestoes: SugestaoAcao[]; aoEscolher: (texto: string) => void }) {
+export function SugestoesCompactas({
+  sugestoes,
+  aoEscolher,
+  discretas = false,
+}: {
+  sugestoes: SugestaoAcao[];
+  aoEscolher: (texto: string) => void;
+  /** leitor cena a cena: a pessoa ainda não chegou ao fim da cena (ficam apagadinhas, mas clicáveis; por filtro, porque o "surgir" prende a opacidade) */
+  discretas?: boolean;
+}) {
   const [aberta, setAberta] = useState(false);
   const pericias = [...new Set(sugestoes.map((s) => s.pericia).filter(Boolean))] as string[];
   return (
-    <div className="surgir mb-2">
+    <div
+      className={`surgir mb-2 transition-[filter] motion-reduce:transition-none ${discretas ? "brightness-[.6] saturate-50 hover:brightness-100 hover:saturate-100 focus-within:brightness-100 focus-within:saturate-100" : ""}`}
+      data-sugestoes={discretas ? "discretas" : "destaque"}
+    >
       <button
         type="button"
         onClick={() => setAberta((v) => !v)}

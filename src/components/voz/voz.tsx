@@ -208,24 +208,30 @@ export function VozNoPainel({ className = "" }: { className?: string }) {
  * Botãozinho "ouvir" de uma narração. No desktop aparece no hover/foco do bloco (o pai precisa da classe `group`);
  * no celular fica sempre visível, discreto. Clicar de novo enquanto fala cala.
  */
-export function Ouvir({ id, texto, className = "" }: { id: string; texto: string; className?: string }) {
+export function Ouvir({ id, texto, className = "", fixo = false }: { id: string; texto: string; className?: string; fixo?: boolean }) {
   const { disponivel, falando } = useVoz();
   if (!disponivel) return null;
   const este = falando === id;
+  // fixo (barra do leitor cena a cena): sempre visível, lê a página à vista; no celular só o ícone
+  const dica = este ? "Parar a leitura" : fixo ? "Ouvir esta página" : "Ouvir esta narração";
   return (
     <button
       type="button"
       onClick={() => (este ? parar() : falar(texto, { id, interromper: true }))}
-      aria-label={este ? "Parar a leitura" : "Ouvir esta narração"}
-      title={este ? "Parar a leitura" : "Ouvir esta narração"}
+      aria-label={dica}
+      title={dica}
       aria-pressed={este}
       data-ouvir
       className={`inline-flex min-h-8 items-center gap-1 rounded-md px-1.5 text-xs transition focus-visible:opacity-100 ${
-        este ? "text-ambar opacity-100" : "text-muted/70 hover:text-ambar sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+        este
+          ? "text-ambar opacity-100"
+          : fixo
+            ? "min-h-10 min-w-10 justify-center text-muted hover:text-ambar sm:min-h-9"
+            : "text-muted/70 hover:text-ambar sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
       } ${className}`}
     >
       <span aria-hidden>{este ? "■" : "🔊"}</span>
-      <span>{este ? "parar" : "ouvir"}</span>
+      <span className={fixo ? "max-sm:sr-only" : ""}>{este ? "parar" : "ouvir"}</span>
     </button>
   );
 }

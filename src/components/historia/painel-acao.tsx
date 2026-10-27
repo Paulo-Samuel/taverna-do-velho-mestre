@@ -11,13 +11,20 @@ export function ListaSugestoes({
   sugestoes,
   desabilitado,
   aoEscolher,
+  discretas = false,
 }: {
   sugestoes: SugestaoAcao[];
   desabilitado?: boolean;
   aoEscolher: (texto: string) => void;
+  /** leitor cena a cena: ainda não chegou ao fim da cena, as sugestões ficam apagadinhas (mas clicáveis; por filtro, porque o "surgir" prende a opacidade) */
+  discretas?: boolean;
 }) {
   return (
-    <ul className="surgir mb-2 space-y-1.5" aria-label="Ações sugeridas">
+    <ul
+      className={`surgir mb-2 space-y-1.5 transition-[filter] motion-reduce:transition-none ${discretas ? "brightness-[.6] saturate-50 hover:brightness-100 hover:saturate-100 focus-within:brightness-100 focus-within:saturate-100" : ""}`}
+      aria-label="Ações sugeridas"
+      data-sugestoes={discretas ? "discretas" : "destaque"}
+    >
       {sugestoes.map((s, i) => (
         <li key={`${i}-${s.texto}`}>
           <button
@@ -55,6 +62,7 @@ export function PainelAcao({
   topo,
   campoRef,
   preencher,
+  sugestoesDiscretas = false,
 }: {
   sugestoes: SugestaoAcao[];
   mostrarSugestoes: boolean;
@@ -69,6 +77,8 @@ export function PainelAcao({
   campoRef?: React.RefObject<HTMLTextAreaElement | null>;
   /** põe um texto no campo (ex.: a ação devolvida depois de desfazer o turno); `n` muda a cada pedido */
   preencher?: { texto: string; n: number } | null;
+  /** leitor cena a cena: a pessoa ainda não chegou ao fim da cena */
+  sugestoesDiscretas?: boolean;
 }) {
   const [texto, setTexto] = useState("");
   // pedido novo de preencher: ajusta o estado durante a renderização (sem efeito), como manda o React
@@ -96,7 +106,7 @@ export function PainelAcao({
 
   return (
     <div>
-      {ver && <ListaSugestoes sugestoes={sugestoes} desabilitado={enviando} aoEscolher={(t) => void mandar(t, false)} />}
+      {ver && <ListaSugestoes sugestoes={sugestoes} desabilitado={enviando} discretas={sugestoesDiscretas} aoEscolher={(t) => void mandar(t, false)} />}
 
       {topo}
 

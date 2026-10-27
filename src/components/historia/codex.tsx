@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, type ReactNode } from "react";
 import { Convite } from "@/components/presenca/convite";
+import { MenuLeitura } from "@/components/leitor/menu-leitura";
 import type { AcoesMesa, Mesa } from "@/lib/cliente/use-mesa";
 import type { PersonagemVisivel } from "@/lib/mesa";
 import type { BlocoFicha, EntradaDiario } from "@/lib/sistemas/tipos";
@@ -524,6 +525,8 @@ export function Codex({
           <Link href={`/mesa/${mesa.campanha.id}/ajustes`} className="flex min-h-10 shrink-0 items-center gap-1 rounded-md px-2 hover:bg-surface-2 hover:text-ambar">
             <span aria-hidden>⚙</span> Ajustes da mesa
           </Link>
+          {/* no celular o cabeçalho não tem espaço: o modo de leitura (cena a cena / rolagem) mora aqui */}
+          <MenuLeitura acima className="sm:hidden" />
         </div>
       </aside>
     </>

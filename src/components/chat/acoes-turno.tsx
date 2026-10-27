@@ -18,11 +18,14 @@ export function AcoesTurno({
   aoConcluir,
   aoErro,
   className = "",
+  compacto = false,
 }: {
   campanhaId: number;
   aoConcluir: (r: Desfeito, refazer: boolean) => void;
   aoErro: (erro: string) => void;
   className?: string;
+  /** barra do leitor cena a cena: no celular só os ícones (o "tem certeza?" encurta para caber) */
+  compacto?: boolean;
 }) {
   const [armado, setArmado] = useState<Qual | null>(null);
   const [indo, setIndo] = useState<Qual | null>(null);
@@ -75,7 +78,17 @@ export function AcoesTurno({
         <span aria-hidden className="text-sm leading-none">
           {indo === qual ? "…" : icone}
         </span>
-        <span>{conf ? "Tem certeza? Clique de novo" : rotulo}</span>
+        {compacto ? (
+          conf ? (
+            <span>
+              <span className="max-sm:hidden">Tem certeza? </span>Clique de novo
+            </span>
+          ) : (
+            <span className="max-sm:sr-only">{rotulo}</span>
+          )
+        ) : (
+          <span>{conf ? "Tem certeza? Clique de novo" : rotulo}</span>
+        )}
       </button>
     );
   };

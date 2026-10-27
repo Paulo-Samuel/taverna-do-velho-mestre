@@ -5,7 +5,7 @@ import { Fragment, useMemo, type ReactNode } from "react";
 // Narração do mestre como texto de livro: parágrafos, **negrito**, *itálico*, falas entre aspas em itálico e
 // nomes de NPCs e personagens coloridos (cada nome com a sua cor fixa, ver cores.ts).
 
-type Destaque = { regex: RegExp | null; cores: Map<string, string> };
+export type Destaque = { regex: RegExp | null; cores: Map<string, string> };
 
 function escapar(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -42,7 +42,8 @@ function comNomes(texto: string, d: Destaque, chave: string): ReactNode[] {
 
 const MARCAS = /(\*\*[^*\n]+\*\*|\*[^*\n]+\*|"[^"\n]+"|“[^”\n]+”|«[^»\n]+»)/g;
 
-function trecho(texto: string, d: Destaque, chave: string): ReactNode[] {
+/** A marcação inline de um parágrafo (usada também pelo leitor cena a cena, que monta os parágrafos ele mesmo). */
+export function trecho(texto: string, d: Destaque, chave: string): ReactNode[] {
   return texto.split(MARCAS).map((t, j) => {
     const k = `${chave}-${j}`;
     if (j % 2 === 0) return <Fragment key={k}>{comNomes(t, d, k)}</Fragment>;
