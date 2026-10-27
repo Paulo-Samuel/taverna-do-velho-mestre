@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import type { EstadoFormulario } from "@/components/ficha/formulario-personagem";
 import { criarCampanha, criarPersonagem, type ConfigCampanha } from "@/lib/db";
 import { fichaDoFormulario } from "@/lib/formulario-ficha";
+import { dificuldadeDe, FOCOS, MAX_FOCO_LIVRE, MAX_INSTRUCOES, tamanhoDe } from "@/lib/mestre/estilo";
+import { tomPadrao } from "@/lib/sistemas/sementes";
 
 /** Campanha nova + primeiro personagem, tudo do mesmo formulário (contrato em lib/formulario-ficha.ts). */
 export async function criarCampanhaAcao(_anterior: EstadoFormulario, form: FormData): Promise<EstadoFormulario> {
@@ -16,15 +18,26 @@ export async function criarCampanhaAcao(_anterior: EstadoFormulario, form: FormD
     .trim()
     .replace(/[^\p{L}\p{N}]/gu, "")
     .slice(0, 12);
+  // estilo do mestre: mesmas regras de limpeza dos ajustes da mesa (mesa/[id]/ajustes/acoes.ts)
+  const foco = [...new Set(form.getAll("foco").map(String))].filter((f) => FOCOS.some((x) => x.id === f));
+  const focoLivre = String(form.get("focoLivre") ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_FOCO_LIVRE);
+  if (focoLivre) foco.push(focoLivre);
   const config: ConfigCampanha = {
+    modoJogo: "avancado",
     modo: form.get("modo_mesa") === "rodada" ? "rodada" : "livre",
+    dados: form.get("dados") === "automatico" ? "automatico" : "jogador",
+    sugestoes: form.get("sugestoes") === "on",
+    dificuldade: dificuldadeDe(form.get("dificuldade")),
+    narracao: tamanhoDe(form.get("narracao")),
+    foco,
+    instrucoes: String(form.get("instrucoes") ?? "").replace(/\r\n/g, "\n").trim().slice(0, MAX_INSTRUCOES),
     ...(pin ? { pin } : {}),
   };
   const id = criarCampanha({
     nome: String(form.get("campanha") ?? "").trim().slice(0, 80) || `A saga de ${r.ficha.nome}`,
     sistema: r.sistema.id,
     cenario: String(form.get("cenario") ?? "").trim().slice(0, 1500),
-    tom: String(form.get("tom") ?? "").trim().slice(0, 60) || "sombrio e debochado",
+    tom: String(form.get("tom") ?? "").trim().slice(0, 60) || tomPadrao(r.sistema.id),
     config,
   });
   criarPersonagem(id, r.ficha, r.jogador);

@@ -1,9 +1,9 @@
 "use client";
 
-import { useActionState, useRef, useState, useTransition, type FormEvent, type KeyboardEvent } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { previaFicha, sugerirAtributos, type PreviaFicha } from "@/app/acoes-ficha";
 import { apelido as apelidoSalvo, salvarApelido } from "@/lib/cliente/identidade";
-import type { OpcaoCriacao, SistemaPublico } from "@/lib/sistemas/tipos";
+import type { SistemaPublico } from "@/lib/sistemas/tipos";
 import { temaDoSistema } from "@/lib/temas";
 import { TemaPagina } from "@/components/tema-pagina";
 import {
@@ -20,10 +20,12 @@ import {
   type Escolhas,
 } from "./passos";
 import { PreviaLateral, Resumo } from "./previa";
+import { opcoesValidas, personagemPronto, problemaOpcoes, sortearOpcoes as sortearExtras } from "./sugestoes";
 
 // Assistente de criação de personagem, guiado só pelos dados públicos do sistema (SistemaPublico).
 // Um único <form> para a server action: os passos são controlados e os campos do contrato
 // (src/lib/formulario-ficha.ts) saem em <input type="hidden"> no fim do formulário.
+// O rascunho fica no localStorage (por destino e por sistema) até a criação dar certo.
 
 export type EstadoFormulario = { erro: string | null };
 
@@ -38,6 +40,10 @@ export type PropsFormulario = {
   /** "campanha": também pede nome, cenário, tom e modo da mesa; "personagem": só o personagem */
   modo: "campanha" | "personagem";
   textoBotao?: string;
+  /** de quem é o rascunho: "campanha" (nova) ou "mesa-<id>"; padrão pelo modo */
+  destino?: string;
+  /** título da página: grande no primeiro passo, numa linha junto da barra de passos depois */
+  cabecalho?: { titulo: string; subtitulo?: ReactNode; antes?: ReactNode };
 };
 
 type Passo = "sistema" | "ancestralidade" | "classe" | "antecedente" | "atributos" | "pericias" | "opcoes" | "identidade" | "campanha" | "resumo";
@@ -74,25 +80,88 @@ function escolhasIniciais(sistemaId: string, sistema: SistemaPublico | undefined
     modoMesa: "livre",
     pin: "",
     adicionarMais: false,
+    // mesmos padrões dos ajustes da mesa
+    dificuldade: "justa",
+    narracao: "media",
+    foco: [],
+    focoLivre: "",
+    instrucoes: "",
+    dados: "jogador",
+    sugestoes: true,
   };
 }
 
-/** Opções de criação que valem para a classe e a ancestralidade escolhidas (itens de outra ancestralidade somem). */
-function opcoesValidas(sistema: SistemaPublico | undefined, classe: string, ancestralidade: string): OpcaoCriacao[] {
-  const vale = (lista: string[] | undefined, id: string) => !lista?.length || lista.includes(id);
-  return (sistema?.opcoesCriacao ?? [])
-    .filter((o) => vale(o.classes, classe) && vale(o.ancestralidades, ancestralidade))
-    .map((o) => (o.opcoes?.some((x) => x.ancestralidades?.length) ? { ...o, opcoes: o.opcoes.filter((x) => vale(x.ancestralidades, ancestralidade)) } : o))
-    // lista fechada que ficou vazia (nenhuma herança desta ancestralidade) não tem o que escolher
-    .filter((o) => !((o.tipo === "escolha" || o.tipo === "multipla") && o.opcoes && !o.opcoes.length));
+/* ---------- rascunho no localStorage ---------- */
+
+const PREFIXO_RASCUNHO = "taverna:rascunho-avancado:";
+const VALIDADE_RASCUNHO = 30 * 24 * 3600 * 1000;
+
+type Rascunho = { v: 1; e: Escolhas; passo: Passo; alcance: number; editados: boolean; salvoEm: number };
+type Oferta = { rascunho: Rascunho; quando: string; sistema: string };
+
+const chaveRascunho = (destino: string, sistemaId: string) => `${PREFIXO_RASCUNHO}${destino}:${sistemaId}`;
+
+function lerRascunhos(destino: string): Rascunho[] {
+  const lista: Rascunho[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const chave = localStorage.key(i);
+      if (!chave?.startsWith(`${PREFIXO_RASCUNHO}${destino}:`)) continue;
+      try {
+        const r = JSON.parse(localStorage.getItem(chave) ?? "") as Rascunho;
+        if (r?.v === 1 && r.e?.sistemaId && Date.now() - r.salvoEm < VALIDADE_RASCUNHO) lista.push(r);
+      } catch {
+        // rascunho estragado: ignora
+      }
+    }
+  } catch {
+    // armazenamento bloqueado (modo privado): sem rascunho, a vida segue
+  }
+  return lista.sort((a, b) => b.salvoEm - a.salvoEm);
 }
 
-export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, acao, modo, textoBotao }: PropsFormulario) {
+function gravarRascunho(destino: string, sistemaId: string, r: Rascunho | null) {
+  try {
+    if (r) localStorage.setItem(chaveRascunho(destino, sistemaId), JSON.stringify(r));
+    else localStorage.removeItem(chaveRascunho(destino, sistemaId));
+  } catch {
+    // cheio ou bloqueado: perde só a conveniência
+  }
+}
+
+function haQuanto(ms: number): string {
+  const min = Math.round((Date.now() - ms) / 60000);
+  if (min < 2) return "agora há pouco";
+  if (min < 60) return `há ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `há ${h} h`;
+  const d = Math.round(h / 24);
+  return d === 1 ? "ontem" : `há ${d} dias`;
+}
+
+/** Tem algo que valha guardar? (abrir a página e não mexer em nada não vira rascunho) */
+function temConteudo(e: Escolhas): boolean {
+  return Boolean(
+    e.ancestralidade ||
+      e.classe ||
+      e.antecedente ||
+      e.nome.trim() ||
+      e.historia.trim() ||
+      e.campanha.trim() ||
+      e.cenario.trim() ||
+      e.pericias.length ||
+      Object.values(e.extras).some((v) => v.some((x) => x.trim())),
+  );
+}
+
+export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, acao, modo, textoBotao, destino: destinoProp, cabecalho }: PropsFormulario) {
   const [estado, enviar, enviando] = useActionState(acao, { erro: null });
   const formRef = useRef<HTMLFormElement>(null);
   const topoRef = useRef<HTMLDivElement>(null);
   // fica ligada por um instante depois que o resumo aparece (trava contra envio por clique duplo)
   const travaEnvio = useRef(false);
+  const relogioRascunho = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const destino = destinoProp ?? (modo === "campanha" ? "campanha" : "personagem");
 
   const pedido = sistemas.find((s) => s.id === sistemaInicial && s.pronto)?.id;
   const inicial = sistemaFixo ?? pedido ?? sistemas.find((s) => s.pronto)?.id ?? "";
@@ -112,9 +181,14 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
   const [carregandoAtributos, iniciarAtributos] = useTransition();
   const [previa, setPrevia] = useState<PreviaFicha | null>(null);
   const [carregandoPrevia, iniciarPrevia] = useTransition();
+  // ação auxiliar (prévia, sugestão de atributos) que falhou: aviso pequeno, sem derrubar a página
+  const [tropeco, setTropeco] = useState<string | null>(null);
+  // rascunho encontrado ao abrir; enquanto a pessoa não decide, nada é gravado por cima
+  const [oferta, setOferta] = useState<Oferta | null>(null);
+  const [veioPronto, setVeioPronto] = useState(false);
 
   const sistema = sistemas.find((s) => s.id === e.sistemaId);
-  const opcoes = opcoesValidas(sistema, e.classe, e.ancestralidade);
+  const opcoes = opcoesValidas(sistema, e.classe, e.ancestralidade, e.extras);
   const limitePericias = sistema?.periciasEscolhiveis ?? 0;
   const periciasDaClasse = new Set(sistema?.classes.find((c) => c.id === e.classe)?.pericias ?? []);
   const periciasEscolhidas = e.pericias.filter((p) => !periciasDaClasse.has(p)).slice(0, limitePericias);
@@ -142,6 +216,53 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
   const atual = passos[indice] ?? "sistema";
   const ultimo = atual === "resumo";
 
+  // ao abrir: procura um rascunho deste destino (do sistema pedido, ou o mais recente)
+  useEffect(() => {
+    const fixo = sistemaFixo ?? pedido;
+    const achado = lerRascunhos(destino).find((r) => (!fixo || r.e.sistemaId === fixo) && sistemas.some((s) => s.id === r.e.sistemaId && s.pronto));
+    if (!achado) return;
+    const nomeSistema = sistemas.find((s) => s.id === achado.e.sistemaId)?.nomeCurto ?? achado.e.sistemaId;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage só existe no navegador, depois da hidratação
+    setOferta({ rascunho: achado, quando: haQuanto(achado.salvoEm), sistema: nomeSistema });
+    // o navegador pode restaurar a rolagem de antes do recarregar e esconder a pergunta lá em cima
+    requestAnimationFrame(() => window.scrollTo({ top: 0 }));
+  }, [destino, sistemaFixo, pedido, sistemas]);
+
+  // grava o rascunho um instante depois de cada mudança (e de novo quando o envio volta com erro)
+  useEffect(() => {
+    if (oferta || !temConteudo(e)) return;
+    if (relogioRascunho.current) clearTimeout(relogioRascunho.current);
+    relogioRascunho.current = setTimeout(() => {
+      gravarRascunho(destino, e.sistemaId, { v: 1, e, passo, alcance, editados, salvoEm: Date.now() });
+    }, 400);
+    return () => {
+      if (relogioRascunho.current) clearTimeout(relogioRascunho.current);
+    };
+  }, [e, passo, alcance, editados, oferta, destino, estado]);
+
+  function continuarRascunho() {
+    if (!oferta) return;
+    const r = oferta.rascunho;
+    const sis = sistemas.find((s) => s.id === r.e.sistemaId);
+    // campos novos que o rascunho antigo não tinha vêm do padrão
+    const restaurado = { ...escolhasIniciais(r.e.sistemaId, sis), ...r.e };
+    setE(restaurado);
+    setPasso(r.passo);
+    setAlcance(r.alcance);
+    setEditados(r.editados);
+    const temAtributos = sis?.atributos.some((a) => restaurado.atributos[a.id]);
+    setOrigemAtributos(temAtributos ? `${restaurado.classe}|${restaurado.metodo}` : null);
+    setSugestao(null);
+    setTocouSistema(true);
+    setOferta(null);
+    setAviso(null);
+  }
+
+  function descartarRascunho() {
+    if (oferta) gravarRascunho(destino, oferta.rascunho.e.sistemaId, null);
+    setOferta(null);
+  }
+
   function atualizar(parcial: Partial<Escolhas>) {
     setAviso(null);
     setE((v) => ({ ...v, ...parcial }));
@@ -164,6 +285,13 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
       modoMesa: v.modoMesa,
       pin: v.pin,
       adicionarMais: v.adicionarMais,
+      dificuldade: v.dificuldade,
+      narracao: v.narracao,
+      foco: v.foco,
+      focoLivre: v.focoLivre,
+      instrucoes: v.instrucoes,
+      dados: v.dados,
+      sugestoes: v.sugestoes,
     }));
     setOrigemAtributos(null);
     setEditados(false);
@@ -172,16 +300,45 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
     setAlcance(indice);
   }
 
-  function sugerir(metodo: string, classe = e.classe) {
+  function sugerir(metodo: string, classe = e.classe, tentativa = 0) {
     if (!sistema) return;
+    const id = sistema.id;
     setE((v) => ({ ...v, metodo }));
     iniciarAtributos(async () => {
-      const valores = await sugerirAtributos(sistema.id, classe, metodo);
-      if (!Object.keys(valores).length) return;
-      setE((v) => ({ ...v, atributos: Object.fromEntries(Object.entries(valores).map(([k, n]) => [k, String(n)])) }));
-      setSugestao(valores);
-      setOrigemAtributos(`${classe}|${metodo}`);
-      setEditados(false);
+      try {
+        const valores = await sugerirAtributos(id, classe, metodo);
+        setTropeco(null);
+        if (!Object.keys(valores).length) return;
+        setE((v) => (v.sistemaId === id ? { ...v, atributos: Object.fromEntries(Object.entries(valores).map(([k, n]) => [k, String(n)])) } : v));
+        setSugestao(valores);
+        setOrigemAtributos(`${classe}|${metodo}`);
+        setEditados(false);
+      } catch {
+        // servidor tropeçou (reiniciando, rede): avisa e tenta mais uma vez, sem levar a página junto
+        if (tentativa < 1) {
+          setTropeco("Os atributos não vieram. Tentando de novo…");
+          setTimeout(() => sugerir(metodo, classe, tentativa + 1), 1500);
+        } else {
+          setTropeco("Os atributos não vieram. Clique em “Sugerir valores” de novo ou digite à mão.");
+        }
+      }
+    });
+  }
+
+  function pedirPrevia(dados: FormData, tentativa = 0) {
+    iniciarPrevia(async () => {
+      try {
+        setPrevia(await previaFicha(dados));
+        setTropeco(null);
+      } catch {
+        if (tentativa < 2) {
+          setTropeco("A prévia não carregou. Tentando de novo…");
+          setTimeout(() => pedirPrevia(dados, tentativa + 1), 1500);
+        } else {
+          setTropeco(null);
+          setPrevia({ ok: false, erro: "A prévia não carregou (o servidor tropeçou). Dá para criar assim mesmo: a ficha sai das mesmas escolhas." });
+        }
+      }
     });
   }
 
@@ -236,14 +393,8 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
       }
       case "pericias":
         return periciasEscolhidas.length > limitePericias ? `No máximo ${limitePericias} perícias.` : null;
-      case "opcoes": {
-        for (const o of opcoes) {
-          const fechada = (o.tipo === "escolha" || o.tipo === "multipla") && o.opcoes?.length;
-          const valores = (e.extras[o.id] ?? []).filter((v) => v.trim() && (!fechada || o.opcoes?.some((x) => x.id === v)));
-          if (o.obrigatoria && !valores.length) return `Preencha: ${o.rotulo}.`;
-        }
-        return null;
-      }
+      case "opcoes":
+        return problemaOpcoes(opcoes, e.extras);
       case "identidade":
         return e.nome.trim() ? null : "Seu personagem precisa de um nome.";
       default:
@@ -253,6 +404,7 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
 
   function irPara(p: Passo) {
     setAviso(null);
+    if (p !== "identidade") setVeioPronto(false);
     if (p === "atributos" && sistema?.atributos.length) {
       const vazios = sistema.atributos.every((a) => !e.atributos[a.id]);
       // sugestão nova quando ainda não há valores, ou quando a classe mudou e o jogador não mexeu à mão
@@ -268,10 +420,7 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
       setPrevia(null);
       // o FormData sai dos campos escondidos, que já refletem o estado atual
       const form = formRef.current;
-      if (form) {
-        const dados = new FormData(form);
-        iniciarPrevia(async () => setPrevia(await previaFicha(dados)));
-      }
+      if (form) pedirPrevia(new FormData(form));
     }
     setPasso(p);
     setAlcance((a) => Math.max(a, passos.indexOf(p)));
@@ -304,6 +453,22 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
     if (anterior) irPara(anterior);
   }
 
+  /** ⚡ Personagem pronto: sorteia tudo que é regra (válido), nome e história, e leva para revisar a identidade. */
+  function prontoJa() {
+    if (!sistema?.pronto) return;
+    setTocouSistema(true);
+    const sorteado = personagemPronto(sistema, e);
+    setE((v) => ({ ...v, ...sorteado }));
+    setOrigemAtributos(null);
+    setEditados(false);
+    setSugestao(null);
+    if (sistema.atributos.length) sugerir(e.metodo || (sistema.metodosAtributos[0]?.id ?? ""), sorteado.classe ?? "");
+    irPara("identidade");
+    // todos os passos ficam liberados na barra para revisar o que o dado escolheu
+    setAlcance(99);
+    setVeioPronto(true);
+  }
+
   function aoEnviar(ev: FormEvent<HTMLFormElement>) {
     // Enter num campo ou envio fora do último passo não manda o formulário
     if (!ultimo) {
@@ -324,6 +489,9 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
       return;
     }
     if (e.jogador.trim()) salvarApelido(e.jogador);
+    // deu certo, a página vai embora com o redirect; deu erro, o efeito do rascunho grava de novo quando o estado volta
+    if (relogioRascunho.current) clearTimeout(relogioRascunho.current);
+    gravarRascunho(destino, e.sistemaId, null);
   }
 
   function aoTeclar(ev: KeyboardEvent<HTMLFormElement>) {
@@ -347,10 +515,21 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
         .filter(Boolean)
         .join(" · ")
     : "";
+  // depois do primeiro passo o título da página encolhe para uma linha junto da barra de passos
+  const compacto = indice > 0;
+  const primeiroDeRegra = passos.find((p) => p !== "sistema");
+  const mostrarPronto = Boolean(sistema?.pronto) && (atual === "sistema" || (atual === primeiroDeRegra && atual !== "identidade"));
 
   return (
-    <div ref={topoRef} className="mt-6 scroll-mt-4">
+    <div ref={topoRef} className="scroll-mt-4">
       {temaEscolhido && <TemaPagina tema={temaDoSistema(e.sistemaId)} />}
+      {cabecalho?.antes}
+      {cabecalho && !compacto && (
+        <header className="mb-6">
+          <h1 className="titulo text-3xl text-pergaminho sm:text-4xl">{cabecalho.titulo}</h1>
+          {cabecalho.subtitulo && <p className="mt-2 max-w-2xl text-sm text-muted">{cabecalho.subtitulo}</p>}
+        </header>
+      )}
       {sistemaFixo && sistema && !sistema.pronto ? null : prontos.length === 0 ? (
         <p className="cartao p-4 text-sm text-muted">Nenhum sistema pronto ainda. O mestre está afinando as regras.</p>
       ) : (
@@ -362,13 +541,39 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
           noValidate
           className="[&_:focus-visible]:outline-2 [&_:focus-visible]:outline-offset-2 [&_:focus-visible]:outline-ambar"
         >
+          {oferta && (
+            <div role="status" className="cartao mb-4 flex flex-wrap items-center justify-between gap-3 border-ambar/50 bg-ambar/[0.07] px-4 py-3">
+              <p className="min-w-0 flex-1 basis-64 text-sm">
+                <span className="font-semibold text-pergaminho">
+                  Continuar o rascunho de {oferta.rascunho.e.nome.trim() || "alguém sem nome"} ({oferta.quando})?
+                </span>{" "}
+                <span className="text-muted">
+                  {oferta.sistema}
+                  {oferta.rascunho.e.campanha.trim() ? ` · ${oferta.rascunho.e.campanha.trim()}` : ""}. O mestre guardou a ficha embaixo do balcão.
+                </span>
+              </p>
+              <span className="flex shrink-0 gap-2">
+                <button type="button" className="btn-ambar" onClick={continuarRascunho}>
+                  Continuar
+                </button>
+                <button type="button" className="btn-borda" onClick={descartarRascunho}>
+                  Começar do zero
+                </button>
+              </span>
+            </div>
+          )}
+
           {/* progresso: cada passo já visitado é clicável */}
           <nav className="mb-4" aria-label="Passos da criação">
             <div className="flex items-baseline justify-between gap-3 text-xs text-muted">
-              <span>
-                Passo {indice + 1} de {passos.length} · <span className="font-semibold text-ambar">{nomePasso(atual)}</span>
+              <span className="flex min-w-0 items-baseline gap-2">
+                {cabecalho && compacto && <h1 className="titulo min-w-0 truncate text-lg leading-tight text-pergaminho sm:text-xl">{cabecalho.titulo}</h1>}
+                <span className="shrink-0">
+                  {cabecalho && compacto ? "· " : ""}Passo {indice + 1} de {passos.length} · <span className="font-semibold text-ambar">{nomePasso(atual)}</span>
+                </span>
               </span>
-              {sistema && atual !== "sistema" && <span className="truncate">{sistema.nomeCurto}</span>}
+              {/* no celular, com o título na linha, o nome do sistema sai (já está na prévia) */}
+              {sistema && atual !== "sistema" && <span className={`shrink-0 truncate ${cabecalho && compacto ? "hidden sm:inline" : ""}`}>{sistema.nomeCurto}</span>}
             </div>
             <ol className="flex gap-1">
               {passos.map((p, i) => {
@@ -403,6 +608,30 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
             </ol>
           </nav>
 
+          {mostrarPronto && sistema && (
+            <div className="cartao mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <p className="min-w-0 flex-1 basis-64 text-sm">
+                <span className="font-semibold text-pergaminho">Sem paciência para ficha?</span>{" "}
+                <span className="text-muted">O dado escolhe tudo em {sistema.nomeCurto} (dentro das regras, prometo) e você só revisa o nome e a história.</span>
+              </p>
+              <button type="button" className="btn-ambar shrink-0" onClick={prontoJa}>
+                ⚡ Personagem pronto
+              </button>
+            </div>
+          )}
+
+          {veioPronto && atual === "identidade" && (
+            <p role="status" className="mb-4 rounded-lg border border-musgo/50 bg-musgo/10 px-3 py-2 text-sm">
+              ⚡ Tudo sorteado. Revise o nome e a história; a barra de passos leva a qualquer escolha para trocar o que o dado errou.
+            </p>
+          )}
+
+          {tropeco && (
+            <p role="status" className="mb-4 rounded-lg border border-ambar/40 bg-ambar/10 px-3 py-2 text-xs text-foreground/90">
+              {tropeco}
+            </p>
+          )}
+
           {/* no celular a prévia mora numa gaveta acima do passo */}
           {sistema && mostrarPrevia && (
             <details className="cartao group/previa mb-4 lg:hidden">
@@ -421,7 +650,8 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
             </details>
           )}
 
-          <div className={mostrarPrevia ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]" : ""}>
+          {/* pb: o fim do passo não fica escondido atrás da barra grudada no rodapé */}
+          <div className={`pb-10 ${mostrarPrevia ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]" : ""}`}>
             <div key={atual} className="surgir min-w-0">
               {atual === "sistema" && <PassoSistema sistemas={sistemas} e={e} escolher={escolherSistema} />}
               {sistema && atual === "ancestralidade" && <PassoAncestralidade sistema={sistema} e={e} atualizar={atualizar} />}
@@ -441,7 +671,15 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
                 />
               )}
               {sistema && atual === "pericias" && <PassoPericias sistema={sistema} e={e} atualizar={atualizar} />}
-              {sistema && atual === "opcoes" && <PassoOpcoes sistema={sistema} e={e} atualizar={atualizar} opcoes={opcoes} />}
+              {sistema && atual === "opcoes" && (
+                <PassoOpcoes
+                  sistema={sistema}
+                  e={e}
+                  atualizar={atualizar}
+                  opcoes={opcoes}
+                  sortearOpcoes={(modoSorteio) => atualizar({ extras: sortearExtras(sistema, e, modoSorteio) })}
+                />
+              )}
               {atual === "identidade" && <PassoIdentidade e={e} atualizar={atualizar} />}
               {atual === "campanha" && <PassoCampanha e={e} atualizar={atualizar} />}
               {sistema && atual === "resumo" && (
@@ -468,7 +706,7 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
           </div>
 
           {/* navegação grudada no rodapé (celular e desktop): listas longas não escondem o Avançar, nem o aviso de pendência */}
-          <div className="sticky bottom-0 z-20 -mx-4 mt-6 border-t border-border bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:mx-0 sm:rounded-t-xl sm:border-x sm:bg-surface/95">
+          <div className="sticky bottom-0 z-20 -mx-4 border-t border-border bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:mx-0 sm:rounded-t-xl sm:border-x sm:bg-surface/95">
             {(aviso || (ultimo && estado.erro)) && (
               <p role="alert" className="mb-3 flex items-start gap-2 rounded-md border border-sangue/60 bg-sangue/15 px-3 py-2 text-sm">
                 <span className="text-sangue" aria-hidden>
@@ -528,6 +766,15 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
               <input type="hidden" name="modo_mesa" value={e.modoMesa} />
               <input type="hidden" name="pin" value={e.pin} />
               {e.adicionarMais && <input type="hidden" name="adicionar_mais" value="1" />}
+              <input type="hidden" name="dificuldade" value={e.dificuldade} />
+              <input type="hidden" name="narracao" value={e.narracao} />
+              {e.foco.map((f) => (
+                <input key={f} type="hidden" name="foco" value={f} />
+              ))}
+              <input type="hidden" name="focoLivre" value={e.focoLivre.trim()} />
+              <input type="hidden" name="instrucoes" value={e.instrucoes.trim()} />
+              <input type="hidden" name="dados" value={e.dados} />
+              {e.sugestoes && <input type="hidden" name="sugestoes" value="on" />}
             </>
           )}
         </form>

@@ -29,7 +29,14 @@ export type PreviaFicha = { ok: true; ficha: Ficha; blocos: BlocoFicha[] } | { o
  * Recebe o mesmo FormData do envio. Valores que o sistema rola na criação (PV, ouro...) podem mudar no envio de verdade.
  */
 export async function previaFicha(form: FormData): Promise<PreviaFicha> {
-  const r = fichaDoFormulario(form);
+  let r: ReturnType<typeof fichaDoFormulario>;
+  // a prévia nunca pode estourar: um erro aqui derrubava a página inteira no error boundary
+  try {
+    r = fichaDoFormulario(form);
+  } catch (e) {
+    console.warn("[taverna] fichaDoFormulario falhou na prévia:", e);
+    return { ok: false, erro: "O mestre não conseguiu rabiscar a prévia desta ficha. Dá para tentar criar assim mesmo." };
+  }
   if (!r.ok) return r;
   let blocos: BlocoFicha[] = [];
   try {

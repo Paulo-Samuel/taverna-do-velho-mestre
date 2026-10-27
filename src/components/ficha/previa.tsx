@@ -2,9 +2,10 @@
 
 import type { ReactNode } from "react";
 import type { PreviaFicha } from "@/app/acoes-ficha";
+import { tomPadrao } from "@/lib/sistemas/sementes";
 import type { OpcaoCriacao, SistemaPublico } from "@/lib/sistemas/tipos";
 import { CartaoFicha } from "./painel-ficha";
-import { ajustesTexto, Titulo, type Escolhas } from "./passos";
+import { ajustesTexto, resumoEstilo, Titulo, type Escolhas } from "./passos";
 
 // Prévia ao lado do assistente (desktop) e o resumo final antes de enviar.
 // A prévia lateral é montada só com os dados públicos do sistema; o resumo pede ao servidor a ficha de verdade.
@@ -205,11 +206,17 @@ export function Resumo({ sistema, e, opcoes, modo, passos, irPara, previa, carre
                 {editar("campanha")}
               </Linha>
               <Linha rotulo="Cenário">{e.cenario.trim() ? <span className="line-clamp-3">{e.cenario}</span> : <span className="text-muted">o mestre inventa</span>}</Linha>
-              <Linha rotulo="Tom">{e.tom.trim() || "sombrio e debochado"}</Linha>
+              <Linha rotulo="Tom">{e.tom.trim() || tomPadrao(e.sistemaId)}</Linha>
               <Linha rotulo="Mesa">
                 {e.modoMesa === "rodada" ? "por rodada" : "livre"}
                 {e.pin ? " · com PIN na rede" : " · sem PIN"}
               </Linha>
+              <Linha rotulo="Mestre">{resumoEstilo(e)}</Linha>
+              {e.instrucoes.trim() && (
+                <Linha rotulo="Regras da casa">
+                  <span className="line-clamp-3">{e.instrucoes}</span>
+                </Linha>
+              )}
               <Linha rotulo="Início">{e.adicionarMais ? "depois de sentar mais gente" : "o mestre abre a cena na hora"}</Linha>
             </div>
           )}

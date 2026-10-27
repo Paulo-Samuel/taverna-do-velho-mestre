@@ -181,10 +181,19 @@ const OPCOES: OpcaoCriacao[] = [
     tipo: "escolha",
     opcoes: ESTILOS_PERICIAS.map(({ id, nome, descricao }) => ({ id, nome, descricao })),
   },
-  { id: "pericias_4", rotulo: "Perícia em ●●●● (só Especialista)", tipo: "multipla", max: 1, opcoes: OPCOES_PERICIAS },
-  { id: "pericias_3", rotulo: "Perícias em ●●●", ajuda: "Faz-tudo 1, Equilibrado 3, Especialista 3.", tipo: "multipla", max: 3, opcoes: OPCOES_PERICIAS },
-  { id: "pericias_2", rotulo: "Perícias em ●●", ajuda: "Faz-tudo 8, Equilibrado 5, Especialista 3.", tipo: "multipla", max: 8, opcoes: OPCOES_PERICIAS },
-  { id: "pericias_1", rotulo: "Perícias em ●", ajuda: "Faz-tudo 10, Equilibrado 7, Especialista 3.", tipo: "multipla", max: 10, opcoes: OPCOES_PERICIAS },
+  ...[4, 3, 2, 1].map((n): OpcaoCriacao => {
+    const rotulos: Record<number, [string, string | undefined]> = {
+      4: ["Perícia em ●●●● (só Especialista)", undefined],
+      3: ["Perícias em ●●●", "Faz-tudo 1, Equilibrado 3, Especialista 3."],
+      2: ["Perícias em ●●", "Faz-tudo 8, Equilibrado 5, Especialista 3."],
+      1: ["Perícias em ●", "Faz-tudo 10, Equilibrado 7, Especialista 3."],
+    };
+    // a cota de cada valor segue o estilo (em branco, Equilibrado); a mesma perícia não entra em dois valores
+    const cotas = Object.fromEntries(ESTILOS_PERICIAS.map((e) => [e.id, e.cotas[n] ?? 0]));
+    const outras = [4, 3, 2, 1].filter((x) => x !== n).map((x) => `pericias_${x}`);
+    const [rotulo, ajuda] = rotulos[n];
+    return { id: `pericias_${n}`, rotulo, ajuda, tipo: "multipla", max: Math.max(...Object.values(cotas)), opcoes: OPCOES_PERICIAS, maxPor: { opcao: "estilo", valores: cotas, padrao: "equilibrado" }, exclusivaCom: outras };
+  }),
   {
     id: "especialidades",
     rotulo: "Especialidades",
@@ -198,8 +207,8 @@ const OPCOES: OpcaoCriacao[] = [
       return { id, nome: x.nome, descricao: x.descricao };
     });
     return [
-      { id: `disciplinaPrincipal_${cla.id}`, rotulo: "Disciplina principal (●●)", tipo: "escolha", opcoes, classes: [cla.id] },
-      { id: `disciplinaSecundaria_${cla.id}`, rotulo: "Disciplina secundária (●)", ajuda: "Diferente da principal.", tipo: "escolha", opcoes, classes: [cla.id] },
+      { id: `disciplinaPrincipal_${cla.id}`, rotulo: "Disciplina principal (●●)", tipo: "escolha", opcoes, classes: [cla.id], exclusivaCom: [`disciplinaSecundaria_${cla.id}`] },
+      { id: `disciplinaSecundaria_${cla.id}`, rotulo: "Disciplina secundária (●)", ajuda: "Diferente da principal.", tipo: "escolha", opcoes, classes: [cla.id], exclusivaCom: [`disciplinaPrincipal_${cla.id}`] },
     ];
   }),
   {

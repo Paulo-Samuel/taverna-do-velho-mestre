@@ -30,24 +30,37 @@ export const NOMES_FEMININOS = [
 export const NOMES_NEUTROS = [
   "Corvo", "Cinza", "Sálvia", "Faísca", "Lume", "Breu", "Orvalho", "Junco", "Alecrim", "Pardal",
   "Bruma", "Ébano", "Rubi", "Ariel", "Sabre", "Gralha", "Urze", "Tojo", "Andorinha", "Musgo",
+  "Cardo", "Ferrugem", "Fagulha", "Avelã", "Lince", "Ônix", "Garoa", "Raposa", "Coruja", "Ventania",
+  "Âmbar", "Carvão", "Sereno", "Rapina", "Nogueira", "Trovão", "Azevinho", "Estopa", "Graveto", "Lírio",
 ];
 
-/** Três nomes sorteados (um masculino, um feminino e um terceiro de qualquer lista), sempre os mesmos para a mesma semente. */
-export function sortearNomes(semente: string, evitar: string[] = []): string[] {
+export type SexoNome = "homem" | "mulher" | "outro" | "";
+
+/**
+ * Seis nomes sorteados, sempre os mesmos para a mesma semente. Sem sexo escolhido: dois de cada lista. Depois do passo do
+ * rosto (quem volta para trocar o nome), puxa para o lado escolhido: quatro do sexo e dois neutros.
+ */
+export function sortearNomes(semente: string, sexo: SexoNome = "", evitar: string[] = []): string[] {
   const s = sorte(`nomes|${semente}`);
   const escolhidos: string[] = [];
-  const pegar = (lista: string[]) => {
-    for (let i = 0; i < 20; i++) {
-      const n = s.um(lista);
-      if (!escolhidos.includes(n) && !evitar.includes(n)) {
-        escolhidos.push(n);
-        return;
+  const pegar = (lista: string[], quantos: number) => {
+    for (let k = 0; k < quantos; k++) {
+      for (let i = 0; i < 20; i++) {
+        const n = s.um(lista);
+        if (!escolhidos.includes(n) && !evitar.includes(n)) {
+          escolhidos.push(n);
+          break;
+        }
       }
     }
   };
-  pegar(NOMES_MASCULINOS);
-  pegar(NOMES_FEMININOS);
-  pegar(s.chance(0.3) ? NOMES_NEUTROS : s.chance(0.5) ? NOMES_MASCULINOS : NOMES_FEMININOS);
+  if (sexo === "homem") pegar(NOMES_MASCULINOS, 4);
+  else if (sexo === "mulher") pegar(NOMES_FEMININOS, 4);
+  else {
+    pegar(NOMES_MASCULINOS, 2);
+    pegar(NOMES_FEMININOS, 2);
+  }
+  pegar(NOMES_NEUTROS, 2);
   // embaralha (Fisher-Yates: sort com comparador aleatório muda de motor para motor e quebra a hidratação)
   for (let i = escolhidos.length - 1; i > 0; i--) {
     const j = Math.floor(s.n() * (i + 1));

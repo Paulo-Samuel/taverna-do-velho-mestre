@@ -134,6 +134,10 @@ export type OpcaoCriacao = {
   classes?: string[];
   /** só aparece para estas ancestralidades (ids); vazio = todas (heranças, linhagens, +2 flexível...) */
   ancestralidades?: string[];
+  /** ids de outras opções que não podem repetir valor com esta (disciplina principal x secundária do Vampiro) */
+  exclusivaCom?: string[];
+  /** o máximo depende da resposta de outra opção (perícias por valor x estilo no Vampiro); 0 esconde a opção */
+  maxPor?: { opcao: string; valores: Record<string, number>; padrao?: string };
 };
 
 export type EntradaCriacao = {

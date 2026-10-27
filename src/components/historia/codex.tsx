@@ -6,6 +6,7 @@ import { Convite } from "@/components/presenca/convite";
 import type { AcoesMesa, Mesa } from "@/lib/cliente/use-mesa";
 import type { PersonagemVisivel } from "@/lib/mesa";
 import type { BlocoFicha, EntradaDiario } from "@/lib/sistemas/tipos";
+import { AvisoAjuste, BotoesMarcador, NotasJogador, useAjusteFicha, type AjusteFicha } from "@/components/ficha/ajuste-ficha";
 import { corDoNome } from "./cores";
 import { fonteGotica } from "./fonte-gotica";
 import { Retrato } from "./retrato";
@@ -38,7 +39,12 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
   );
 }
 
-function Barra({ rotulo, atual, max, cor }: { rotulo: string; atual: number; max: number; cor?: string }) {
+function Barra({ rotulo, atual: lido, max: maxLido, cor, ajuste }: { rotulo: string; atual: number; max: number; cor?: string; ajuste?: AjusteFicha }) {
+  // com ajuste (ficha do jogador), −/+ discretos ao lado do número; o valor já mostra os cliques a caminho do servidor
+  const alvo = ajuste?.alvoDaBarra(rotulo, cor) ?? null;
+  const v = alvo && ajuste ? ajuste.valor(alvo) : null;
+  const atual = v?.atual ?? lido;
+  const max = v?.max ?? maxLido;
   const pct = max > 0 ? Math.max(0, Math.min(100, (atual / max) * 100)) : 0;
   const fundo =
     cor === "magia"
@@ -53,13 +59,22 @@ function Barra({ rotulo, atual, max, cor }: { rotulo: string; atual: number; max
               : "bg-sangue"
           : "bg-ambar";
   return (
-    <div aria-label={`${rotulo}: ${atual} de ${max}`}>
-      <div className="mb-1 flex items-baseline justify-between text-xs">
+    <div className="group/marcador" aria-label={`${rotulo}: ${atual} de ${max}`}>
+      <div className="mb-1 flex items-center justify-between text-xs">
         <span className="text-muted">{rotulo}</span>
-        <span className="tabular-nums">
-          <span className="text-pergaminho">{atual}</span>
-          <span className="text-muted">/{max}</span>
-        </span>
+        {alvo && ajuste ? (
+          <BotoesMarcador ajuste={ajuste} alvo={alvo}>
+            <span className="tabular-nums">
+              <span className={v?.pendente ? "text-ambar" : "text-pergaminho"}>{atual}</span>
+              <span className="text-muted">/{max}</span>
+            </span>
+          </BotoesMarcador>
+        ) : (
+          <span className="tabular-nums">
+            <span className="text-pergaminho">{atual}</span>
+            <span className="text-muted">/{max}</span>
+          </span>
+        )}
       </div>
       <div className="h-2.5 overflow-hidden rounded-full bg-background/70 ring-1 ring-border">
         <div className={`h-full rounded-full transition-[width] duration-700 motion-reduce:transition-none ${fundo}`} style={{ width: `${pct}%` }} />
@@ -68,13 +83,13 @@ function Barra({ rotulo, atual, max, cor }: { rotulo: string; atual: number; max
   );
 }
 
-function Bloco({ b }: { b: BlocoFicha }) {
+function Bloco({ b, ajuste }: { b: BlocoFicha; ajuste?: AjusteFicha }) {
   switch (b.tipo) {
     case "barras":
       return (
         <div className="mt-4 space-y-3">
           {b.itens.map((x, i) => (
-            <Barra key={`${x.rotulo}-${i}`} {...x} />
+            <Barra key={`${x.rotulo}-${i}`} {...x} ajuste={ajuste} />
           ))}
         </div>
       );
@@ -137,6 +152,12 @@ function Bloco({ b }: { b: BlocoFicha }) {
 
 function AbaPersonagem({ mesa, p }: { mesa: Mesa; p: PersonagemVisivel | null }) {
   if (!p) return <p className="text-sm italic text-muted">Nenhum personagem nesta mesa ainda.</p>;
+  // key: trocar de personagem zera os cliques pendentes e reabre as anotações do outro
+  return <FichaCodex key={p.id} mesa={mesa} p={p} />;
+}
+
+function FichaCodex({ mesa, p }: { mesa: Mesa; p: PersonagemVisivel }) {
+  const ajuste = useAjusteFicha(p, mesa.sistema.rotulos, mesa.ocupado);
   const s = mesa.sistema;
   const origem = s.ancestralidades.find((a) => a.id === p.ficha.ancestralidade)?.nome ?? p.ficha.ancestralidade;
   const classe = s.classes.find((c) => c.id === p.ficha.classe)?.nome ?? p.ficha.classe;
@@ -152,9 +173,22 @@ function AbaPersonagem({ mesa, p }: { mesa: Mesa; p: PersonagemVisivel | null })
           {[origem, classe].filter(Boolean).join(" ")} · {s.rotulos.nivel} {p.ficha.nivel}
         </p>
       </div>
-      {!temBarras && <Barra rotulo={s.rotulos.pv} atual={p.ficha.pv} max={p.ficha.pvMax} cor="vida" />}
+      {/* ajuste manual (o mestre esqueceu o dano?): −/+ aparecem ao passar o mouse; no celular, este botão liga */}
+      <div className="mt-3 flex justify-end">
+        <button
+          type="button"
+          onClick={ajuste.alternarEdicao}
+          aria-pressed={ajuste.editando}
+          title="Corrigir à mão a vida e os recursos"
+          className={`rounded-full border px-2.5 py-0.5 text-xs transition ${ajuste.editando ? "border-ambar bg-ambar/15 text-ambar" : "border-border text-muted hover:border-ambar hover:text-ambar"}`}
+        >
+          {ajuste.editando ? "✓ pronto" : "✎ ajustar"}
+        </button>
+      </div>
+      <AvisoAjuste ajuste={ajuste} />
+      {!temBarras && <Barra rotulo={s.rotulos.pv} atual={p.ficha.pv} max={p.ficha.pvMax} cor="vida" ajuste={ajuste} />}
       {p.blocos.length ? (
-        p.blocos.map((b, i) => <Bloco key={i} b={b} />)
+        p.blocos.map((b, i) => <Bloco key={i} b={b} ajuste={ajuste} />)
       ) : (
         <Secao titulo="Bolsa">
           <p className="text-sm">
@@ -162,6 +196,9 @@ function AbaPersonagem({ mesa, p }: { mesa: Mesa; p: PersonagemVisivel | null })
           </p>
         </Secao>
       )}
+      <Secao titulo="Minhas anotações">
+        <NotasJogador campanhaId={p.campanhaId} personagemId={p.id} linhas={4} />
+      </Secao>
     </div>
   );
 }

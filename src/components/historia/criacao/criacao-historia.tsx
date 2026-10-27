@@ -1,20 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useMemo, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
+import { useActionState, useEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
 import type { EstadoHistoria } from "@/app/nova/historia-acoes";
 import { apelido as apelidoSalvo } from "@/lib/cliente/identidade";
+import { DIFICULDADES, dificuldadeDe, TAMANHOS, tamanhoDe, type Dificuldade, type TamanhoNarracao } from "@/lib/mestre/estilo";
 import type { SistemaPublico } from "@/lib/sistemas/tipos";
 import { Musica } from "../musica";
 import { gerarRetrato, type DadosRetrato } from "../retrato/dados";
 import { RetratoSVG } from "../retrato/desenho";
+import { COMECOS, comecoDe, TONS, tomDe } from "./comecos";
 import { CSS_CRIACAO } from "./estilos";
 import { gotica } from "./fonte";
 import { sortearGanchos } from "./ganchos";
 import { sortearNomes } from "./nomes";
 
-// Criação do modo história em quatro passos, no estilo "senta aí e conta quem você é": nome, aparência, ofício e passado.
-// Sem número nenhum na tela; as regras ficam escondidas no sistema "historia". O rascunho vive no localStorage.
+// Criação do modo história em cinco passos, no estilo "senta aí e conta quem você é": nome, aparência, ofício, passado e
+// onde a história começa (com tom e estilo do mestre). Sem número nenhum na tela; as regras ficam escondidas no sistema
+// "historia". O rascunho vive no localStorage e, ao voltar, a taverna pergunta se é para continuar.
 
 type Sexo = "homem" | "mulher" | "outro";
 
@@ -32,6 +35,11 @@ type Rascunho = {
   historia: string;
   rodadaGanchos: number;
   campanha: string;
+  /** ids de COMECOS e TONS (comecos.ts) */
+  comeco: string;
+  tom: string;
+  dificuldade: Dificuldade;
+  narracao: TamanhoNarracao;
 };
 
 const INICIAL: Rascunho = {
@@ -47,6 +55,10 @@ const INICIAL: Rascunho = {
   historia: "",
   rodadaGanchos: 0,
   campanha: "",
+  comeco: "taverna",
+  tom: "sombrio",
+  dificuldade: "justa",
+  narracao: "media",
 };
 
 const CHAVE = "taverna:rascunho-historia";
@@ -58,13 +70,15 @@ const SEXOS: { id: Sexo; nome: string }[] = [
   { id: "outro", nome: "Outro" },
 ];
 
-const PASSOS = ["Nome", "Rosto", "Ofício", "Passado"];
-const TITULOS = ["Como você se chama?", "Como você é?", "Qual é o seu ofício?", "De onde você vem?"];
+const PASSOS = ["Nome", "Rosto", "Ofício", "Passado", "Começo"];
+const ULTIMO = PASSOS.length - 1;
+const TITULOS = ["Como você se chama?", "Como você é?", "Qual é o seu ofício?", "De onde você vem?", "Onde tudo começa?"];
 const SUBTITULOS = [
   "O nome que os bardos vão errar nas canções.",
   "Escolha um rosto. Reclamações ao espelho.",
   "O que você faz quando a conversa acaba.",
   "Todo mundo chega na taverna fugindo de alguma coisa.",
+  "O Velho Mestre serve a primeira cena. Você escolhe a mesa.",
 ];
 
 // ---------- rascunho no localStorage ----------
@@ -96,7 +110,12 @@ function lerRascunho(bruto: string | null): Rascunho | null {
     const o = JSON.parse(bruto) as Partial<Rascunho>;
     if (!o || typeof o !== "object") return null;
     const r = { ...INICIAL, ...o };
-    r.passo = Math.max(0, Math.min(3, Number(r.passo) || 0));
+    r.passo = Math.max(0, Math.min(ULTIMO, Number(r.passo) || 0));
+    // rascunhos de antes do passo "Começo" (ou mexidos à mão) caem nos padrões
+    r.comeco = comecoDe(r.comeco).id;
+    r.tom = tomDe(r.tom).id;
+    r.dificuldade = dificuldadeDe(r.dificuldade);
+    r.narracao = tamanhoDe(r.narracao);
     return r;
   } catch {
     return null;
@@ -124,6 +143,77 @@ function Rotulo({ children }: { children: ReactNode }) {
   return <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">{children}</p>;
 }
 
+/** vale a pena perguntar se continua: já tem nome ou passou do primeiro passo */
+const temProgresso = (r: Rascunho) => r.nome.trim().length > 0 || r.passo > 0;
+
+function retratoDo(r: Rascunho): DadosRetrato | null {
+  return r.rosto && r.sexo && r.origem ? gerarRetrato(r.rosto, { sexo: r.sexo, origem: r.origem, classe: r.classe || undefined }) : null;
+}
+
+/** Mini cartão do herói: o resumo antes de começar e o "continuar de onde parou". */
+function CartaoHeroi({ retrato, nome, linhas }: { retrato: DadosRetrato | null; nome: string; linhas: ReactNode[] }) {
+  return (
+    <div className="flex items-center gap-4 rounded-xl border border-ambar/35 bg-background/50 p-3 shadow-[inset_0_0_30px_-18px_var(--ambar)] sm:p-4">
+      {retrato ? (
+        <RetratoSVG dados={retrato} tamanho={84} titulo={`Retrato de ${nome}`} className="shrink-0" />
+      ) : (
+        <span className="grid size-[84px] shrink-0 place-items-center rounded-xl border border-dashed border-border text-3xl text-muted" aria-hidden>
+          ?
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className={`${gotica.className} truncate text-[1.7rem] leading-tight text-pergaminho`}>{nome || "Sem nome (ainda)"}</p>
+        {linhas.filter(Boolean).map((l, i) => (
+          <p key={i} className={`text-sm leading-snug ${i === 0 ? "text-foreground/90" : "mt-0.5 text-muted"}`}>
+            {l}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Quem volta com um herói pela metade: continuar ou começar do zero (o rascunho só some com o segundo botão). */
+function Oferta({
+  rascunho,
+  origem,
+  classe,
+  onContinuar,
+  onZerar,
+}: {
+  rascunho: Rascunho;
+  origem?: string;
+  classe?: string;
+  onContinuar: () => void;
+  onZerar: () => void;
+}) {
+  const retrato = useMemo(() => retratoDo(rascunho), [rascunho]);
+  return (
+    <section className="cartao surgir relative overflow-clip border-ambar/25 bg-surface/85 px-5 py-7 backdrop-blur-sm sm:px-8">
+      <h1 className={`${gotica.className} text-center text-[2.1rem] leading-tight text-pergaminho sm:text-5xl`}>De volta, é?</h1>
+      <p className="mt-2 text-center text-sm italic text-muted">Alguém ficou esperando no balcão. E ainda não pagou a conta.</p>
+      <div className="mt-6">
+        <CartaoHeroi
+          retrato={retrato}
+          nome={rascunho.nome.trim()}
+          linhas={[
+            [origem, classe].filter(Boolean).join(" · ") || "Ainda sem origem nem ofício",
+            `Parou no passo ${rascunho.passo + 1} de ${PASSOS.length}: ${PASSOS[rascunho.passo]}`,
+          ]}
+        />
+      </div>
+      <div className="mt-6 flex flex-col gap-2 sm:flex-row-reverse">
+        <button type="button" onClick={onContinuar} className="btn-ambar min-h-12 flex-1 py-3 text-base" autoFocus>
+          Continuar de onde parei
+        </button>
+        <button type="button" onClick={onZerar} className="btn-borda min-h-12 px-4">
+          Começar do zero
+        </button>
+      </div>
+    </section>
+  );
+}
+
 // ---------- componente ----------
 
 export type PropsCriacao = {
@@ -138,9 +228,16 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
   const salvo = useSyncExternalStore(assinarNada, lerRascunhoBruto, () => null);
   const doSalvo = useMemo(() => lerRascunho(salvo), [salvo]);
   const [editado, setEditado] = useState<Rascunho | null>(null);
-  const r = editado ?? doSalvo ?? INICIAL;
+  // rascunho com algum progresso: antes de tudo, a taverna pergunta se é para continuar (nada é carregado sem pedir)
+  const pendente = !editado && doSalvo && temProgresso(doSalvo) ? doSalvo : null;
+  const r = editado ?? INICIAL;
   const [aviso, setAviso] = useState<string | null>(null);
   const [estado, enviar, enviando] = useActionState<EstadoHistoria, FormData>(acao, { erro: null });
+
+  // a ação falhou: o rascunho (tirado do armazenamento no envio) volta, para sobreviver a um recarregar da página
+  useEffect(() => {
+    if (estado.erro && editado) gravarRascunho(editado);
+  }, [estado, editado]);
 
   function mudar(p: Partial<Rascunho>) {
     const novo = { ...r, ...p };
@@ -149,7 +246,7 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
     setAviso(null);
   }
 
-  const sugestoes = useMemo(() => sortearNomes(`${semente}|${r.rodadaNomes}`), [semente, r.rodadaNomes]);
+  const sugestoes = useMemo(() => sortearNomes(`${semente}|${r.rodadaNomes}`, r.sexo), [semente, r.rodadaNomes, r.sexo]);
   const sementesRostos = useMemo(
     () => Array.from({ length: ROSTOS_POR_RODADA }, (_, i) => `${semente}:${r.rodadaRostos}:${i}`),
     [semente, r.rodadaRostos],
@@ -159,7 +256,7 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
     [sementesRostos, r.sexo, r.origem],
   );
   const retrato: DadosRetrato | null = useMemo(
-    () => (r.rosto && r.sexo && r.origem ? gerarRetrato(r.rosto, { sexo: r.sexo, origem: r.origem, classe: r.classe || undefined }) : null),
+    () => retratoDo({ ...INICIAL, rosto: r.rosto, sexo: r.sexo, origem: r.origem, classe: r.classe }),
     [r.rosto, r.sexo, r.origem, r.classe],
   );
   const ganchos = useMemo(
@@ -169,6 +266,10 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
 
   const classe = sistema.classes.find((c) => c.id === r.classe);
   const origem = sistema.ancestralidades.find((a) => a.id === r.origem);
+  const comeco = comecoDe(r.comeco);
+  const tom = tomDe(r.tom);
+  const dificuldade = DIFICULDADES.find((d) => d.id === r.dificuldade) ?? DIFICULDADES[1];
+  const narracao = TAMANHOS.find((t) => t.id === r.narracao) ?? TAMANHOS[1];
 
   function problemaDoPasso(passo: number): string | null {
     if (passo === 0 && r.nome.trim().length < 2) return "Todo herói tem nome. Até os que morrem na primeira cena.";
@@ -182,10 +283,10 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
   }
 
   /** o passo mais adiantado que dá para abrir: o primeiro com pendência (ou o último, se está tudo certo) */
-  const alcancavel = [0, 1, 2].find((p) => problemaDoPasso(p)) ?? 3;
+  const alcancavel = [0, 1, 2].find((p) => problemaDoPasso(p)) ?? ULTIMO;
 
   function irPara(passo: number) {
-    mudar({ passo: Math.max(0, Math.min(3, passo)) });
+    mudar({ passo: Math.max(0, Math.min(ULTIMO, passo)) });
     const reduzido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     window.scrollTo({ top: 0, behavior: reduzido ? "auto" : "smooth" });
   }
@@ -232,12 +333,21 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
       }
     }
     form.set("jogador", apelidoSalvo());
-    // o rascunho só sai do armazenamento quando a mesa vai ser criada; se der erro, ele volta na próxima edição
+    // o rascunho sai do armazenamento quando a mesa vai ser criada; se a ação devolver erro, o efeito lá em cima o regrava
     gravarRascunho(null);
     enviar(form);
   }
 
-  const progresso = ((r.passo + 1) / 4) * 100;
+  function continuarRascunho() {
+    if (pendente) setEditado(pendente);
+  }
+
+  function comecarDoZero() {
+    gravarRascunho(null);
+    setEditado({ ...INICIAL });
+  }
+
+  const progresso = ((r.passo + 1) / PASSOS.length) * 100;
   const historiaFinal = r.historia.trim() || ganchos[0] || "";
 
   return (
@@ -252,15 +362,19 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
 
       <main className="relative z-10 mx-auto w-full max-w-lg px-4 pb-16 pt-6 sm:pt-10">
         <div className="mb-4 flex items-center justify-between gap-3">
-          {/* os quatro passos: os já liberados dão para clicar (voltar ao nome sem apertar Voltar três vezes) */}
+          {/* os cinco passos: os já liberados dão para clicar (voltar ao nome sem apertar Voltar quatro vezes); no celular só o
+              atual mostra o nome, os outros ficam no número */}
+          {pendente ? (
+            <span className="flex-1" />
+          ) : (
           <nav aria-label="Passos da criação" className="min-w-0 flex-1">
             <p className="sr-only">
-              Passo {r.passo + 1} de 4: {PASSOS[r.passo]}
+              Passo {r.passo + 1} de {PASSOS.length}: {PASSOS[r.passo]}
             </p>
             <ol className="flex items-center gap-0.5 sm:gap-1">
               {PASSOS.map((nome, i) => {
                 const atual = i === r.passo;
-                const feito = !atual && i < 3 && !problemaDoPasso(i);
+                const feito = !atual && (i < 3 ? !problemaDoPasso(i) : i < r.passo);
                 return (
                   <li key={nome} className="min-w-0">
                     <button
@@ -280,16 +394,26 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
                       >
                         {feito ? "✓" : i + 1}
                       </span>
-                      <span className={`truncate ${atual ? "font-semibold" : ""}`}>{nome}</span>
+                      <span className={`truncate ${atual ? "font-semibold" : "sr-only sm:not-sr-only"}`}>{nome}</span>
                     </button>
                   </li>
                 );
               })}
             </ol>
           </nav>
+          )}
           <Musica musica={{ humor: "taverna", energia: "baixa" }} />
         </div>
 
+        {pendente ? (
+          <Oferta
+            rascunho={pendente}
+            origem={sistema.ancestralidades.find((a) => a.id === pendente.origem)?.nome}
+            classe={sistema.classes.find((c) => c.id === pendente.classe)?.nome}
+            onContinuar={continuarRascunho}
+            onZerar={comecarDoZero}
+          />
+        ) : (
         <form action={aoEnviar} className="cartao relative overflow-clip border-ambar/25 bg-surface/85 backdrop-blur-sm">
           <div className="h-1 w-full bg-surface-2">
             <div className="criacao-progresso h-full bg-ambar" style={{ width: `${progresso}%` }} />
@@ -322,7 +446,7 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     {sugestoes.map((n) => (
-                      <Opcao key={n} ativo={r.nome === n} onClick={() => mudar({ nome: n })} className="truncate">
+                      <Opcao key={n} ativo={r.nome === n} onClick={() => mudar({ nome: n })} className="truncate px-2">
                         {n}
                       </Opcao>
                     ))}
@@ -508,6 +632,95 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ---------- passo 5: onde começa, tom e estilo do mestre ---------- */}
+            {r.passo === 4 && (
+              <div className="mt-6 space-y-6">
+                <div>
+                  <Rotulo>A primeira cena</Rotulo>
+                  <div className="grid grid-cols-2 gap-2">
+                    {COMECOS.map((c) => {
+                      const ativo = r.comeco === c.id;
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => mudar({ comeco: c.id })}
+                          aria-pressed={ativo}
+                          className={`relative flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition ${
+                            ativo ? "border-ambar bg-ambar/12 shadow-[0_0_22px_-10px_var(--ambar)]" : "border-border bg-surface-2/60 hover:border-ambar/60"
+                          }`}
+                        >
+                          {ativo && (
+                            <span className="absolute right-2 top-2 grid size-5 place-items-center rounded-full bg-ambar text-[11px] font-bold text-[#1a120c]" aria-hidden>
+                              ✓
+                            </span>
+                          )}
+                          <span className="text-2xl leading-none" aria-hidden>
+                            {c.icone}
+                          </span>
+                          <span className={`pr-5 text-sm font-semibold leading-tight ${ativo ? "text-ambar" : "text-pergaminho"}`}>{c.nome}</span>
+                          {/* no celular a descrição só aparece embaixo, a do escolhido: oito cartões altos viravam rolagem */}
+                          <span className="hidden text-xs leading-snug text-muted sm:block">{c.texto}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-sm italic text-muted sm:hidden">{comeco.texto}</p>
+                </div>
+
+                <div>
+                  <Rotulo>O tom da história</Rotulo>
+                  <div className="flex flex-wrap gap-2">
+                    {TONS.map((t) => (
+                      <Opcao key={t.id} ativo={r.tom === t.id} onClick={() => mudar({ tom: t.id })} className="py-2">
+                        {t.nome}
+                      </Opcao>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-sm italic text-muted">{tom.texto}</p>
+                </div>
+
+                {/* estilo rápido do mestre: fechado por padrão; o resumo do que está valendo fica no próprio título */}
+                <details className="group rounded-xl border border-border bg-surface-2/40">
+                  <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm [&::-webkit-details-marker]:hidden">
+                    <span className="font-semibold text-pergaminho">Como você quer o mestre?</span>
+                    <span className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-muted">
+                      {dificuldade.nome} · <span className="hidden sm:inline">narração</span> {narracao.nome.toLowerCase()}
+                      <span className="text-ambar transition group-open:rotate-180" aria-hidden>
+                        ▾
+                      </span>
+                    </span>
+                  </summary>
+                  <div className="space-y-4 border-t border-border/60 px-3 pb-4 pt-3">
+                    <div>
+                      <Rotulo>Dificuldade</Rotulo>
+                      <div className="grid grid-cols-3 gap-2">
+                        {DIFICULDADES.map((d) => (
+                          <Opcao key={d.id} ativo={r.dificuldade === d.id} onClick={() => mudar({ dificuldade: d.id })} className="px-2">
+                            {d.nome}
+                          </Opcao>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-xs leading-snug text-muted">{dificuldade.texto}</p>
+                    </div>
+                    <div>
+                      <Rotulo>Tamanho da narração</Rotulo>
+                      <div className="grid grid-cols-3 gap-2">
+                        {TAMANHOS.map((t) => (
+                          <Opcao key={t.id} ativo={r.narracao === t.id} onClick={() => mudar({ narracao: t.id })} className="px-2">
+                            {t.nome}
+                          </Opcao>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-xs leading-snug text-muted">{narracao.texto}</p>
+                    </div>
+                    <p className="text-xs italic text-muted">Dá para mudar depois, nos ajustes da mesa.</p>
+                  </div>
+                </details>
+
                 <div>
                   <Rotulo>Nome da campanha (opcional)</Rotulo>
                   <input
@@ -516,6 +729,19 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
                     onChange={(e) => mudar({ campanha: e.target.value.slice(0, 80) })}
                     placeholder={`A saga de ${r.nome.trim() || "alguém"}`}
                     aria-label="Nome da campanha"
+                  />
+                </div>
+
+                <div>
+                  <Rotulo>Quem entra em cena</Rotulo>
+                  <CartaoHeroi
+                    retrato={retrato}
+                    nome={r.nome.trim()}
+                    linhas={[
+                      [origem?.nome, classe?.nome].filter(Boolean).join(" · "),
+                      `${comeco.icone} ${comeco.id === "livre" ? "Onde começa: o mestre escolhe" : `Começa ${comeco.onde}`}`,
+                      `${tom.nome} · mestre ${dificuldade.nome.toLowerCase()}`,
+                    ]}
                   />
                 </div>
               </div>
@@ -534,7 +760,7 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
                     ← Voltar
                   </button>
                 )}
-                {r.passo < 3 ? (
+                {r.passo < ULTIMO ? (
                   <button type="button" onClick={avancar} className="btn-ambar min-h-12 flex-1 py-3 text-base">
                     Continuar →
                   </button>
@@ -555,7 +781,12 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
           <input type="hidden" name="historia" value={historiaFinal} />
           <input type="hidden" name="campanha" value={r.campanha.trim()} />
           <input type="hidden" name="retrato" value={retrato ? JSON.stringify(retrato) : ""} />
+          <input type="hidden" name="comeco" value={r.comeco} />
+          <input type="hidden" name="tom" value={r.tom} />
+          <input type="hidden" name="dificuldade" value={r.dificuldade} />
+          <input type="hidden" name="narracao" value={r.narracao} />
         </form>
+        )}
 
         <p className="mt-6 text-center text-sm text-muted">
           Prefere escolher as regras?{" "}

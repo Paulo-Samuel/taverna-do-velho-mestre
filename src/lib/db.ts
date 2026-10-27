@@ -324,6 +324,26 @@ export function removerPersonagem(personagemId: number) {
   db.prepare("DELETE FROM personagens WHERE id = ?").run(personagemId);
 }
 
+// Anotações do jogador: coluna própria, fora da ficha (o mestre não lê, o turno não sobrescreve e o "desfazer" não apaga).
+let temColunaNotas = false;
+function garantirColunaNotas() {
+  if (temColunaNotas) return;
+  // conferida no primeiro uso (e não em abrir()): o servidor de desenvolvimento reaproveita a conexão aberta entre recargas
+  const colunas = (db.prepare("SELECT name FROM pragma_table_info('personagens')").all() as { name: string }[]).map((c) => c.name);
+  if (!colunas.includes("notas")) db.exec("ALTER TABLE personagens ADD COLUMN notas TEXT NOT NULL DEFAULT ''");
+  temColunaNotas = true;
+}
+
+export function lerNotas(personagemId: number): string {
+  garantirColunaNotas();
+  return (db.prepare("SELECT notas FROM personagens WHERE id = ?").get(personagemId) as { notas: string } | undefined)?.notas ?? "";
+}
+
+export function salvarNotas(personagemId: number, notas: string) {
+  garantirColunaNotas();
+  db.prepare("UPDATE personagens SET notas = ? WHERE id = ?").run(notas, personagemId);
+}
+
 // ---------- mensagens ----------
 
 export function adicionarMensagem(

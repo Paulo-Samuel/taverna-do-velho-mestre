@@ -2,11 +2,13 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { comecoDe, montarCenario, tomDe } from "@/components/historia/criacao/comecos";
 import { gerarRetrato, normalizarRetrato } from "@/components/historia/retrato/dados";
 import { criarCampanha, criarPersonagem, type ConfigCampanha } from "@/lib/db";
+import { dificuldadeDe, tamanhoDe } from "@/lib/mestre/estilo";
 import { historia } from "@/lib/sistemas/historia";
 
-// Criação rápida do modo história: campanha + personagem de uma vez, e a mesa já abre numa cena.
+// Criação rápida do modo história: campanha + personagem de uma vez, e a mesa já abre numa cena (a do começo escolhido).
 
 export type EstadoHistoria = { erro: string | null };
 
@@ -47,23 +49,36 @@ export async function criarHistoriaAcao(_anterior: EstadoHistoria, form: FormDat
   // o rosto escolhido veste o ofício escolhido; sem rosto, a taverna pinta um pelo nome
   retrato = retrato ? { ...retrato, sexo: sexo as "homem" | "mulher" | "outro", origem: ancestralidade } : gerarRetrato(nome, { sexo, origem: ancestralidade, classe });
 
-  const config: ConfigCampanha = { modoJogo: "historia", dados: "jogador", modo: "livre" };
-  const id = criarCampanha({
-    nome: texto(form, "campanha", 80) || `A saga de ${nome}`,
-    sistema: "historia",
-    cenario: passado,
-    tom: "aventura sombria e irreverente",
-    config,
-  });
+  // começo, tom e estilo do mestre: ids desconhecidos caem no padrão (taverna, sombrio, justa, média)
+  const config: ConfigCampanha = {
+    modoJogo: "historia",
+    dados: "jogador",
+    modo: "livre",
+    dificuldade: dificuldadeDe(texto(form, "dificuldade", 20)),
+    narracao: tamanhoDe(texto(form, "narracao", 20)),
+  };
+  let id: number;
+  try {
+    id = criarCampanha({
+      nome: texto(form, "campanha", 80) || `A saga de ${nome}`,
+      sistema: "historia",
+      cenario: montarCenario(comecoDe(texto(form, "comeco", 20)), passado),
+      tom: tomDe(texto(form, "tom", 20)).prompt,
+      config,
+    });
+    const ficha = historia.criarFicha({
+      nome,
+      ancestralidade,
+      classe,
+      historia: passado,
+      extras: { sexo, ...(aparencia ? { aparencia } : {}), retrato },
+    });
+    criarPersonagem(id, ficha, texto(form, "jogador", 40));
+  } catch (e) {
+    console.error("[taverna] falha ao criar a história:", e);
+    return { erro: "A taverna tropeçou ao abrir sua mesa (o banco não colaborou). Nada do que você escolheu se perdeu; tente de novo." };
+  }
 
-  const ficha = historia.criarFicha({
-    nome,
-    ancestralidade,
-    classe,
-    historia: passado,
-    extras: { sexo, ...(aparencia ? { aparencia } : {}), retrato },
-  });
-  criarPersonagem(id, ficha, texto(form, "jogador", 40));
   revalidatePath("/");
   redirect(`/mesa/${id}?inicio=1`);
 }

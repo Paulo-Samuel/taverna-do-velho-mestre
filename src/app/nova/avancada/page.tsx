@@ -9,17 +9,19 @@ export default async function NovaCampanha(props: PageProps<"/nova/avancada">) {
   // o catálogo (/sistemas) linka para /nova/avancada?sistema=<id>; o formulário confere se existe e está pronto
   const { sistema } = await props.searchParams;
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
-      <h1 className="titulo text-3xl text-pergaminho sm:text-4xl">Quem entra pela porta?</h1>
-      <p className="mt-2 max-w-2xl text-sm text-muted">
-        Escolha as regras, monte o personagem e diga onde a história começa. O mestre cuida do resto, inclusive de arruinar seus planos.
-      </p>
+    <main className="mx-auto max-w-6xl px-4 py-6 sm:py-8">
+      {/* o título mora no formulário: grande no primeiro passo, numa linha junto da barra de passos depois */}
       <FormularioPersonagem
         sistemas={sistemasPublicos()}
         sistemaInicial={typeof sistema === "string" ? sistema : undefined}
         acao={criarCampanhaAcao}
         modo="campanha"
+        destino="campanha"
         textoBotao="Entrar na taverna"
+        cabecalho={{
+          titulo: "Quem entra pela porta?",
+          subtitulo: "Escolha as regras, monte o personagem e diga onde a história começa. O mestre cuida do resto, inclusive de arruinar seus planos.",
+        }}
       />
     </main>
   );

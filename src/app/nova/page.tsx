@@ -7,7 +7,7 @@ import { criarHistoriaAcao } from "./historia-acoes";
 
 export const metadata: Metadata = { title: "Nova história · Taverna do Velho Mestre" };
 
-// Criação rápida do modo história: nome, aparência, ofício e passado. As regras ficam escondidas atrás do balcão.
+// Criação rápida do modo história: nome, aparência, ofício, passado e onde começa. As regras ficam escondidas atrás do balcão.
 export default async function NovaHistoria() {
   // a cada visita, outros nomes e outros rostos sugeridos (a semente vem do servidor para o HTML bater com o navegador)
   await connection();
