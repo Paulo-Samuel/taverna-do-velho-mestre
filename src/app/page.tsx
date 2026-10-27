@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { aventurasPublicas, type AventuraPublica } from "@/lib/aventuras";
 import { listarCampanhas, listarMensagens, listarPersonagens, type Campanha, type Personagem } from "@/lib/db";
 import { lerAjustesMestre, provedorAtual } from "@/lib/mestre";
 import { obterSistema } from "@/lib/sistemas";
@@ -179,6 +180,50 @@ function MestreCompacto({ nome, aviso }: { nome: string; aviso: string }) {
   );
 }
 
+/** Link que abre a criação já com a aventura marcada: modo história ou avançado no sistema dela. */
+function linkDaAventura(a: AventuraPublica): string {
+  const sistema = a.sistemas[0];
+  return sistema === "historia" ? `/nova?aventura=${a.id}` : `/nova/avancada?sistema=${sistema}&aventura=${a.id}`;
+}
+
+/** Faixa discreta de aventuras prontas: cartões pequenos com o tema de cada sistema, rolando de lado. */
+function AventurasProntas() {
+  // o modo história (o padrão) vem primeiro; o resto na ordem do catálogo de aventuras
+  const lista = aventurasPublicas().sort((a, b) => Number(b.sistemas[0] === "historia") - Number(a.sistemas[0] === "historia"));
+  return (
+    <section className="mt-12" aria-labelledby="aventuras-titulo">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+        <h2 id="aventuras-titulo" className="titulo text-2xl text-pergaminho">
+          Aventuras prontas
+        </h2>
+        <p className="text-sm text-muted">Sem ideia? Escolha uma: o mestre já chega com o roteiro decorado (e com os segredos que você não vai ler).</p>
+      </div>
+      <ul className="-mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-3" aria-label="Aventuras prontas">
+        {lista.map((a) => {
+          const sistema = a.sistemas[0];
+          const tema = dadosDoTema(sistema);
+          return (
+            <li key={a.id} className="w-60 shrink-0 snap-start sm:w-64">
+              <Link
+                href={linkDaAventura(a)}
+                data-tema={temaDoSistema(sistema)}
+                className="cartao cartao-tema group flex h-full flex-col p-4 transition hover:border-ambar"
+              >
+                <span className="etiqueta w-fit text-ambar-forte">
+                  <span aria-hidden>{sistema === "historia" ? "📜" : tema.ornamento}</span> {sistema === "historia" ? "Modo história" : obterSistema(sistema).nomeCurto}
+                </span>
+                <span className="titulo mt-2 text-lg leading-tight text-pergaminho group-hover:text-ambar">{a.titulo}</span>
+                <span className="mt-1 line-clamp-3 text-xs leading-snug text-muted">{a.chamada}</span>
+                <span className="mt-auto pt-2 text-[11px] text-muted/80">{a.duracao}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 export default function Inicio() {
   // listarCampanhas já vem da jogada mais recente para a mais antiga
   const campanhas: CampanhaListada[] = listarCampanhas().map((c) => ({ ...c, sistema: obterSistema(c.sistema), personagens: listarPersonagens(c.id) }));
@@ -319,6 +364,8 @@ export default function Inicio() {
           ))}
         </ul>
       )}
+
+      <AventurasProntas />
 
       <section className="mt-14">
         <h2 className="titulo mb-4 text-2xl text-pergaminho">Como jogar com amigos</h2>

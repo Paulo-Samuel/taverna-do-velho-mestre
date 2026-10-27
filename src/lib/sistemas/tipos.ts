@@ -49,6 +49,10 @@ export type PedidoTeste = {
   /** bônus ou penalidade circunstancial somado ao total */
   modificador?: number;
   motivo: string;
+  /** opções próprias do sistema (ex.: no Vampiro, custo de Despertar do poder, matar na caça, tipo de frenesi) */
+  opcoes?: Record<string, unknown>;
+  /** só uma prévia (cartão do pedido de teste): o sistema não rola custos nem sorteia nada além da parada */
+  previa?: boolean;
 };
 
 export type ResultadoTeste = {
@@ -75,6 +79,8 @@ export type ResultadoTeste = {
   /** detalhe extra: "vantagem: 14 e 7", "nível 2 na escada (Razoável)" */
   detalhes?: string;
   margem: number | null;
+  /** opcional: o que o teste mudou na ficha e o que narrar (vai junto com o resultado para o mestre) */
+  avisoMestre?: string;
 };
 
 export type AtributoDef = { id: string; nome: string; abrev: string; descricao?: string };

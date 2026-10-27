@@ -14,6 +14,9 @@ import { usePreferenciasLeitor } from "@/components/leitor/preferencias";
 import { dadosDoPedido, PedidoTeste } from "@/components/historia/pedido-teste";
 import { PainelCena } from "@/components/cena/painel-cena";
 import { Diario } from "@/components/diario/diario";
+import { FixarSelecao } from "@/components/fatos/fixar-selecao";
+import { PainelFatos } from "@/components/fatos/painel-fatos";
+import { useFatos, type ControleFatos } from "@/components/fatos/use-fatos";
 import { PainelFicha } from "@/components/ficha/painel-ficha";
 import { Avatar, quemAgiu } from "@/components/grupo/avatar";
 import { PainelGrupo } from "@/components/grupo/painel-grupo";
@@ -90,7 +93,7 @@ export function Narracao({ texto, escrevendo = false }: { texto: string; escreve
     .map((p) => p.replace(/^#{1,6}\s+/, "").trim())
     .filter(Boolean);
   return (
-    <div className={CLASSE_NARRACAO}>
+    <div className={CLASSE_NARRACAO} data-fixavel>
       {paragrafos.map((p, i) =>
         /^(-{3,}|\*{3,}|_{3,})$/.test(p) ? (
           <Fragment key={i}>{SEPARADOR_NARRACAO}</Fragment>
@@ -116,10 +119,20 @@ function Pontinhos() {
   );
 }
 
-type Aba = "ficha" | "grupo" | "cena" | "diario";
+type Aba = "ficha" | "grupo" | "cena" | "diario" | "fatos";
 
-/** Abas Ficha/Grupo/Cena/Diário: a barra de abas fica parada e o conteúdo rola sozinho. */
-function Lateral({ mesa, acoes, aoAtalhos }: { mesa: EstadoVivo; acoes: ReturnType<typeof useMesa>[1]; aoAtalhos: () => void }) {
+/** Abas Ficha/Grupo/Cena/Diário/📌 Fatos: a barra de abas fica parada e o conteúdo rola sozinho. */
+function Lateral({
+  mesa,
+  acoes,
+  fatos,
+  aoAtalhos,
+}: {
+  mesa: EstadoVivo;
+  acoes: ReturnType<typeof useMesa>[1];
+  fatos: ControleFatos;
+  aoAtalhos: () => void;
+}) {
   const [aba, setAba] = useState<Aba>("ficha");
   const ativo = mesa.personagens.find((p) => p.id === mesa.eu.personagemId) ?? mesa.personagens[0] ?? null;
   const abas: [Aba, string][] = [
@@ -127,6 +140,7 @@ function Lateral({ mesa, acoes, aoAtalhos }: { mesa: EstadoVivo; acoes: ReturnTy
     ["grupo", `Grupo (${mesa.personagens.length})`],
     ["cena", mesa.cena.combate?.ativo ? "⚔ Cena" : "Cena"],
     ["diario", "Diário"],
+    ["fatos", `📌 ${fatos.fatos.length}`],
   ];
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -138,7 +152,9 @@ function Lateral({ mesa, acoes, aoAtalhos }: { mesa: EstadoVivo; acoes: ReturnTy
             role="tab"
             aria-selected={aba === id}
             onClick={() => setAba(id)}
-            className={`-mb-px min-h-10 border-b-2 px-2.5 focus-visible:text-ambar focus-visible:outline-none ${aba === id ? "border-ambar text-ambar" : "border-transparent text-muted hover:text-foreground"}`}
+            aria-label={id === "fatos" ? `Fatos fixados (${fatos.fatos.length})` : undefined}
+            title={id === "fatos" ? "Fatos fixados: o que o mestre nunca pode esquecer" : undefined}
+            className={`-mb-px min-h-10 border-b-2 px-2 focus-visible:text-ambar focus-visible:outline-none ${aba === id ? "border-ambar text-ambar" : "border-transparent text-muted hover:text-foreground"}`}
           >
             {rotulo}
           </button>
@@ -149,7 +165,8 @@ function Lateral({ mesa, acoes, aoAtalhos }: { mesa: EstadoVivo; acoes: ReturnTy
           (ativo ? <PainelFicha personagem={ativo} sistema={mesa.sistema} /> : <p className="text-sm text-muted">Nenhum personagem nesta mesa.</p>)}
         {aba === "grupo" && <PainelGrupo mesa={mesa} acoes={acoes} />}
         {aba === "cena" && <PainelCena cena={mesa.cena} sistema={mesa.sistema} />}
-        {aba === "diario" && <Diario entradas={mesa.diario} />}
+        {aba === "diario" && <Diario entradas={mesa.diario} fatos={fatos} />}
+        {aba === "fatos" && <PainelFatos controle={fatos} />}
         <div className="mt-5 border-t border-border pt-3 text-xs text-muted">
           <p>
             {mesa.sistema.nomeCurto} · Mestre: {mesa.provedor}
@@ -202,6 +219,7 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
   const busca = useSearchParams();
   useState(() => assumirDaUrl(estadoInicial, busca.get("personagem")));
   const [mesa, acoes] = useMesa(estadoInicial);
+  const fatos = useFatos(mesa.campanha.id);
   const [acao, setAcao] = useState("");
   const [lateralAberta, setLateralAberta] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -761,18 +779,19 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
 
         <aside className="hidden w-[330px] shrink-0 py-4 lg:flex">
           <div className="cartao flex min-h-0 flex-1 flex-col overflow-hidden">
-            <Lateral mesa={mesa} acoes={acoes} aoAtalhos={() => setAjuda(true)} />
+            <Lateral mesa={mesa} acoes={acoes} fatos={fatos} aoAtalhos={() => setAjuda(true)} />
           </div>
         </aside>
       </div>
 
       {lateralAberta && (
         <div id="painel-celular" className="surgir fixed inset-x-0 bottom-0 top-14 z-40 flex flex-col bg-background lg:hidden" role="dialog" aria-label="Painel da mesa">
-          <Lateral mesa={mesa} acoes={acoes} aoAtalhos={() => setAjuda(true)} />
+          <Lateral mesa={mesa} acoes={acoes} fatos={fatos} aoAtalhos={() => setAjuda(true)} />
         </div>
       )}
 
       <AjudaAtalhos aberta={ajuda} aoFechar={() => setAjuda(false)} extras={cenas ? ATALHOS_LEITOR : []} />
+      <FixarSelecao controle={fatos} />
     </div>
   );
 }

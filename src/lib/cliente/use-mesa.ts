@@ -154,6 +154,8 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
       fonte.onerror = () => setConectado(false);
       fonte.onmessage = (msg) => {
         const ev = JSON.parse(msg.data);
+        // outros painéis (ex.: fatos fixados, src/components/fatos) ouvem a mesma conexão sem abrir outra
+        if (ev.e !== "ping" && ev.e !== "texto") window.dispatchEvent(new CustomEvent("taverna:evento", { detail: ev }));
         if (ev.e === "estado_inicial") {
           if (ev.estado) setBase(deEstado(ev.estado as EstadoMesa));
         } else if (ev.e === "recarregar") {

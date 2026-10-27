@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { aventurasDoSistema } from "@/lib/aventuras";
 import { sistemasPublicos } from "@/lib/sistemas";
 import { AvisoDarkPack, DECLARACAO_DARK_PACK } from "@/components/aviso-dark-pack";
 import { Catalogo, type ItemCatalogo } from "./catalogo";
@@ -49,6 +50,7 @@ export default function PaginaSistemas() {
     atributos: s.atributos.length,
     pericias: s.pericias.length,
     antecedentes: s.antecedentes?.length ?? 0,
+    aventuras: aventurasDoSistema(s.id).length,
     // só o que a lista mostra: manda menos coisa para o navegador
     classes: s.classes.map((c) => ({ id: c.id, nome: c.nome, descricao: c.descricao, detalhe: [c.papel, c.fonte].filter(Boolean).join(" · ") })),
     ancestralidades: s.ancestralidades.map((a) => ({

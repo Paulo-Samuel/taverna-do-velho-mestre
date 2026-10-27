@@ -352,7 +352,7 @@ function TestePbta({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: 
 }
 
 /** Dado de d10 em pipa: normal (6+ sucesso, 10 em âmbar) ou de Fome (vermelho; 10 com presas, 1 com caveira). */
-function D10({ valor, fome, despertar, i, novo }: { valor: number; fome: boolean; despertar?: boolean; i: number; novo: boolean }) {
+function D10({ valor, fome, despertar, i, novo, pequeno }: { valor: number; fome: boolean; despertar?: boolean; i: number; novo: boolean; pequeno?: boolean }) {
   const dez = valor === 10;
   const sucesso = valor >= 6;
   const bestial = fome && !despertar && valor === 1;
@@ -373,7 +373,7 @@ function D10({ valor, fome, despertar, i, novo }: { valor: number; fome: boolean
   const titulo = fome ? (despertar ? "Despertar" : dez ? "10 de Fome" : bestial ? "1 de Fome: a Besta" : "dado de Fome") : dez ? "10" : sucesso ? "sucesso" : "falha";
   return (
     <span
-      className={`relative inline-grid size-9 shrink-0 place-items-center ${cor} ${novo ? "cd-face" : ""}`}
+      className={`relative inline-grid ${pequeno ? "size-7" : "size-9"} shrink-0 place-items-center ${cor} ${novo ? "cd-face" : ""}`}
       style={{ ["--i" as string]: i }}
       title={`${titulo}: ${valor}`}
       aria-label={`${titulo}: ${valor}`}
@@ -421,9 +421,11 @@ function TesteVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: b
   const rotulo = String(r.rotuloGrau ?? "");
   const cor = ROTULO_VTM[rotulo] ?? COR_GRAU[r.grau] ?? "text-foreground";
   const sujo = rotulo === "Crítico Sujo";
-  const bestial = rotulo === "Falha Bestial" || r.grau === "falha_critica";
+  // frenesi que venceu a vontade pinta o cartão como a Falha Bestial
+  const bestial = rotulo === "Falha Bestial" || r.grau === "falha_critica" || (r.frenesi && !r.frenesi.resistiu);
   const destaque = sujo || bestial ? "border-sangue/70" : r.grau === "sucesso_critico" ? "border-ambar/60" : despertar && !r.sucesso ? "border-sangue/40" : "border-border";
   const tom = sujo || bestial ? "bg-sangue/10" : "bg-surface-2/80";
+  const despertares = listaDespertares(r.despertares).filter((x) => !x.previsto);
   const dezes = [...normais, ...fome].filter((v) => v === 10).length;
   const pares = Math.floor(dezes / 2);
   return (
@@ -462,7 +464,150 @@ function TesteVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: b
           <D10 key={`f${i}`} valor={v} fome despertar={despertar} i={normais.length + i} novo={novo} />
         ))}
       </div>
+      {despertares.map((x, k) => (
+        <FaixaDespertar key={k} x={x} novo={novo} />
+      ))}
+      <EfeitosVtm efeitos={r.efeitos} />
       {r.detalhes && <p className={`mt-1.5 text-xs ${sujo || bestial ? "text-sangue/90" : "text-muted"}`}>{r.detalhes}</p>}
+    </Moldura>
+  );
+}
+
+// ---------- sangue do Vampiro: Despertar, Surto, efeitos ----------
+
+/** Despertar como o servidor manda (sistemas/vtm5/sangue.ts). */
+export type DespertarVtm = {
+  rolagens: number[][];
+  vezes: number;
+  falhas: number;
+  rerrolagem?: boolean;
+  fomeAntes: number;
+  fomeDepois: number;
+  estourou?: boolean;
+  motivo?: string;
+  previsto?: boolean;
+};
+
+export function listaDespertares(v: unknown): DespertarVtm[] {
+  return (Array.isArray(v) ? v : []).filter((x): x is DespertarVtm => Boolean(x) && typeof x === "object" && Array.isArray((x as DespertarVtm).rolagens));
+}
+
+const COR_EFEITO: Record<string, string> = { sangue: "var(--sangue)", ambar: "var(--critico)", musgo: "var(--musgo)", muted: "var(--muted)" };
+
+/** Pílulas do que o teste custou ou mudou: "Fome 3 → 2", "Colérica intensa", "Surto +2", "Frenesi (fúria)". */
+export function EfeitosVtm({ efeitos, centro = false }: { efeitos: unknown; centro?: boolean }) {
+  const lista = (Array.isArray(efeitos) ? efeitos : []) as { texto?: string; tom?: string }[];
+  if (!lista.length) return null;
+  return (
+    <div className={`mt-1.5 flex flex-wrap gap-1 ${centro ? "justify-center" : ""}`}>
+      {lista.map((e, i) => {
+        const cor = COR_EFEITO[e.tom ?? ""] ?? COR_EFEITO.muted;
+        return (
+          <span
+            key={i}
+            className="inline-flex items-center rounded-full border px-2 py-px text-[11px] leading-5"
+            style={{ color: cor, borderColor: `color-mix(in srgb, ${cor} 45%, transparent)`, background: `color-mix(in srgb, ${cor} 10%, transparent)` }}
+          >
+            {e.texto}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Fome em 5 losangos; os pontos que o Despertar acabou de encher brilham. */
+export function MedidorFome({ antes, depois, novo = false }: { antes: number; depois: number; novo?: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1" role="img" aria-label={antes === depois ? `Fome ${depois} de 5` : `Fome ${antes} para ${depois} de 5`}>
+      {Array.from({ length: 5 }, (_, i) => {
+        const cheio = i < depois;
+        const recente = i >= antes && i < depois;
+        return (
+          <span
+            key={i}
+            className={`inline-block size-2.5 rotate-45 border ${cheio ? "border-sangue bg-sangue" : "border-sangue/45 bg-transparent"} ${recente && novo ? "cd-brilho" : ""}`}
+            style={recente ? { boxShadow: "0 0 7px var(--sangue)", color: "var(--sangue)" } : undefined}
+          />
+        );
+      })}
+    </span>
+  );
+}
+
+/** Faces de um Despertar: o dado que falhou e foi rerrolado aparece apagado e riscado antes do novo. */
+function FacesDespertar({ x, novo, pequeno = false }: { x: DespertarVtm; novo: boolean; pequeno?: boolean }) {
+  let i = 0;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {x.rolagens.map((r, k) => (
+        <span key={k} className="inline-flex items-center gap-0.5">
+          {r.length > 1 && (
+            <span className="inline-flex items-center opacity-40" title="rerrolado (Potência de Sangue)">
+              <D10 valor={r[0]} fome despertar i={i++} novo={novo} pequeno={pequeno} />
+              <span className="text-[10px] text-muted" aria-hidden>
+                ↻
+              </span>
+            </span>
+          )}
+          <D10 valor={r[r.length - 1]} fome despertar i={i++} novo={novo} pequeno={pequeno} />
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function textoFome(x: DespertarVtm) {
+  if (x.estourou) return x.fomeAntes < 5 ? `Fome ${x.fomeAntes} → 5 · a Besta cobra` : "Fome 5 · o sangue não responde";
+  return x.falhas ? `Fome ${x.fomeAntes} → ${x.fomeDepois}` : `Fome segue ${x.fomeAntes}`;
+}
+
+/** Faixa de Despertar dentro de um teste (o poder da disciplina, o Surto do nome do teste). */
+export function FaixaDespertar({ x, novo = false, centro = false }: { x: DespertarVtm; novo?: boolean; centro?: boolean }) {
+  const pesou = x.falhas > 0 || x.estourou;
+  return (
+    <div
+      className={`mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border px-2 py-1 text-xs ${pesou ? "border-sangue/45 bg-sangue/10" : "border-sangue/25 bg-sangue/5"} ${centro ? "justify-center" : ""}`}
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-sangue">🩸 Despertar{x.vezes > 1 ? ` ×${x.vezes}` : ""}</span>
+      {x.motivo && <span className="text-foreground/85">{x.motivo}</span>}
+      <FacesDespertar x={x} novo={novo} pequeno />
+      <MedidorFome antes={x.fomeAntes} depois={x.fomeDepois} novo={novo} />
+      <span className={pesou ? "text-sangue" : "text-muted"}>{textoFome(x)}</span>
+    </div>
+  );
+}
+
+/** Cartão pequeno do Despertar avulso e do Surto de Sangue: "Despertar · Celeridade ●● — 4 → Fome 2 → 3". */
+function SangueVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: boolean }) {
+  const x = listaDespertares(r.despertares)[0];
+  const surto = r.vtm === "surto";
+  const ganho = num(r.surtoGanho) ?? 0;
+  const pesou = x.falhas > 0 || x.estourou;
+  const cor = surto ? (ganho ? "text-[var(--critico)]" : "text-sangue") : pesou ? "text-sangue" : "text-musgo";
+  return (
+    <Moldura mensagem={mensagem} destaque={x.estourou ? "border-sangue/70" : pesou ? "border-sangue/45" : "border-sangue/20"} tom={x.estourou ? "bg-sangue/10" : "bg-surface-2/80"}>
+      <Cabecalho r={r} mensagem={mensagem} />
+      <div className="mt-1.5 flex items-center gap-3">
+        <span className={`grid size-11 shrink-0 place-items-center rounded-full border-2 border-sangue/60 text-lg ${novo ? "dado-rolando" : ""}`} aria-hidden>
+          {surto ? "⚡" : "🩸"}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm">
+            <span className="text-pergaminho">{surto ? "Surto de Sangue" : `Despertar${x.vezes > 1 ? ` ×${x.vezes}` : ""}`}</span>
+            {!surto && x.motivo && <span className="text-muted"> · {x.motivo}</span>}
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs">
+            <FacesDespertar x={x} novo={novo} />
+            <MedidorFome antes={x.fomeAntes} depois={x.fomeDepois} novo={novo} />
+            <span className={pesou ? "text-sangue" : "text-muted"}>{textoFome(x)}</span>
+          </div>
+        </div>
+        <span className={`titulo max-w-[7.5rem] shrink-0 text-balance text-right text-base leading-tight sm:text-lg ${cor} ${novo ? "cd-pop" : ""}`}>{r.rotuloGrau}</span>
+      </div>
+      {surto && ganho > 0 && <p className="mt-1.5 text-xs text-[var(--critico)]">+{ganho} dados no próximo teste (fora de disciplinas)</p>}
+      {x.rerrolagem && x.rolagens.some((f) => f.length > 1) && <p className="mt-1 text-[11px] text-muted">↻ rerrolou pela Potência de Sangue</p>}
+      {x.estourou && <p className="mt-1 text-xs text-sangue/90">Fome 5: o sangue não responde e a Besta exige — teste de frenesi de fome.</p>}
     </Moldura>
   );
 }
@@ -725,6 +870,7 @@ function Conteudo({ mensagem, novo }: { mensagem: Mensagem; novo: boolean }) {
   switch (r.tipo) {
     case "teste": {
       const s = sabor(r);
+      if (s === "vtm5" && (r.vtm === "despertar" || r.vtm === "surto") && listaDespertares(r.despertares).length) return <SangueVtm r={r} mensagem={mensagem} novo={novo} />;
       if (s === "vtm5") return <TesteVtm r={r} mensagem={mensagem} novo={novo} />;
       if (s === "d100") return <TesteD100 r={r} mensagem={mensagem} novo={novo} />;
       if (s === "fate") return <TesteFate r={r} mensagem={mensagem} novo={novo} />;

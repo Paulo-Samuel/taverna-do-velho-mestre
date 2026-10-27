@@ -116,3 +116,8 @@ export function montarCenario(comeco: Comeco, passado: string): string {
     : "Começo: livre; o mestre escolhe um lugar surpreendente que converse com o passado do herói.";
   return passado.trim() ? `${inicio}\n\nPassado do herói: ${passado.trim()}` : inicio;
 }
+
+/** Cenário de uma aventura pronta: o texto dela no lugar do começo, com o passado do herói junto. */
+export function cenarioDeAventura(cenario: string, passado: string): string {
+  return passado.trim() ? `${cenario}\n\nPassado do herói: ${passado.trim()}` : cenario;
+}

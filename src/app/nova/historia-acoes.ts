@@ -2,8 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { comecoDe, montarCenario, tomDe } from "@/components/historia/criacao/comecos";
+import { cenarioDeAventura, comecoDe, montarCenario, tomDe } from "@/components/historia/criacao/comecos";
 import { gerarRetrato, normalizarRetrato } from "@/components/historia/retrato/dados";
+import { aventuraDoSistema } from "@/lib/aventuras";
 import { criarCampanha, criarPersonagem, type ConfigCampanha } from "@/lib/db";
 import { dificuldadeDe, tamanhoDe } from "@/lib/mestre/estilo";
 import { historia } from "@/lib/sistemas/historia";
@@ -49,6 +50,9 @@ export async function criarHistoriaAcao(_anterior: EstadoHistoria, form: FormDat
   // o rosto escolhido veste o ofício escolhido; sem rosto, a taverna pinta um pelo nome
   retrato = retrato ? { ...retrato, sexo: sexo as "homem" | "mulher" | "outro", origem: ancestralidade } : gerarRetrato(nome, { sexo, origem: ancestralidade, classe });
 
+  // aventura pronta (opcional): troca o começo pelo cenário dela; o tom "aventura" usa o tom que veio com ela
+  const aventura = aventuraDoSistema(texto(form, "aventura", 60), "historia");
+  const tomEscolhido = texto(form, "tom", 20);
   // começo, tom e estilo do mestre: ids desconhecidos caem no padrão (taverna, sombrio, justa, média)
   const config: ConfigCampanha = {
     modoJogo: "historia",
@@ -56,14 +60,15 @@ export async function criarHistoriaAcao(_anterior: EstadoHistoria, form: FormDat
     modo: "livre",
     dificuldade: dificuldadeDe(texto(form, "dificuldade", 20)),
     narracao: tamanhoDe(texto(form, "narracao", 20)),
+    ...(aventura ? { aventura: aventura.id } : {}),
   };
   let id: number;
   try {
     id = criarCampanha({
-      nome: texto(form, "campanha", 80) || `A saga de ${nome}`,
+      nome: texto(form, "campanha", 80) || aventura?.titulo || `A saga de ${nome}`,
       sistema: "historia",
-      cenario: montarCenario(comecoDe(texto(form, "comeco", 20)), passado),
-      tom: tomDe(texto(form, "tom", 20)).prompt,
+      cenario: aventura ? cenarioDeAventura(aventura.cenario, passado) : montarCenario(comecoDe(texto(form, "comeco", 20)), passado),
+      tom: aventura && tomEscolhido === "aventura" ? aventura.tom : tomDe(tomEscolhido).prompt,
       config,
     });
     const ficha = historia.criarFicha({

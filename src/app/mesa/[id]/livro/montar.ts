@@ -1,5 +1,5 @@
 import "server-only";
-import { listarDiario, listarMensagens, listarPersonagens, obterCampanha, type Campanha, type Mensagem, type Personagem } from "@/lib/db";
+import { listarDiario, listarFatos, listarMensagens, listarPersonagens, obterCampanha, type Campanha, type Mensagem, type Personagem } from "@/lib/db";
 import { obterSistema } from "@/lib/sistemas";
 import type { EntradaDiario, Sistema } from "@/lib/sistemas/tipos";
 
@@ -41,6 +41,8 @@ export type Livro = {
   pessoas: EntradaDiario[];
   lugares: EntradaDiario[];
   outros: EntradaDiario[];
+  /** fatos fixados pelo jogador, na ordem da lista */
+  fatos: string[];
 };
 
 /** Nota de rolagem para a margem, ou null quando é coisa interna. */
@@ -128,6 +130,7 @@ export function montarLivro(campanhaId: number): Livro | null {
     pessoas: diario.filter((e) => e.tipo === "npc"),
     lugares: diario.filter((e) => e.tipo === "local"),
     outros: diario.filter((e) => e.tipo === "item" || e.tipo === "nota"),
+    fatos: listarFatos(c.id).map((f) => f.texto),
   };
 }
 
@@ -204,12 +207,13 @@ export function livroEmMarkdown(l: Livro): string {
     if (!itens.length) return;
     linhas.push(`### ${titulo}`, "", ...itens.map((e) => entradaMd(e, extra?.(e) ?? "")), "");
   };
-  if (l.missoes.length + l.pessoas.length + l.lugares.length + l.outros.length) {
+  if (l.missoes.length + l.pessoas.length + l.lugares.length + l.outros.length + l.fatos.length) {
     linhas.push("---", "", "## Diário", "");
     secao("Missões", l.missoes, (e) => ` *(${statusDaMissao(e.status)})*`);
     secao("Pessoas", l.pessoas, (e) => (e.status ? ` *(${e.status})*` : ""));
     secao("Lugares", l.lugares);
     secao("Notas e itens", l.outros);
+    if (l.fatos.length) linhas.push("### Fatos fixados", "", ...l.fatos.map((f) => `- 📌 ${f}`), "");
   }
   linhas.push("---", "", "*Escrito na Taverna do Velho Mestre. Os personagens são IA; as desculpas pelas rolagens ruins são de vocês.*", "");
   return linhas.join("\n");

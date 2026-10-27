@@ -53,6 +53,17 @@ export async function salvarAjustesAcao(campanhaId: number, _anterior: EstadoAju
   return { erro: null, ok: modo !== modoAntes ? `Salvo. A mesa agora joga no modo ${modo}.` : "Salvo." };
 }
 
+/** Desliga o roteiro da aventura pronta: a campanha segue livre (cenário, tom e diário ficam como estão). */
+export async function desligarAventuraAcao(campanhaId: number): Promise<EstadoAjustes> {
+  if (!(await daMaquinaNaPagina())) return { erro: NEGADO };
+  const campanha = obterCampanha(campanhaId);
+  if (!campanha) return { erro: "Essa mesa não existe mais." };
+  const config = { ...campanha.config };
+  delete config.aventura;
+  atualizarCampanha(campanha.id, { config });
+  return { erro: null, ok: "Roteiro desligado. Daqui para frente o mestre improvisa sem colinha." };
+}
+
 export async function excluirCampanhaAcao(campanhaId: number, _anterior: EstadoAjustes, form: FormData): Promise<EstadoAjustes> {
   if (!(await daMaquinaNaPagina())) return { erro: NEGADO };
   const campanha = obterCampanha(campanhaId);

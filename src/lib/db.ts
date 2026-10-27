@@ -149,6 +149,8 @@ export type ConfigCampanha = {
   foco?: string[];
   /** regras e preferências da mesa em texto livre (até ~500 caracteres) */
   instrucoes?: string;
+  /** id de uma aventura pronta (lib/aventuras): o roteiro secreto entra no prompt do mestre; ausente = campanha livre */
+  aventura?: string;
 };
 
 export type Campanha = {
@@ -453,6 +455,77 @@ export function salvarEntradaDiario(
 
 export function removerEntradaDiario(id: number) {
   db.prepare("DELETE FROM diario WHERE id = ?").run(id);
+}
+
+// ---------- fatos fixados ----------
+
+// O que o jogador marcou para o mestre nunca esquecer. São do jogador (como as anotações): o "desfazer" não mexe neles.
+
+export type Fato = { id: number; texto: string; autor: string; ordem: number; criadoEm: string };
+type LinhaFato = { id: number; texto: string; autor: string; ordem: number; criado_em: string };
+const paraFato = (l: LinhaFato): Fato => ({ id: l.id, texto: l.texto, autor: l.autor, ordem: l.ordem, criadoEm: l.criado_em });
+
+let temTabelaFatos = false;
+function garantirTabelaFatos() {
+  if (temTabelaFatos) return;
+  // criada no primeiro uso (como a coluna de notas): o servidor de desenvolvimento reaproveita a conexão aberta
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS fatos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campanha_id INTEGER NOT NULL REFERENCES campanhas(id) ON DELETE CASCADE,
+      texto TEXT NOT NULL,
+      autor TEXT NOT NULL DEFAULT '',
+      ordem INTEGER NOT NULL DEFAULT 0,
+      criado_em TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS fatos_campanha ON fatos(campanha_id, ordem, id);
+  `);
+  temTabelaFatos = true;
+}
+
+export function listarFatos(campanhaId: number): Fato[] {
+  garantirTabelaFatos();
+  return (db.prepare("SELECT * FROM fatos WHERE campanha_id = ? ORDER BY ordem, id").all(campanhaId) as LinhaFato[]).map(paraFato);
+}
+
+export function obterFato(id: number): (Fato & { campanhaId: number }) | null {
+  garantirTabelaFatos();
+  const l = db.prepare("SELECT * FROM fatos WHERE id = ?").get(id) as (LinhaFato & { campanha_id: number }) | undefined;
+  return l ? { ...paraFato(l), campanhaId: l.campanha_id } : null;
+}
+
+/** Fato novo vai para o fim da lista. */
+export function criarFato(campanhaId: number, texto: string, autor = ""): Fato {
+  garantirTabelaFatos();
+  const ordem = (db.prepare("SELECT COALESCE(MAX(ordem), -1) + 1 AS o FROM fatos WHERE campanha_id = ?").get(campanhaId) as { o: number }).o;
+  const r = db.prepare("INSERT INTO fatos (campanha_id, texto, autor, ordem) VALUES (?, ?, ?, ?)").run(campanhaId, texto, autor, ordem);
+  return paraFato(db.prepare("SELECT * FROM fatos WHERE id = ?").get(Number(r.lastInsertRowid)) as LinhaFato);
+}
+
+export function editarFato(id: number, texto: string) {
+  garantirTabelaFatos();
+  db.prepare("UPDATE fatos SET texto = ? WHERE id = ?").run(texto, id);
+}
+
+export function removerFato(id: number) {
+  garantirTabelaFatos();
+  db.prepare("DELETE FROM fatos WHERE id = ?").run(id);
+}
+
+/** Nova ordem pelos ids; ids de outra mesa são ignorados e os que faltarem vão para o fim, na ordem de antes. */
+export function reordenarFatos(campanhaId: number, ids: number[]) {
+  const atuais = listarFatos(campanhaId);
+  const vistos = new Set<number>();
+  const ordem = [...ids.filter((id) => atuais.some((f) => f.id === id) && !vistos.has(id) && vistos.add(id)), ...atuais.map((f) => f.id).filter((id) => !vistos.has(id))];
+  db.exec("BEGIN");
+  try {
+    const mudar = db.prepare("UPDATE fatos SET ordem = ? WHERE id = ? AND campanha_id = ?");
+    ordem.forEach((id, i) => mudar.run(i, id, campanhaId));
+    db.exec("COMMIT");
+  } catch (erro) {
+    db.exec("ROLLBACK");
+    throw erro;
+  }
 }
 
 // ---------- instantâneos (desfazer o último turno) ----------

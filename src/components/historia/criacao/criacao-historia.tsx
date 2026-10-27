@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
 import type { EstadoHistoria } from "@/app/nova/historia-acoes";
+import type { AventuraPublica } from "@/lib/aventuras/tipos";
 import { apelido as apelidoSalvo } from "@/lib/cliente/identidade";
 import { DIFICULDADES, dificuldadeDe, TAMANHOS, tamanhoDe, type Dificuldade, type TamanhoNarracao } from "@/lib/mestre/estilo";
 import type { SistemaPublico } from "@/lib/sistemas/tipos";
@@ -35,9 +36,11 @@ type Rascunho = {
   historia: string;
   rodadaGanchos: number;
   campanha: string;
-  /** ids de COMECOS e TONS (comecos.ts) */
+  /** ids de COMECOS e TONS (comecos.ts); tom "aventura" = o tom que veio com a aventura pronta */
   comeco: string;
   tom: string;
+  /** id da aventura pronta (vazio = vale o começo escolhido) */
+  aventura: string;
   dificuldade: Dificuldade;
   narracao: TamanhoNarracao;
 };
@@ -57,6 +60,7 @@ const INICIAL: Rascunho = {
   campanha: "",
   comeco: "taverna",
   tom: "sombrio",
+  aventura: "",
   dificuldade: "justa",
   narracao: "media",
 };
@@ -113,7 +117,8 @@ function lerRascunho(bruto: string | null): Rascunho | null {
     r.passo = Math.max(0, Math.min(ULTIMO, Number(r.passo) || 0));
     // rascunhos de antes do passo "Começo" (ou mexidos à mão) caem nos padrões
     r.comeco = comecoDe(r.comeco).id;
-    r.tom = tomDe(r.tom).id;
+    r.aventura = typeof r.aventura === "string" ? r.aventura : "";
+    r.tom = r.tom === "aventura" && r.aventura ? "aventura" : tomDe(r.tom).id;
     r.dificuldade = dificuldadeDe(r.dificuldade);
     r.narracao = tamanhoDe(r.narracao);
     return r;
@@ -222,15 +227,21 @@ export type PropsCriacao = {
   semente: string;
   /** server action que cria campanha + personagem (src/app/nova/historia-acoes.ts) */
   acao: (estado: EstadoHistoria, form: FormData) => Promise<EstadoHistoria>;
+  /** aventuras prontas do modo história (só a parte pública; o roteiro fica no servidor) */
+  aventuras?: AventuraPublica[];
+  /** aventura já marcada ao abrir (link do início: /nova?aventura=<id>) */
+  aventuraInicial?: string;
 };
 
-export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
+export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventuraInicial }: PropsCriacao) {
   const salvo = useSyncExternalStore(assinarNada, lerRascunhoBruto, () => null);
   const doSalvo = useMemo(() => lerRascunho(salvo), [salvo]);
   const [editado, setEditado] = useState<Rascunho | null>(null);
   // rascunho com algum progresso: antes de tudo, a taverna pergunta se é para continuar (nada é carregado sem pedir)
   const pendente = !editado && doSalvo && temProgresso(doSalvo) ? doSalvo : null;
-  const r = editado ?? INICIAL;
+  // veio do início com uma aventura: ela já começa marcada (e o tom é o dela)
+  const base = useMemo<Rascunho>(() => (aventuraInicial ? { ...INICIAL, aventura: aventuraInicial, tom: "aventura" } : INICIAL), [aventuraInicial]);
+  const r = editado ?? base;
   const [aviso, setAviso] = useState<string | null>(null);
   const [estado, enviar, enviando] = useActionState<EstadoHistoria, FormData>(acao, { erro: null });
 
@@ -268,6 +279,9 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
   const origem = sistema.ancestralidades.find((a) => a.id === r.origem);
   const comeco = comecoDe(r.comeco);
   const tom = tomDe(r.tom);
+  const aventura = aventuras.find((a) => a.id === r.aventura);
+  const tomDaAventura = Boolean(aventura) && r.tom === "aventura";
+  const tomNome = tomDaAventura ? "Tom da aventura" : tom.nome;
   const dificuldade = DIFICULDADES.find((d) => d.id === r.dificuldade) ?? DIFICULDADES[1];
   const narracao = TAMANHOS.find((t) => t.id === r.narracao) ?? TAMANHOS[1];
 
@@ -339,12 +353,24 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
   }
 
   function continuarRascunho() {
-    if (pendente) setEditado(pendente);
+    if (pendente) setEditado(aventuraInicial ? { ...pendente, aventura: aventuraInicial, tom: "aventura" } : pendente);
   }
 
   function comecarDoZero() {
     gravarRascunho(null);
-    setEditado({ ...INICIAL });
+    setEditado({ ...base });
+  }
+
+  /** Marcar (ou desmarcar, clicando de novo) uma aventura pronta: o nome da campanha acompanha se ninguém mexeu nele. */
+  function alternarAventura(a: AventuraPublica) {
+    const nomeLivre = !r.campanha.trim() || r.campanha === aventura?.titulo;
+    if (a.id === r.aventura) mudar({ aventura: "", tom: r.tom === "aventura" ? "sombrio" : r.tom, campanha: nomeLivre ? "" : r.campanha });
+    else mudar({ aventura: a.id, tom: "aventura", campanha: nomeLivre ? a.titulo : r.campanha });
+  }
+
+  function escolherComeco(id: string) {
+    if (!aventura) return mudar({ comeco: id });
+    mudar({ comeco: id, aventura: "", tom: r.tom === "aventura" ? "sombrio" : r.tom, campanha: r.campanha === aventura.titulo ? "" : r.campanha });
   }
 
   const progresso = ((r.passo + 1) / PASSOS.length) * 100;
@@ -424,6 +450,11 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
               {TITULOS[r.passo]}
             </h1>
             <p className="mt-2 text-center text-sm italic text-muted">{SUBTITULOS[r.passo]}</p>
+            {aventura && r.passo < ULTIMO && (
+              <p className="mx-auto mt-3 w-fit rounded-full border border-ambar/40 bg-ambar/10 px-3 py-1 text-center text-xs text-pergaminho">
+                📜 Aventura escolhida: {aventura.titulo}
+              </p>
+            )}
 
             {/* ---------- passo 1: nome ---------- */}
             {r.passo === 0 && (
@@ -642,12 +673,12 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
                   <Rotulo>A primeira cena</Rotulo>
                   <div className="grid grid-cols-2 gap-2">
                     {COMECOS.map((c) => {
-                      const ativo = r.comeco === c.id;
+                      const ativo = !aventura && r.comeco === c.id;
                       return (
                         <button
                           key={c.id}
                           type="button"
-                          onClick={() => mudar({ comeco: c.id })}
+                          onClick={() => escolherComeco(c.id)}
                           aria-pressed={ativo}
                           className={`relative flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition ${
                             ativo ? "border-ambar bg-ambar/12 shadow-[0_0_22px_-10px_var(--ambar)]" : "border-border bg-surface-2/60 hover:border-ambar/60"
@@ -668,19 +699,67 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
                       );
                     })}
                   </div>
-                  <p className="mt-2 text-sm italic text-muted sm:hidden">{comeco.texto}</p>
+                  {!aventura && <p className="mt-2 text-sm italic text-muted sm:hidden">{comeco.texto}</p>}
                 </div>
+
+                {/* aventuras prontas: o lugar do começo vira uma missão inteira, com roteiro secreto para o mestre */}
+                {aventuras.length > 0 && (
+                  <div>
+                    <Rotulo>Ou uma aventura pronta</Rotulo>
+                    <div className="grid gap-2">
+                      {aventuras.map((a) => {
+                        const ativo = r.aventura === a.id;
+                        return (
+                          <button
+                            key={a.id}
+                            type="button"
+                            onClick={() => alternarAventura(a)}
+                            aria-pressed={ativo}
+                            title={ativo ? "Clique de novo para desmarcar" : undefined}
+                            className={`relative flex items-start gap-3 rounded-xl border p-3 text-left transition ${
+                              ativo ? "border-ambar bg-ambar/12 shadow-[0_0_22px_-10px_var(--ambar)]" : "border-border bg-surface-2/60 hover:border-ambar/60"
+                            }`}
+                          >
+                            {ativo && (
+                              <span className="absolute right-2 top-2 grid size-5 place-items-center rounded-full bg-ambar text-[11px] font-bold text-[#1a120c]" aria-hidden>
+                                ✓
+                              </span>
+                            )}
+                            <span className="text-2xl leading-none" aria-hidden>
+                              📜
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className={`block pr-5 text-sm font-semibold leading-tight ${ativo ? "text-ambar" : "text-pergaminho"}`}>{a.titulo}</span>
+                              <span className="mt-1 block text-xs leading-snug text-muted">{a.chamada}</span>
+                              <span className="mt-1 block text-[11px] text-muted/80">
+                                {a.duracao} · {a.tom}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {aventura && (
+                      <p className="mt-2 text-sm italic text-muted">O Velho Mestre já leu o roteiro. Você, não. É assim que tem que ser.</p>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <Rotulo>O tom da história</Rotulo>
                   <div className="flex flex-wrap gap-2">
+                    {aventura && (
+                      <Opcao ativo={tomDaAventura} onClick={() => mudar({ tom: "aventura" })} className="py-2">
+                        Da aventura
+                      </Opcao>
+                    )}
                     {TONS.map((t) => (
-                      <Opcao key={t.id} ativo={r.tom === t.id} onClick={() => mudar({ tom: t.id })} className="py-2">
+                      <Opcao key={t.id} ativo={!tomDaAventura && r.tom === t.id} onClick={() => mudar({ tom: t.id })} className="py-2">
                         {t.nome}
                       </Opcao>
                     ))}
                   </div>
-                  <p className="mt-2 text-sm italic text-muted">{tom.texto}</p>
+                  <p className="mt-2 text-sm italic text-muted">{tomDaAventura && aventura ? `O tom que a aventura pede: ${aventura.tom}.` : tom.texto}</p>
                 </div>
 
                 {/* estilo rápido do mestre: fechado por padrão; o resumo do que está valendo fica no próprio título */}
@@ -739,8 +818,8 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
                     nome={r.nome.trim()}
                     linhas={[
                       [origem?.nome, classe?.nome].filter(Boolean).join(" · "),
-                      `${comeco.icone} ${comeco.id === "livre" ? "Onde começa: o mestre escolhe" : `Começa ${comeco.onde}`}`,
-                      `${tom.nome} · mestre ${dificuldade.nome.toLowerCase()}`,
+                      aventura ? `📜 ${aventura.titulo}` : `${comeco.icone} ${comeco.id === "livre" ? "Onde começa: o mestre escolhe" : `Começa ${comeco.onde}`}`,
+                      `${tomNome} · mestre ${dificuldade.nome.toLowerCase()}`,
                     ]}
                   />
                 </div>
@@ -782,7 +861,8 @@ export function CriacaoHistoria({ sistema, semente, acao }: PropsCriacao) {
           <input type="hidden" name="campanha" value={r.campanha.trim()} />
           <input type="hidden" name="retrato" value={retrato ? JSON.stringify(retrato) : ""} />
           <input type="hidden" name="comeco" value={r.comeco} />
-          <input type="hidden" name="tom" value={r.tom} />
+          <input type="hidden" name="tom" value={tomDaAventura ? "aventura" : tomDe(r.tom).id} />
+          {aventura && <input type="hidden" name="aventura" value={aventura.id} />}
           <input type="hidden" name="dificuldade" value={r.dificuldade} />
           <input type="hidden" name="narracao" value={r.narracao} />
         </form>

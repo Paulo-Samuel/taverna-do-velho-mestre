@@ -1,5 +1,5 @@
 import "server-only";
-import type { AcaoPendente, Mensagem } from "./db";
+import type { AcaoPendente, Fato, Mensagem } from "./db";
 import type { PersonagemVisivel } from "./visivel";
 import type { Cena, EntradaDiario } from "./sistemas/tipos";
 
@@ -27,6 +27,8 @@ export type EventoMesa =
   | { e: "personagem_removido"; id: number }
   | { e: "cena"; cena: Cena }
   | { e: "diario"; entradas: EntradaDiario[] }
+  /** fatos fixados pelo jogador (lista inteira, na ordem) */
+  | { e: "fatos"; fatos: Fato[] }
   | { e: "estado"; ocupado: boolean; fila: AcaoPendente[] }
   | { e: "presenca"; jogadores: Jogador[] }
   | { e: "limite"; janela: string; uso: number | null; renovaEm: number | null }

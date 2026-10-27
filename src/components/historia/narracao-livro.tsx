@@ -76,7 +76,7 @@ export function NarracaoLivro({ texto, destaque, escrevendo = false }: { texto: 
     [texto],
   );
   return (
-    <div className="narracao-livro text-[1.08rem] leading-[1.8] text-foreground/95 sm:text-[1.15rem]">
+    <div className="narracao-livro text-[1.08rem] leading-[1.8] text-foreground/95 sm:text-[1.15rem]" data-fixavel>
       {paragrafos.map((p, i) =>
         /^(-{3,}|\*{3,}|_{3,})$/.test(p) ? (
           <p key={i} className="my-5 text-center text-sm tracking-[0.6em] text-muted" aria-hidden>

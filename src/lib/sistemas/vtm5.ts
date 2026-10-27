@@ -26,10 +26,15 @@ import {
   ID,
   listaExtra,
   manchaDe,
+  NOME_FRENESI,
   potenciaDe,
+  ressonanciaDe,
   resolver,
+  surtoPendenteDe,
+  textoRessonancia,
   type ResultadoVtm,
 } from "./vtm5/testes";
+import { CONDICAO_FAMINTO, INTENSIDADES, RESSONANCIAS } from "./vtm5/sangue";
 import type { BlocoFicha, Ficha, OpcaoCriacao, Sistema } from "./tipos";
 
 // Vampiro: A Máscara 5ª edição — fã-conteúdo gratuito e não oficial sob a política Dark Pack da Paradox.
@@ -169,6 +174,18 @@ function textoPotencia(ficha: Ficha): string {
   return `Surto +${ef.surto} dados · cura ${ef.cura} superficial por Despertar · +${ef.bonusPoder} em disciplinas · rerrola Despertar de disciplinas nível ≤${ef.rerrolagem} · gravidade da perdição ${ef.gravidade} · ${ef.alimento}`;
 }
 
+/** Ressonância da última caça e Surto guardado, para o mestre (vazio quando não há nenhum). */
+function textoSangue(ficha: Ficha): string {
+  const res = ressonanciaDe(ficha);
+  const partes = [
+    res
+      ? `Ressonância ${textoRessonancia(res)} (${INTENSIDADES[res.intensidade].bonus ? `+1 dado em ${res.disciplinas.map(nomeDisciplina).join(" e ")}, automático` : "sem efeito nos dados"})`
+      : "",
+    surtoPendenteDe(ficha) ? `Surto de Sangue guardado: +${surtoPendenteDe(ficha)} dados no próximo teste (automático)` : "",
+  ].filter(Boolean);
+  return partes.join(" · ");
+}
+
 // ---------- opções de criação ----------
 
 const OPCOES_PERICIAS = PERICIAS.map((p) => ({ id: p.id, nome: p.nome, descricao: p.descricao }));
@@ -247,18 +264,20 @@ const OPCOES: OpcaoCriacao[] = [
 
 const REGRAS = `Sistema: Vampiro: A Máscara 5ª edição (V5). Fã-conteúdo; mecânica resumida.
 TESTES — parada de d10 = atributo + perícia (ou atributo + atributo, ou atributo + disciplina). Cada dado 6+ é um sucesso; cada PAR de 10 vale 4 sucessos no total. Ao testar (teste ou pedir_teste):
-- teste: "Destreza + Furtividade", "Raciocínio + Percepção", "Carisma + Persuasão"; só a perícia ("Furtividade") usa o atributo usual; só o atributo ("Força") faz par com outro atributo; disciplina ("Dominação", "Presença", "Auspícios", "Celeridade"...) soma o atributo usual (pode dizer "Carisma + Dominação"). Especialidade: escreva o foco entre parênteses ("Lábia (sedução)") e, se a ficha tiver, ganha +1 dado. "Surto de Sangue" no nome (ex.: "Força + Briga com Surto de Sangue") soma os dados do Surto e rola um Despertar.
-- Especiais: "Ataque" (escolhe Briga, Armas Brancas ou Armas de Fogo pela arma citada), "Iniciativa" (Raciocínio + Percepção, sem dificuldade), "Caça" (parada do tipo de predador), "Despertar" (ou "Despertar 2" para dois), "Frenesi" (Força de Vontade + Humanidade/3), "Remorso" (10 − Humanidade − Manchas), "Força de Vontade".
+- teste: "Destreza + Furtividade", "Raciocínio + Percepção", "Carisma + Persuasão"; só a perícia ("Furtividade") usa o atributo usual; só o atributo ("Força") faz par com outro atributo; disciplina ("Dominação", "Presença", "Auspícios", "Celeridade"...) soma o atributo usual (pode dizer "Carisma + Dominação"). Especialidade: escreva o foco entre parênteses ("Lábia (sedução)") e, se a ficha tiver, ganha +1 dado.
+- PODERES: disciplina na parada ("Destreza + Celeridade", "Raciocínio + Auspícios") já rola o Despertar do poder junto (1 por padrão) e sobe a Fome sozinho. Poder que não custa sangue (vários de nível 1, passivos): custo_despertar 0; poder que custa 2: custo_despertar 2; nivel_poder ajuda a Potência de Sangue a rerrolar. Poder usado SEM teste (Celeridade para correr, Fortitude para aguentar, Ofuscação para sumir): despertar_sangue com o motivo. Nunca faça a conta da Fome de cabeça.
+- Especiais: "Ataque" (escolhe Briga, Armas Brancas ou Armas de Fogo pela arma citada), "Iniciativa" (Raciocínio + Percepção, sem dificuldade), "Força de Vontade". Caça, Despertar, Surto, Frenesi e Remorso têm ferramentas próprias (abaixo).
 - alvo = DIFICULDADE em sucessos (padrão 1): 1 rotineiro, 2 direto, 3 moderado, 4 desafiador, 5 muito difícil, 6+ quase impossível. Em disputa, role o NPC com rolar_dados (Nd10, conte 6+) e use os sucessos dele como alvo.
 - Ajuda ou atrapalho = ±2 dados (modificador ±2 no teste ou no pedir_teste, mínimo 1 dado).
 - Resultado: total ≥ alvo = Sucesso; com par de 10 = Crítico. Se faltar pouco (0 < sucessos < alvo), ofereça VITÓRIA A UM CUSTO (dano, Mancha, barulho, testemunha, Fome).
 FOME (0 a 5, recurso "fome") — cada ponto troca um dado da parada por um dado de Fome (o servidor faz isso; não vale em Despertar, Frenesi, Remorso e Força de Vontade). Crítico Sujo (um 10 de Fome no par): consegue, e além da conta, do jeito da Besta — brutal, exagerado, à vista de alguém. Falha Bestial (falhou com um 1 de Fome): a Besta escapa — compulsão, violência ou vexame. Nunca narre os dois como sucesso ou falha comuns.
-- Despertar (cada falha = +1 de Fome, o servidor aplica) ao: usar disciplina que custa sangue (a maioria; níveis altos custam mais), Surto de Sangue (já vem no teste "com Surto de Sangue"), se fazer passar por vivo (corar, comer). descansar já faz o da cura e o do acordar. Disciplina usada = Despertar NO MESMO turno, sem esquecer: se vier junto com outro teste, role você (rolar_dados 1d10, motivo "Despertar") e, com 1–5, alterar_ficha recursos {"fome": 1}. Com Fome 5 não dá para Despertar: a falha vira teste de Frenesi (condição "faminto: teste de frenesi").
+- DESPERTAR (1d10: 6+ nada; 1–5 = +1 de Fome; o servidor rola e aplica): poder em teste já vem junto; fora de teste use despertar_sangue (poder sem teste, corar e comer para parecer vivo). descansar já faz o da cura e o do acordar. Com Fome 5 a falha não sobe: o sangue não responde, o poder não sai e a Besta cobra — chame testar_frenesi tipo "fome".
+- SURTO DE SANGUE: surto_de_sangue rola o Despertar e guarda +dados (Potência) para o PRÓXIMO teste do personagem, que os gasta sozinho (não vale em disciplina).
 - Fome 4–5: descreva a Besta arranhando por dentro; o personagem fica irritadiço, distraído pelo pulso alheio.
-ALIMENTAÇÃO — caça com teste "Caça" (dificuldade 2–4 conforme o lugar); sucesso: alterar_ficha recursos {"fome": -1 a -3} (uma bebida rápida tira 1; se fartar tira mais; só matando chega a 0). Sangue animal e de bolsa sacia menos (e nada com Potência alta). Falha: vítima foge, testemunha, briga, Mascarada em risco.
+ALIMENTAÇÃO — cacar (dificuldade 2–4 conforme o lugar; parada do Tipo de Predador). O servidor baixa a Fome (1, ou 2 com folga; sem matar não desce de 1), aplica a Potência, grava a Ressonância (sorteada ou a que você der: colérica, melancólica, fleumática, sanguínea, vazia) e marca compulsão na Falha Bestial. matar: true zera a Fome e dá Manchas (manchas: N; padrão 2). Ressonância intensa ou aguda = +1 dado nas disciplinas ligadas até a próxima caça (automático). Falha: complicação (vítima foge, testemunha, briga, Máscara em risco).
 MASCARADA — esconder a existência dos vampiros é a lei de todas as seitas. Quebras chamam caçadores, a Segunda Inquisição e a ira do Príncipe ou do Barão. Câmeras, celulares e testemunhas importam.
-HUMANIDADE (recurso "humanidade", 0–10) e MANCHAS (recurso "mancha") — atos monstruosos ou contra as Convicções dão Manchas: alterar_ficha recursos {"mancha": 1 a 3} (matar inocente vale 3+). Manchas que preenchem todas as caixas vazias deixam o personagem atormentado (−2 dados, o servidor aplica). Ao fechar a noite ou o capítulo (amanhecer, fim de arco), quem tem Manchas faz "Remorso": sucesso limpa as Manchas; falha tira 1 de Humanidade (o servidor aplica as duas coisas). Humanidade baixa = mais monstro: menos parece humano, dorme mais, frenesis mais fáceis. Humanidade 0 = perdido para a Besta (vira NPC). Pedras de Toque feridas ou mortas doem: Manchas e perda de Convicção.
-FRENESI E COMPULSÕES — provocação, fogo, sol ou fome extrema pedem "Frenesi" com alvo 2 (leve) a 4–5 (fogo na cara, Fome 5 diante de sangue). Falha = a Besta age (fúria, fome ou terror do Rötschreck) até o fim da cena. Gastar 1 de Força de Vontade (alterar_ficha recursos {"vontade": -1}) pode adiar um turno. Compulsão ativa: −2 dados em tudo que não a sirva.
+HUMANIDADE (recurso "humanidade", 0–10) e MANCHAS (recurso "mancha") — atos monstruosos ou contra as Convicções dão Manchas: alterar_ficha recursos {"mancha": 1 a 3} (matar inocente vale 3+). Manchas que preenchem todas as caixas vazias deixam o personagem atormentado (−2 dados, o servidor aplica). Ao fechar a noite ou o capítulo (amanhecer, fim de arco), quem tem Manchas faz teste_de_remorso (10 − Humanidade − Manchas dados, mínimo 1): sucesso limpa as Manchas; falha tira 1 de Humanidade e limpa as Manchas (o servidor aplica). Humanidade baixa = mais monstro: menos parece humano, dorme mais, frenesis mais fáceis. Humanidade 0 = perdido para a Besta (vira NPC). Pedras de Toque feridas ou mortas doem: Manchas e perda de Convicção.
+FRENESI E COMPULSÕES — provocação, fogo, sol ou fome extrema pedem testar_frenesi (Força de Vontade + Humanidade/3; tipo fúria, fome ou terror; dificuldade 2 leve a 4–5 fogo na cara ou Fome 5 diante de sangue). Falha = a Besta age até o fim da cena (o servidor marca "Frenesi (tipo)"; tire com alterar_ficha quando a cena acabar). Gastar 1 de Força de Vontade (alterar_ficha recursos {"vontade": -1}) pode adiar um turno. Compulsão ativa: −2 dados em tudo que não a sirva.
 FORÇA DE VONTADE (recurso "vontade") — gaste 1 para rerrolar até 3 dados normais (não os de Fome) depois de um teste: role com rolar_dados e conte de novo. Dano mental/social também tira Força de Vontade.
 DANO — Saúde = Vigor + 3 (pv). Superficial: vampiros dividem por 2 (arredonde para cima) ANTES de aplicar com alterar_ficha pv −N. Agravado (fogo, sol, garras e presas de lobisomem, alguns poderes) entra inteiro: aplique e anote a condição "agravado N" (só cura com noites de descanso e muito sangue). Armas somam dano à margem de sucesso do ataque (soco +0, faca +1, espada/taco +2, pistola +2, espingarda +4). Mortais e lacaios caem rápido (Saúde 3–7).
 TORPOR E MORTE FINAL — Saúde 0 por dano superficial = torpor (o servidor marca "inconsciente": trate como torpor, dias a anos). Saúde 0 por dano agravado, estaca no coração + fogo/sol, decapitação = Morte Final. Estaca no coração paralisa, não mata.
@@ -412,6 +431,7 @@ export const vtm5: Sistema = {
       `Perdição (gravidade ${ef.gravidade}): ${cla.perdicao}`,
       `Compulsão do clã: ${cla.compulsao ? `${cla.compulsao.nome} — ${cla.compulsao.efeito}` : "nenhuma (use as genéricas)"}`,
       `Caça: ${paradaCaca(ficha)}`,
+      textoSangue(ficha),
       textoExtra(ficha, "ambicao") || textoExtra(ficha, "desejo") ? `Ambição: ${textoExtra(ficha, "ambicao") || "—"} · Desejo: ${textoExtra(ficha, "desejo") || "—"}` : "",
       lista("conviccoes") ? `Convicções: ${lista("conviccoes")}` : "",
       lista("pedrasToque") ? `Pedras de Toque: ${lista("pedrasToque")}` : "",
@@ -451,6 +471,8 @@ export const vtm5: Sistema = {
           { rotulo: "Recursos", valor: pontos(ficha.dinheiro) || "0" },
           { rotulo: "Perdição", valor: `gravidade ${ef.gravidade}` },
           { rotulo: "Caça", valor: pred.parada ? `${nomeAtributo(pred.parada[0])} + ${nomePericia(pred.parada[1])}` : "especial" },
+          ...(ressonanciaDe(ficha) ? [{ rotulo: "Ressonância", valor: RESSONANCIAS[ressonanciaDe(ficha)!.tipo].nome, detalhe: INTENSIDADES[ressonanciaDe(ficha)!.intensidade].nome }] : []),
+          ...(surtoPendenteDe(ficha) ? [{ rotulo: "Surto guardado", valor: `+${surtoPendenteDe(ficha)}`, detalhe: "no próximo teste" }] : []),
         ],
       },
       ...CATEGORIAS_ATRIBUTOS.map(
@@ -537,7 +559,7 @@ export const vtm5: Sistema = {
       const partes: string[] = [];
       if (dado >= 6) partes.push(`Despertar ao acordar: ${dado}, a Fome fica em ${fomeAntes}`);
       else if (fomeAntes >= 5) {
-        if (!ficha.condicoes.some((c) => normalizar(c).startsWith("faminto"))) ficha.condicoes.push("faminto: teste de frenesi");
+        if (!ficha.condicoes.some((c) => normalizar(c).startsWith("faminto"))) ficha.condicoes.push(CONDICAO_FAMINTO);
         partes.push(`Despertar ao acordar: ${dado} com Fome já em 5 — acorda faminto e precisa resistir ao frenesi`);
       } else {
         r.fome.atual = fomeAntes + 1;
@@ -582,16 +604,53 @@ export const vtm5: Sistema = {
     sincronizar(ficha);
     const r = ficha.recursos;
     let mudou = false;
+    const condicao = (texto: string) => {
+      if (!ficha.condicoes.some((c) => normalizar(c) === normalizar(texto))) ficha.condicoes.push(texto);
+    };
 
+    // Despertares que falharam (avulso, Surto, poder da disciplina): +1 de Fome cada; passou de 5 = a Besta cobra
     const falhas = res.falhasDespertar ?? 0;
     if (falhas > 0) {
       const fome = r.fome.atual;
-      if (fome + falhas > 5 && !ficha.condicoes.some((c) => normalizar(c).startsWith("faminto"))) ficha.condicoes.push("faminto: teste de frenesi");
+      if (fome + falhas > 5 && !ficha.condicoes.some((c) => normalizar(c).startsWith("faminto"))) ficha.condicoes.push(CONDICAO_FAMINTO);
       r.fome.atual = Math.min(5, fome + falhas);
       mudou = true;
     }
 
-    if (res.vtm === "remorso") {
+    // Surto de Sangue: o avulso guarda dados para o próximo teste; a parada que os usou apaga
+    if (res.vtm === "surto") {
+      if (res.surtoGanho) ficha.extras.surtoPendente = res.surtoGanho;
+      else delete ficha.extras.surtoPendente;
+      mudou = true;
+    } else if (res.surtoConsumido) {
+      delete ficha.extras.surtoPendente;
+      mudou = true;
+    }
+
+    if (res.vtm === "frenesi" && res.frenesi) {
+      // teste de frenesi de fome resolve o aviso de faminto (a Fome continua onde está)
+      if (res.frenesi.tipo === "fome") ficha.condicoes = ficha.condicoes.filter((c) => !normalizar(c).startsWith("faminto"));
+      if (!res.frenesi.resistiu) condicao(`Frenesi (${NOME_FRENESI[res.frenesi.tipo]})`);
+      mudou = true;
+    }
+
+    if (res.vtm === "caca" && res.caca) {
+      const c = res.caca;
+      if (c.passou) {
+        r.fome.atual = Math.min(r.fome.atual, c.fomeDepois);
+        if (c.ressonancia) ficha.extras.ressonancia = { tipo: c.ressonancia.tipo, intensidade: c.ressonancia.intensidade, disciplinas: c.ressonancia.disciplinas };
+        if (r.fome.atual < 5) ficha.condicoes = ficha.condicoes.filter((x) => !normalizar(x).startsWith("faminto"));
+        if (c.manchas) {
+          r.mancha.atual = Math.min(r.mancha.max, r.mancha.atual + c.manchas);
+          ficha.extras.mancha = r.mancha.atual;
+        }
+      }
+      if (c.compulsao) condicao(`Compulsão (${c.compulsao})`);
+      sincronizar(ficha);
+      mudou = true;
+    }
+
+    if (res.vtm === "remorso" && manchaDe(original) > 0) {
       if (!res.sucesso) r.humanidade.atual = Math.max(0, r.humanidade.atual - 1);
       r.mancha.atual = 0;
       ficha.extras.mancha = 0;

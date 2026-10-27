@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, type ReactNode } from "react";
+import { BotaoFixar } from "@/components/fatos/fixar-selecao";
+import { PainelFatos } from "@/components/fatos/painel-fatos";
+import { resumoDaEntrada, type ControleFatos } from "@/components/fatos/use-fatos";
 import { Convite } from "@/components/presenca/convite";
 import { MenuLeitura } from "@/components/leitor/menu-leitura";
 import type { AcoesMesa, Mesa } from "@/lib/cliente/use-mesa";
@@ -13,9 +16,9 @@ import { fonteGotica } from "./fonte-gotica";
 import { Retrato } from "./retrato";
 
 // Códex do modo história: gaveta recolhível à esquerda (tela cheia no celular) com o personagem, as missões,
-// as pessoas e os lugares que o mestre anotou no diário e o grupo. Tecla C abre e fecha; Esc fecha.
+// as pessoas e os lugares que o mestre anotou no diário, o grupo e os fatos fixados (📌). Tecla C abre e fecha; Esc fecha.
 
-export type AbaCodex = "personagem" | "missoes" | "pessoas" | "lugares" | "grupo";
+export type AbaCodex = "personagem" | "missoes" | "pessoas" | "lugares" | "grupo" | "fatos";
 
 const ABAS: [AbaCodex, string][] = [
   ["personagem", "Ficha"],
@@ -239,7 +242,7 @@ function Vazio({ children }: { children: ReactNode }) {
   return <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm italic text-muted">{children}</p>;
 }
 
-function AbaMissoes({ entradas }: { entradas: EntradaDiario[] }) {
+function AbaMissoes({ entradas, fatos }: { entradas: EntradaDiario[]; fatos: ControleFatos }) {
   const missoes = entradas.filter((e) => e.tipo === "missao").sort((a, b) => Number(a.status !== "aberta") - Number(b.status !== "aberta"));
   if (!missoes.length) return <Vazio>Nenhuma missão ainda. O mundo está esperando.</Vazio>;
   return (
@@ -250,7 +253,10 @@ function AbaMissoes({ entradas }: { entradas: EntradaDiario[] }) {
           <li key={m.id} className={`rounded-lg border border-border/80 bg-surface-2/60 p-3 ${m.status !== "aberta" ? "opacity-75" : ""}`}>
             <div className="flex items-start justify-between gap-2">
               <p className="font-semibold text-pergaminho">{m.titulo}</p>
-              <Selo status={m.status} />
+              <div className="-mr-1.5 -mt-1 flex shrink-0 items-center gap-1">
+                <Selo status={m.status} />
+                <BotaoFixar texto={resumoDaEntrada(m)} controle={fatos} rotulo={m.titulo} />
+              </div>
             </div>
             {m.texto && <p className="mt-1 text-sm leading-relaxed text-foreground/85">{m.texto}</p>}
             <div className="mt-2 space-y-0.5">
@@ -279,7 +285,7 @@ function AbaMissoes({ entradas }: { entradas: EntradaDiario[] }) {
   );
 }
 
-function AbaPessoas({ entradas }: { entradas: EntradaDiario[] }) {
+function AbaPessoas({ entradas, fatos }: { entradas: EntradaDiario[]; fatos: ControleFatos }) {
   const npcs = entradas.filter((e) => e.tipo === "npc").sort((a, b) => Number(a.status === "morto") - Number(b.status === "morto"));
   if (!npcs.length) return <Vazio>Ninguém conhecido por enquanto.</Vazio>;
   return (
@@ -290,7 +296,10 @@ function AbaPessoas({ entradas }: { entradas: EntradaDiario[] }) {
             <p className="font-semibold" style={{ color: corDoNome(n.titulo) }}>
               {n.titulo}
             </p>
-            <Selo status={n.status} />
+            <div className="-mr-1.5 -mt-1 flex shrink-0 items-center gap-1">
+              <Selo status={n.status} />
+              <BotaoFixar texto={resumoDaEntrada(n)} controle={fatos} rotulo={n.titulo} />
+            </div>
           </div>
           {n.texto && <p className="mt-1 text-sm leading-relaxed text-foreground/85">{n.texto}</p>}
           <div className="mt-2 space-y-0.5">
@@ -307,7 +316,7 @@ function AbaPessoas({ entradas }: { entradas: EntradaDiario[] }) {
   );
 }
 
-function ListaSimples({ entradas, icone }: { entradas: EntradaDiario[]; icone: string }) {
+function ListaSimples({ entradas, icone, fatos }: { entradas: EntradaDiario[]; icone: string; fatos: ControleFatos }) {
   return (
     <ul className="space-y-2">
       {entradas.map((e) => (
@@ -319,7 +328,10 @@ function ListaSimples({ entradas, icone }: { entradas: EntradaDiario[]; icone: s
               </span>
               {e.titulo}
             </p>
-            <Selo status={e.status} />
+            <div className="-mr-1.5 -mt-1 flex shrink-0 items-center gap-1">
+              <Selo status={e.status} />
+              <BotaoFixar texto={resumoDaEntrada(e)} controle={fatos} rotulo={e.titulo} />
+            </div>
           </div>
           {e.texto && <p className="mt-1 text-sm leading-relaxed text-foreground/85">{e.texto}</p>}
         </li>
@@ -328,7 +340,7 @@ function ListaSimples({ entradas, icone }: { entradas: EntradaDiario[]; icone: s
   );
 }
 
-function AbaLugares({ mesa }: { mesa: Mesa }) {
+function AbaLugares({ mesa, fatos }: { mesa: Mesa; fatos: ControleFatos }) {
   const lugares = mesa.diario.filter((e) => e.tipo === "local");
   const itens = mesa.diario.filter((e) => e.tipo === "item");
   const notas = mesa.diario.filter((e) => e.tipo === "nota");
@@ -344,15 +356,15 @@ function AbaLugares({ mesa }: { mesa: Mesa }) {
           {mesa.cena.situacao && <p className="mt-1 text-sm text-foreground/85">{mesa.cena.situacao}</p>}
         </div>
       )}
-      {lugares.length ? <ListaSimples entradas={lugares} icone="⌂" /> : !mesa.cena.local && <Vazio>Nenhum lugar anotado ainda.</Vazio>}
+      {lugares.length ? <ListaSimples entradas={lugares} icone="⌂" fatos={fatos} /> : !mesa.cena.local && <Vazio>Nenhum lugar anotado ainda.</Vazio>}
       {itens.length > 0 && (
         <Secao titulo="Objetos notáveis">
-          <ListaSimples entradas={itens} icone="◆" />
+          <ListaSimples entradas={itens} icone="◆" fatos={fatos} />
         </Secao>
       )}
       {notas.length > 0 && (
         <Secao titulo="Anotações">
-          <ListaSimples entradas={notas} icone="❡" />
+          <ListaSimples entradas={notas} icone="❡" fatos={fatos} />
         </Secao>
       )}
     </div>
@@ -421,9 +433,12 @@ export function Codex({
   aoFechar,
   aba,
   aoMudarAba,
+  fatos,
 }: {
   mesa: Mesa;
   acoes: AcoesMesa;
+  /** fatos fixados (aba 📌 e o 📌 de cada entrada) */
+  fatos: ControleFatos;
   aberto: boolean;
   aoFechar: () => void;
   aba: AbaCodex;
@@ -462,6 +477,24 @@ export function Codex({
       >
         <div className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-3">
           <h2 className={`${fonteGotica.className} text-2xl text-ambar`}>Códex</h2>
+          {/* fatos fixados: fora da fila de abas (as cinco já ocupam a largura toda), mas com o ícone e a contagem sempre à vista */}
+          <button
+            id="codex-aba-fatos"
+            type="button"
+            onClick={() => aoMudarAba("fatos")}
+            aria-pressed={aba === "fatos"}
+            aria-controls="codex-painel"
+            aria-label={`Fatos fixados (${fatos.fatos.length})`}
+            title="Fatos fixados: o que o mestre nunca pode esquecer"
+            className={`ml-auto flex min-h-10 items-center gap-1.5 rounded-full border px-3 text-sm transition ${
+              aba === "fatos" ? "border-ambar bg-ambar/15 text-ambar" : "border-border text-muted hover:border-ambar/60 hover:text-ambar"
+            }`}
+          >
+            <span aria-hidden>📌</span> Fatos
+            {fatos.fatos.length > 0 && (
+              <span className="grid min-w-4 place-items-center rounded-full bg-ambar/20 px-1 text-[10px] leading-4 text-ambar">{fatos.fatos.length}</span>
+            )}
+          </button>
           <button
             type="button"
             onClick={aoFechar}
@@ -505,10 +538,11 @@ export function Codex({
           aria-labelledby={`codex-aba-${aba}`}
         >
           {aba === "personagem" && <AbaPersonagem mesa={mesa} p={ativo} />}
-          {aba === "missoes" && <AbaMissoes entradas={mesa.diario} />}
-          {aba === "pessoas" && <AbaPessoas entradas={mesa.diario} />}
-          {aba === "lugares" && <AbaLugares mesa={mesa} />}
+          {aba === "missoes" && <AbaMissoes entradas={mesa.diario} fatos={fatos} />}
+          {aba === "pessoas" && <AbaPessoas entradas={mesa.diario} fatos={fatos} />}
+          {aba === "lugares" && <AbaLugares mesa={mesa} fatos={fatos} />}
           {aba === "grupo" && <AbaGrupo mesa={mesa} acoes={acoes} />}
+          {aba === "fatos" && <PainelFatos controle={fatos} />}
         </div>
         <div className="flex items-center gap-3 border-t border-border/70 py-1 pl-4 pr-2 text-[11px] text-muted">
           <p className="min-w-0 flex-1 truncate" title={`${mesa.sistema.nomeCurto} · Mestre: ${mesa.provedor}`}>

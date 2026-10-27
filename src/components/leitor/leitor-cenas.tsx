@@ -90,7 +90,7 @@ export function AcaoTopo({
 function BlocoNarracao({ texto, chave, prosa, escrevendo }: { texto: string; chave: string; prosa: Prosa; escrevendo: boolean }) {
   const paragrafos = dividirParagrafos(texto);
   return (
-    <div className={`${prosa.classe} my-5 first:mt-0`}>
+    <div className={`${prosa.classe} my-5 first:mt-0`} data-fixavel>
       {paragrafos.map((p, i) =>
         SEPARADOR.test(p) ? (
           <div key={i} data-cartao aria-hidden className="leitor-grudar">

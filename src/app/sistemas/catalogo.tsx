@@ -22,6 +22,8 @@ export type ItemCatalogo = {
   atributos: number;
   pericias: number;
   antecedentes: number;
+  /** quantas aventuras prontas o sistema tem (lib/aventuras) */
+  aventuras: number;
   classes: Verbete[];
   ancestralidades: Verbete[];
 };
@@ -172,6 +174,7 @@ function CartaoSistema({ s, classes, ancestralidades, buscando }: { s: ItemCatal
         <Numero rotulo={s.rotuloAncestralidade} valor={s.ancestralidades.length} />
         <Numero rotulo="Perícias" valor={s.pericias} />
         <Numero rotulo="Nível máximo" valor={s.nivelMaximo} />
+        <Numero rotulo="Aventuras prontas" valor={s.aventuras} />
       </dl>
       {s.mecanica && (
         <p className="mt-3 text-sm text-muted">

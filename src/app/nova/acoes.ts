@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { EstadoFormulario } from "@/components/ficha/formulario-personagem";
+import { aventuraDoSistema } from "@/lib/aventuras";
 import { criarCampanha, criarPersonagem, type ConfigCampanha } from "@/lib/db";
 import { fichaDoFormulario } from "@/lib/formulario-ficha";
 import { dificuldadeDe, FOCOS, MAX_FOCO_LIVRE, MAX_INSTRUCOES, tamanhoDe } from "@/lib/mestre/estilo";
@@ -22,6 +23,8 @@ export async function criarCampanhaAcao(_anterior: EstadoFormulario, form: FormD
   const foco = [...new Set(form.getAll("foco").map(String))].filter((f) => FOCOS.some((x) => x.id === f));
   const focoLivre = String(form.get("focoLivre") ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_FOCO_LIVRE);
   if (focoLivre) foco.push(focoLivre);
+  // aventura pronta: só vale se existe e é deste sistema (o id veio do navegador)
+  const aventura = aventuraDoSistema(String(form.get("aventura") ?? ""), r.sistema.id);
   const config: ConfigCampanha = {
     modoJogo: "avancado",
     modo: form.get("modo_mesa") === "rodada" ? "rodada" : "livre",
@@ -32,12 +35,13 @@ export async function criarCampanhaAcao(_anterior: EstadoFormulario, form: FormD
     foco,
     instrucoes: String(form.get("instrucoes") ?? "").replace(/\r\n/g, "\n").trim().slice(0, MAX_INSTRUCOES),
     ...(pin ? { pin } : {}),
+    ...(aventura ? { aventura: aventura.id } : {}),
   };
   const id = criarCampanha({
-    nome: String(form.get("campanha") ?? "").trim().slice(0, 80) || `A saga de ${r.ficha.nome}`,
+    nome: String(form.get("campanha") ?? "").trim().slice(0, 80) || aventura?.titulo || `A saga de ${r.ficha.nome}`,
     sistema: r.sistema.id,
-    cenario: String(form.get("cenario") ?? "").trim().slice(0, 1500),
-    tom: String(form.get("tom") ?? "").trim().slice(0, 60) || tomPadrao(r.sistema.id),
+    cenario: String(form.get("cenario") ?? "").trim().slice(0, 1500) || aventura?.cenario || "",
+    tom: String(form.get("tom") ?? "").trim().slice(0, 60) || aventura?.tom || tomPadrao(r.sistema.id),
     config,
   });
   criarPersonagem(id, r.ficha, r.jogador);

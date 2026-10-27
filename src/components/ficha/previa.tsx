@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { PreviaFicha } from "@/app/acoes-ficha";
+import type { AventuraPublica } from "@/lib/aventuras/tipos";
 import { tomPadrao } from "@/lib/sistemas/sementes";
 import type { OpcaoCriacao, SistemaPublico } from "@/lib/sistemas/tipos";
 import { CartaoFicha } from "./painel-ficha";
@@ -132,9 +133,11 @@ type PropsResumo = {
   irPara: (passo: string) => void;
   previa: PreviaFicha | null;
   carregando: boolean;
+  /** aventura pronta marcada no passo da campanha */
+  aventura?: AventuraPublica;
 };
 
-export function Resumo({ sistema, e, opcoes, modo, passos, irPara, previa, carregando }: PropsResumo) {
+export function Resumo({ sistema, e, opcoes, modo, passos, irPara, previa, carregando, aventura }: PropsResumo) {
   const { anc, classe, antecedente, pericias } = nomes(sistema, e);
   const metodo = sistema.metodosAtributos.find((m) => m.id === e.metodo);
   const respostas = respostasOpcoes(opcoes, e);
@@ -205,6 +208,11 @@ export function Resumo({ sistema, e, opcoes, modo, passos, irPara, previa, carre
                 {e.campanha.trim() || `A saga de ${e.nome.trim() || "alguém"}`}
                 {editar("campanha")}
               </Linha>
+              {aventura && (
+                <Linha rotulo="Aventura">
+                  📜 {aventura.titulo} <span className="text-muted">· {aventura.duracao} · o mestre tem o roteiro</span>
+                </Linha>
+              )}
               <Linha rotulo="Cenário">{e.cenario.trim() ? <span className="line-clamp-3">{e.cenario}</span> : <span className="text-muted">o mestre inventa</span>}</Linha>
               <Linha rotulo="Tom">{e.tom.trim() || tomPadrao(e.sistemaId)}</Linha>
               <Linha rotulo="Mesa">

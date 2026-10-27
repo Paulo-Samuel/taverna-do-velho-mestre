@@ -280,6 +280,8 @@ export function rolarTestePendente(campanhaId: number, mensagemId: number, autor
     modo: dados.modo === "vantagem" || dados.modo === "desvantagem" ? dados.modo : undefined,
     modificador: typeof dados.modificador === "number" ? dados.modificador : undefined,
     motivo: String(dados.motivo ?? ""),
+    // opções próprias do sistema guardadas no pedido (Vampiro: custo de Despertar do poder)
+    ...(dados.opcoes && typeof dados.opcoes === "object" ? { opcoes: dados.opcoes as Record<string, unknown> } : {}),
   });
   const texto = `${p.ficha.nome} · ${r.teste} — ${r.motivo}: ${r.expressao} → ${r.total}${r.alvo !== null ? ` vs ${r.alvo}` : ""} · ${r.rotuloGrau}`;
   // desfazer o turno que esta rolagem vai disparar devolve o teste para "pendente"
@@ -299,7 +301,9 @@ export function rolarTestePendente(campanhaId: number, mensagemId: number, autor
   }
 
   const perigoso = dados.perigoso ? " (teste perigoso: a falha custa caro)" : "";
-  enviarAcao(campanhaId, { personagemId: p.id, autor, acao: `${RESULTADO_TESTE}${texto}${perigoso}` });
+  // o que o sistema já aplicou na ficha e o que narrar (Vampiro: Despertar do poder, Fome nova, Surto gasto)
+  const aviso = r.avisoMestre ? ` — ${r.avisoMestre}` : "";
+  enviarAcao(campanhaId, { personagemId: p.id, autor, acao: `${RESULTADO_TESTE}${texto}${perigoso}${aviso}` });
   return r;
 }
 

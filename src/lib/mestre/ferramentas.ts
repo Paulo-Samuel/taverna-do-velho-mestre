@@ -14,7 +14,7 @@ import {
 import { ajustarReputacao } from "../sistemas/historia";
 import { descreverRolagem, rolar } from "../dados";
 import { acharPorNome, normalizar, sinal } from "../sistemas/comum";
-import type { Cena, Combatente, Ficha, Sistema, TipoDiario } from "../sistemas/tipos";
+import type { Cena, Combatente, Ficha, PedidoTeste, ResultadoTeste, Sistema, TipoDiario } from "../sistemas/tipos";
 import { publicar } from "../tempo-real";
 import { visivel } from "../visivel";
 import type { DefFerramenta } from "./tipos";
@@ -95,11 +95,27 @@ export function definirFerramentas(ctx: ContextoFerramentas): DefFerramenta[] {
   // ações sugeridas valem nos dois modos (botões acima do campo de ação), a menos que a mesa desligue
   const mostraSugestoes = ctx.campanha.config.sugestoes !== false;
   const jogadorRola = jogadorRolaOsDados(ctx.campanha);
+  // Vampiro: custos de sangue do poder testado (o servidor rola o Despertar junto com a parada)
+  const vampiro = ctx.sistema.id === "vtm5";
+  const camposVampiro = vampiro
+    ? {
+        custo_despertar: {
+          type: "integer",
+          minimum: 0,
+          maximum: 3,
+          description: "Despertares do poder usado no teste. Com disciplina na parada o padrão é 1; 0 para poder que não custa sangue (vários de nível 1, passivos), 2–3 para os que custam mais.",
+        },
+        nivel_poder: { type: "integer", minimum: 1, maximum: 5, description: "Nível do poder (1–5): a Potência de Sangue rerrola o Despertar de poderes de nível baixo." },
+      }
+    : {};
+  const notaVampiro = vampiro
+    ? " Vampiro: disciplina na parada (\"Destreza + Celeridade\") já rola o Despertar do poder e sobe a Fome; o Surto guardado entra sozinho. Caça, Frenesi, Remorso, Surto e Despertar avulso têm ferramentas próprias."
+    : "";
 
   const lista: DefFerramenta[] = [
     {
       name: "teste",
-      description: `Rola um teste de um personagem do jogador pelas regras de ${ctx.sistema.nomeCurto}. Use sempre que o resultado de uma ação for incerto. O servidor aplica os modificadores da ficha e devolve o grau de sucesso. Testes comuns: ${ctx.sistema.testesSugeridos.join(", ")}. Não invente o resultado: espere o retorno e narre a partir dele.`,
+      description: `Rola um teste de um personagem do jogador pelas regras de ${ctx.sistema.nomeCurto}. Use sempre que o resultado de uma ação for incerto. O servidor aplica os modificadores da ficha e devolve o grau de sucesso. Testes comuns: ${ctx.sistema.testesSugeridos.join(", ")}. Não invente o resultado: espere o retorno e narre a partir dele.${notaVampiro}`,
       input_schema: {
         type: "object",
         properties: {
@@ -109,6 +125,7 @@ export function definirFerramentas(ctx: ContextoFerramentas): DefFerramenta[] {
           modo: { type: "string", enum: ["normal", "vantagem", "desvantagem"], description: "Vantagem/desvantagem (ou bônus/penalidade equivalente do sistema)." },
           modificador: { type: "integer", description: "Bônus ou penalidade circunstancial." },
           motivo: { type: "string", description: "Frase curta do que está sendo tentado, mostrada aos jogadores." },
+          ...camposVampiro,
         },
         required: ["teste", "motivo"],
         additionalProperties: false,
@@ -273,7 +290,7 @@ export function definirFerramentas(ctx: ContextoFerramentas): DefFerramenta[] {
     const i = lista.findIndex((f) => f.name === "teste");
     lista.splice(i, 1, {
       name: "pedir_teste",
-      description: `Pede um teste a um personagem do jogador (${ctx.sistema.nomeCurto}). Quem rola é o JOGADOR, clicando no dado na tela; depois você recebe o resultado como nova mensagem e continua. Use só quando o resultado for incerto e importar. Depois de pedir, TERMINE a narração do turno com suspense, sem contar o resultado e sem narrar o que vem depois. No máximo um teste por personagem por turno. Testes comuns: ${ctx.sistema.testesSugeridos.join(", ")}.`,
+      description: `Pede um teste a um personagem do jogador (${ctx.sistema.nomeCurto}). Quem rola é o JOGADOR, clicando no dado na tela; depois você recebe o resultado como nova mensagem e continua. Use só quando o resultado for incerto e importar. Depois de pedir, TERMINE a narração do turno com suspense, sem contar o resultado e sem narrar o que vem depois. No máximo um teste por personagem por turno. Testes comuns: ${ctx.sistema.testesSugeridos.join(", ")}.${notaVampiro}`,
       input_schema: {
         type: "object",
         properties: {
@@ -284,6 +301,7 @@ export function definirFerramentas(ctx: ContextoFerramentas): DefFerramenta[] {
           modificador: { type: "integer", description: "Bônus ou penalidade circunstancial (no Vampiro: dados a mais ou a menos na parada)." },
           perigoso: { type: "boolean", description: "true se a falha machuca ou custa caro (o jogador vê o aviso antes de rolar)." },
           motivo: { type: "string", description: "Frase curta do que está sendo tentado, mostrada no cartão do dado." },
+          ...camposVampiro,
         },
         required: ["teste", "alvo", "motivo"],
         additionalProperties: false,
@@ -347,6 +365,8 @@ export function definirFerramentas(ctx: ContextoFerramentas): DefFerramenta[] {
     });
   }
 
+  if (vampiro) lista.push(...ferramentasVampiro(campoPersonagem));
+
   if (marcos) {
     lista.push({
       name: "subir_nivel",
@@ -360,6 +380,84 @@ export function definirFerramentas(ctx: ContextoFerramentas): DefFerramenta[] {
     });
   }
   return lista;
+}
+
+/** Vampiro V5: regras de sangue que o servidor rola e aplica (o mestre só decide quando). */
+function ferramentasVampiro(campoPersonagem: Record<string, unknown>): DefFerramenta[] {
+  return [
+    {
+      name: "despertar_sangue",
+      description:
+        "Teste de Despertar (Rouse) do Vampiro: o servidor rola 1d10 por vez (6+ nada; 1–5 = +1 de Fome), aplica na ficha e devolve a Fome nova. Use SEMPRE que um poder for usado sem teste (Celeridade para correr, Fortitude para aguentar, Ofuscação para sumir...) ou ao corar/comer para parecer vivo. Poder dentro de teste/pedir_teste já rola o Despertar sozinho: não repita. Com Fome 5, a falha faz a Besta cobrar (o retorno diz o que fazer).",
+      input_schema: {
+        type: "object",
+        properties: {
+          personagem: campoPersonagem,
+          motivo: { type: "string", description: "O poder e o uso, ex.: \"Celeridade ●●: correr até a porta\" (cite a disciplina para a Potência de Sangue rerrolar)." },
+          vezes: { type: "integer", minimum: 1, maximum: 3, description: "Quantos Despertares o poder custa (padrão 1)." },
+          nivel_poder: { type: "integer", minimum: 1, maximum: 5, description: "Nível do poder; se omitir, o servidor lê do motivo (●●) ou usa os pontos da disciplina." },
+          rerrolar: { type: "boolean", description: "Força a rerrolagem (concessão do mestre). Sem isso, o servidor decide pela tabela de Potência de Sangue." },
+        },
+        required: ["motivo"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "surto_de_sangue",
+      description:
+        "Surto de Sangue: o servidor rola o Despertar e guarda os dados extras da Potência de Sangue para o PRÓXIMO teste daquele personagem (que os gasta sozinho e mostra \"Surto +N\"). Não vale em parada de disciplina, Frenesi, Remorso nem Força de Vontade.",
+      input_schema: {
+        type: "object",
+        properties: { personagem: campoPersonagem, motivo: { type: "string", description: "Para que o sangue é forçado, ex.: \"arrombar a porta de aço\"." } },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "testar_frenesi",
+      description:
+        "Teste para resistir ao frenesi: Força de Vontade atual + Humanidade/3 (o servidor rola; Brujah perde dados na fúria). Resistiu: a Besta recua. Falhou: frenesi até o fim da cena, condição \"Frenesi (tipo)\" marcada e o retorno diz o que narrar. Use em provocação séria (fúria), sangue à vista com Fome alta (fome), fogo ou sol (terror).",
+      input_schema: {
+        type: "object",
+        properties: {
+          personagem: campoPersonagem,
+          tipo: { type: "string", enum: ["furia", "fome", "terror"], description: "furia (provocação, humilhação), fome (sangue com Fome alta), terror (fogo, sol: Rötschreck)." },
+          dificuldade: { type: "integer", minimum: 1, maximum: 6, description: "2 leve, 3 sério, 4–5 extremo (fogo na cara, Fome 5 diante de sangue). Padrão: fúria 2, fome 3, terror 3." },
+          motivo: { type: "string", description: "O gatilho, mostrado no cartão." },
+        },
+        required: ["tipo"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "cacar",
+      description:
+        "Caça do Vampiro: rola a parada do Tipo de Predador (com dados de Fome), baixa a Fome no sucesso (1, ou 2 com folga; sem matar não desce de 1; Potência alta sacia menos), grava a Ressonância do sangue na ficha (+1 dado nas disciplinas ligadas quando intensa ou aguda) e marca compulsão na Falha Bestial. O retorno diz o que narrar e a complicação da falha.",
+      input_schema: {
+        type: "object",
+        properties: {
+          personagem: campoPersonagem,
+          dificuldade: { type: "integer", minimum: 1, maximum: 6, description: "2 lugar fácil (boate cheia), 3 comum (padrão), 4 difícil (bairro vigiado, alvo atento)." },
+          ressonancia: { type: "string", enum: ["colerica", "melancolica", "fleumatica", "sanguinea", "vazia"], description: "Humor da vítima, se a cena já definiu. Omita para sortear." },
+          intensidade: { type: "string", enum: ["fugaz", "intensa", "aguda", "discrasia"], description: "Força da Ressonância. Omita para sortear (aguda e discrasia são raras)." },
+          matar: { type: "boolean", description: "true se o vampiro drena a vítima até a morte: zera a Fome e dá Manchas." },
+          manchas: { type: "integer", minimum: 0, maximum: 5, description: "Manchas por matar (padrão 2; mais para inocentes ou contra as Convicções)." },
+          parada: { type: "string", description: "Troca a parada de caça, ex.: \"Destreza + Briga\" (tipos de predador sem teste ou caça fora do costume)." },
+          motivo: { type: "string", description: "Onde e como caça, mostrado no cartão." },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "teste_de_remorso",
+      description:
+        "Teste de Remorso no fim da noite ou do capítulo, para quem tem Manchas: o servidor rola 10 − Humanidade − Manchas dados (mínimo 1). Um sucesso limpa as Manchas e mantém a Humanidade; nenhum tira 1 de Humanidade e limpa as Manchas. Sem Manchas não rola nada.",
+      input_schema: {
+        type: "object",
+        properties: { personagem: campoPersonagem },
+        additionalProperties: false,
+      },
+    },
+  ];
 }
 
 const varios = z.union([z.literal("todos"), z.array(z.string()), z.string().transform((s) => [s])]);
@@ -383,6 +481,8 @@ const ENTRADAS = {
     modo: z.enum(["normal", "vantagem", "desvantagem"]).optional(),
     modificador: z.number().int().optional(),
     motivo: z.string().default(""),
+    custo_despertar: z.number().int().min(0).max(3).optional(),
+    nivel_poder: z.number().int().min(1).max(5).optional(),
   }),
   rolar_dados: z.object({ expressao: z.string().min(1), motivo: z.string().default(""), secreta: z.boolean().optional() }),
   alterar_ficha: z.object({
@@ -407,7 +507,34 @@ const ENTRADAS = {
     modificador: z.number().int().optional(),
     perigoso: z.boolean().optional(),
     motivo: z.string().default(""),
+    custo_despertar: z.number().int().min(0).max(3).optional(),
+    nivel_poder: z.number().int().min(1).max(5).optional(),
   }),
+  despertar_sangue: z.object({
+    personagem: z.string().optional(),
+    motivo: z.string().default(""),
+    vezes: z.number().int().min(1).max(3).optional(),
+    nivel_poder: z.number().int().min(1).max(5).optional(),
+    rerrolar: z.boolean().optional(),
+  }),
+  surto_de_sangue: z.object({ personagem: z.string().optional(), motivo: z.string().default("") }),
+  testar_frenesi: z.object({
+    personagem: z.string().optional(),
+    tipo: z.enum(["furia", "fome", "terror"]),
+    dificuldade: z.number().int().min(1).max(6).optional(),
+    motivo: z.string().default(""),
+  }),
+  cacar: z.object({
+    personagem: z.string().optional(),
+    dificuldade: z.number().int().min(1).max(6).optional(),
+    ressonancia: z.enum(["colerica", "melancolica", "fleumatica", "sanguinea", "vazia"]).optional(),
+    intensidade: z.enum(["fugaz", "intensa", "aguda", "discrasia"]).optional(),
+    matar: z.boolean().optional(),
+    manchas: z.number().int().min(0).max(5).optional(),
+    parada: z.string().max(80).optional(),
+    motivo: z.string().default(""),
+  }),
+  teste_de_remorso: z.object({ personagem: z.string().optional() }),
   narrar: z.object({ texto: z.string().min(1) }),
   sugerir_acoes: z.object({
     acoes: z.array(z.object({ texto: z.string().trim().min(1).max(200), pericia: z.string().max(40).optional() })).max(6),
@@ -910,27 +1037,79 @@ function normalizarStatus(tipo: TipoDiario, status: string | undefined): string 
   return NORMAL_STATUS[tipo]?.[chave] ?? (chave ? status.trim() : "");
 }
 
+/** Custo de Despertar e nível do poder vindos do teste/pedir_teste (só o Vampiro usa); undefined quando nada foi dito. */
+function opcoesDoPoder(e: { custo_despertar?: number; nivel_poder?: number }): Record<string, unknown> | undefined {
+  if (e.custo_despertar === undefined && e.nivel_poder === undefined) return undefined;
+  return { ...(e.custo_despertar !== undefined ? { custoDespertar: e.custo_despertar } : {}), ...(e.nivel_poder !== undefined ? { nivelPoder: e.nivel_poder } : {}) };
+}
+
+/** Teste rolado na hora pelo servidor: grava o cartão, aplica o gancho do sistema (Fome, Manchas, condições...) e devolve o resultado. */
+function testeNaHora(ctx: ContextoFerramentas, p: Personagem, pedido: PedidoTeste): ResultadoTeste {
+  const r = ctx.sistema.resolverTeste(p.ficha, pedido);
+  // d100 rola abaixo do valor: "43 ≤ 52" diz mais que "43 vs 52"
+  const comparacao = r.alvo === null ? "" : ctx.sistema.dadoPrincipal.includes("100") ? ` (alvo ${r.alvo})` : ` vs ${r.alvo}`;
+  const texto = `${p.ficha.nome} · ${r.teste} — ${r.motivo}: ${r.expressao} → ${r.total}${comparacao} · ${r.rotuloGrau}`;
+  registrarDado(ctx, texto, r, p.id);
+  // ganchos do sistema depois do teste (d100 marca a perícia usada; Vampiro sobe a Fome, grava Ressonância, marca frenesi...)
+  try {
+    const nova = ctx.sistema.aposTeste?.(p.ficha, r);
+    if (nova) {
+      p.ficha = nova;
+      persistirPersonagem(ctx, p);
+      if (ctx.sistema.id === "vtm5") sincronizarCombate(ctx);
+    }
+  } catch (erro) {
+    console.warn(`[taverna] aposTeste falhou (${ctx.sistema.id}):`, erro);
+  }
+  return r;
+}
+
+/** Resultado + como a ficha ficou (Fome, Humanidade, Manchas, Força de Vontade, condições), para o mestre não fazer conta. */
+function comFicha(p: Personagem, r: ResultadoTeste) {
+  const f = p.ficha;
+  const rec = Object.fromEntries(Object.entries(f.recursos).map(([id, x]) => [id, `${x.atual}/${x.max}`]));
+  return { ...r, fichaAgora: { personagem: f.nome, recursos: rec, condicoes: f.condicoes }, ...(r.avisoMestre ? { narrar: r.avisoMestre } : {}) };
+}
+
 /** Executa uma ferramenta pelo nome. Devolve o que volta para o modelo; lança Error com mensagem amigável em entrada inválida. */
 export async function executarFerramenta(ctx: ContextoFerramentas, nome: string, entradaBruta: unknown): Promise<unknown> {
   if (nome === "teste") {
     const e = ENTRADAS.teste.parse(entradaBruta);
     const p = acharPersonagem(ctx, e.personagem);
-    const r = ctx.sistema.resolverTeste(p.ficha, { teste: e.teste, alvo: e.alvo ?? null, modo: e.modo, modificador: e.modificador, motivo: e.motivo });
-    // d100 rola abaixo do valor: "43 ≤ 52" diz mais que "43 vs 52"
-    const comparacao = r.alvo === null ? "" : ctx.sistema.dadoPrincipal.includes("100") ? ` (alvo ${r.alvo})` : ` vs ${r.alvo}`;
-    const texto = `${p.ficha.nome} · ${r.teste} — ${r.motivo}: ${r.expressao} → ${r.total}${comparacao} · ${r.rotuloGrau}`;
-    registrarDado(ctx, texto, r, p.id);
-    // ganchos do sistema depois do teste (d100 marca a perícia usada para a fase de desenvolvimento)
-    try {
-      const nova = ctx.sistema.aposTeste?.(p.ficha, r);
-      if (nova) {
-        p.ficha = nova;
-        persistirPersonagem(ctx, p);
-      }
-    } catch (erro) {
-      console.warn(`[taverna] aposTeste falhou (${ctx.sistema.id}):`, erro);
-    }
-    return r;
+    const opcoes = opcoesDoPoder(e);
+    const r = testeNaHora(ctx, p, { teste: e.teste, alvo: e.alvo ?? null, modo: e.modo, modificador: e.modificador, motivo: e.motivo, ...(opcoes ? { opcoes } : {}) });
+    return ctx.sistema.id === "vtm5" ? comFicha(p, r) : r;
+  }
+
+  // Vampiro: regras de sangue (o servidor rola, aplica na ficha e diz ao mestre o que narrar)
+  if (nome === "despertar_sangue") {
+    const e = ENTRADAS.despertar_sangue.parse(entradaBruta);
+    const p = acharPersonagem(ctx, e.personagem);
+    const opcoes = { vezes: e.vezes ?? 1, ...(e.nivel_poder ? { nivelPoder: e.nivel_poder } : {}), ...(e.rerrolar ? { rerrolar: true } : {}) };
+    return comFicha(p, testeNaHora(ctx, p, { teste: "Despertar", motivo: e.motivo || "Despertar o sangue", opcoes }));
+  }
+  if (nome === "surto_de_sangue") {
+    const e = ENTRADAS.surto_de_sangue.parse(entradaBruta);
+    const p = acharPersonagem(ctx, e.personagem);
+    return comFicha(p, testeNaHora(ctx, p, { teste: "Surto de Sangue", motivo: e.motivo || "Surto de Sangue" }));
+  }
+  if (nome === "testar_frenesi") {
+    const e = ENTRADAS.testar_frenesi.parse(entradaBruta);
+    const p = acharPersonagem(ctx, e.personagem);
+    const motivo = e.motivo || { furia: "a Besta quer sangue de quem provocou", fome: "o cheiro de sangue chama", terror: "fogo! a Besta quer fugir" }[e.tipo];
+    return comFicha(p, testeNaHora(ctx, p, { teste: "Frenesi", alvo: e.dificuldade ?? null, motivo, opcoes: { frenesi: e.tipo } }));
+  }
+  if (nome === "cacar") {
+    const e = ENTRADAS.cacar.parse(entradaBruta);
+    const p = acharPersonagem(ctx, e.personagem);
+    const opcoes = { matar: Boolean(e.matar), ...(e.manchas !== undefined ? { manchas: e.manchas } : {}), ...(e.ressonancia ? { ressonancia: e.ressonancia } : {}), ...(e.intensidade ? { intensidade: e.intensidade } : {}) };
+    const teste = e.parada?.trim() ? `Caça: ${e.parada.trim()}` : "Caça";
+    return comFicha(p, testeNaHora(ctx, p, { teste, alvo: e.dificuldade ?? 3, motivo: e.motivo || "Caçar", opcoes }));
+  }
+  if (nome === "teste_de_remorso") {
+    const e = ENTRADAS.teste_de_remorso.parse(entradaBruta);
+    const p = acharPersonagem(ctx, e.personagem);
+    return comFicha(p, testeNaHora(ctx, p, { teste: "Remorso", motivo: "Fim da noite: o peso do que fez" }));
   }
 
   if (nome === "rolar_dados") {
@@ -1076,8 +1255,12 @@ export async function executarFerramenta(ctx: ContextoFerramentas, nome: string,
     if (testesPendentes(ctx.campanha.id).some((m) => m.personagemId === p.id)) {
       throw new Error(`${p.ficha.nome} já tem um teste esperando o jogador rolar. Termine o turno.`);
     }
-    // prévia só para mostrar o bônus no cartão; o dado de verdade é sorteado quando o jogador clica
-    const previa = ctx.sistema.resolverTeste(p.ficha, { teste: e.teste, alvo: e.alvo, modo: e.modo, modificador: e.modificador, motivo: e.motivo });
+    // prévia só para mostrar o bônus no cartão; o dado de verdade é sorteado quando o jogador clica (custos como o Despertar também)
+    const opcoes = opcoesDoPoder(e);
+    const previa = ctx.sistema.resolverTeste(p.ficha, { teste: e.teste, alvo: e.alvo, modo: e.modo, modificador: e.modificador, motivo: e.motivo, previa: true, ...(opcoes ? { opcoes } : {}) });
+    // custos que o sistema anuncia antes do clique (Vampiro: "Despertar · Celeridade ●●", "Surto +2")
+    const efeitos = (previa as { efeitos?: { texto?: unknown }[] }).efeitos;
+    const custos = Array.isArray(efeitos) ? efeitos.map((x) => String(x.texto ?? "")).filter(Boolean) : [];
     const dados = {
       tipo: "pedido_teste",
       status: "pendente",
@@ -1092,6 +1275,8 @@ export async function executarFerramenta(ctx: ContextoFerramentas, nome: string,
       bonus: previa.bonus,
       ...(e.modo && e.modo !== "normal" ? { modo: e.modo } : {}),
       ...(e.modificador ? { modificador: e.modificador } : {}),
+      ...(opcoes ? { opcoes } : {}),
+      ...(custos.length ? { custos } : {}),
       perigoso: Boolean(e.perigoso),
       motivo: e.motivo,
       sistema: ctx.sistema.id,

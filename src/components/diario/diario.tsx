@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { BotaoFixar } from "@/components/fatos/fixar-selecao";
+import { resumoDaEntrada, type ControleFatos } from "@/components/fatos/use-fatos";
 import type { EntradaDiario, TipoDiario } from "@/lib/sistemas/tipos";
 
 // Diário da campanha: missões, NPCs, lugares, itens e notas que o mestre registra com anotar_diario.
-// Abas por tipo, busca em tudo e ordem por atualização (missões abertas sempre no topo).
+// Abas por tipo, busca em tudo e ordem por atualização (missões abertas sempre no topo). O 📌 fixa um resumo da entrada.
 
 const ABAS: { tipo: TipoDiario; rotulo: string; vazio: string }[] = [
   { tipo: "missao", rotulo: "Missões", vazio: "Nenhuma missão. Vocês estão de férias, aparentemente." },
@@ -43,7 +45,7 @@ function Status({ status }: { status: string }) {
   return <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide ${s.classe}`}>{s.rotulo}</span>;
 }
 
-function Entrada({ e, mostrarTipo }: { e: EntradaDiario; mostrarTipo: boolean }) {
+function Entrada({ e, mostrarTipo, fatos }: { e: EntradaDiario; mostrarTipo: boolean; fatos?: ControleFatos }) {
   const [aberta, setAberta] = useState(false);
   const longo = e.texto.length > 160;
   const apagada = ["concluida", "falhou", "morto"].includes(sem(e.status));
@@ -54,7 +56,10 @@ function Entrada({ e, mostrarTipo }: { e: EntradaDiario; mostrarTipo: boolean })
           {mostrarTipo && <span className="mr-1.5 text-[10px] uppercase tracking-wide text-muted">{ABAS.find((a) => a.tipo === e.tipo)?.rotulo ?? e.tipo}</span>}
           {e.titulo}
         </p>
-        <Status status={e.status} />
+        <div className="-mr-1.5 -mt-0.5 flex shrink-0 items-center gap-1">
+          <Status status={e.status} />
+          {fatos && <BotaoFixar texto={resumoDaEntrada(e)} controle={fatos} rotulo={e.titulo} />}
+        </div>
       </div>
       {e.texto && (
         <p className={`mt-1 whitespace-pre-line text-xs leading-relaxed text-muted ${longo && !aberta ? "line-clamp-3" : ""}`}>{e.texto}</p>
@@ -71,7 +76,7 @@ function Entrada({ e, mostrarTipo }: { e: EntradaDiario; mostrarTipo: boolean })
   );
 }
 
-export function Diario({ entradas }: { entradas: EntradaDiario[] }) {
+export function Diario({ entradas, fatos }: { entradas: EntradaDiario[]; fatos?: ControleFatos }) {
   const contagem = useMemo(() => {
     const c: Partial<Record<TipoDiario, number>> = {};
     for (const e of entradas) c[e.tipo] = (c[e.tipo] ?? 0) + 1;
@@ -143,7 +148,7 @@ export function Diario({ entradas }: { entradas: EntradaDiario[] }) {
       {visiveis.length ? (
         <ul className="space-y-2" role={termo ? undefined : "tabpanel"}>
           {visiveis.map((e) => (
-            <Entrada key={e.id} e={e} mostrarTipo={Boolean(termo)} />
+            <Entrada key={e.id} e={e} mostrarTipo={Boolean(termo)} fatos={fatos} />
           ))}
         </ul>
       ) : (

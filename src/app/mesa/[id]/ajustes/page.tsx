@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { aventuraDoSistema } from "@/lib/aventuras";
 import { listarPersonagens, obterCampanha } from "@/lib/db";
 import { dificuldadeDe, tamanhoDe } from "@/lib/mestre/estilo";
 import { acessoNaPagina, daMaquinaNaPagina } from "@/lib/rede/acesso";
 import { obterSistema } from "@/lib/sistemas";
 import { temaDoSistema } from "@/lib/temas";
 import { TemaPagina } from "@/components/tema-pagina";
-import { excluirCampanhaAcao, salvarAjustesAcao } from "./acoes";
-import { FormularioCampanha, FormularioExcluir, FormularioPin } from "./formularios";
+import { desligarAventuraAcao, excluirCampanhaAcao, salvarAjustesAcao } from "./acoes";
+import { FormularioAventura, FormularioCampanha, FormularioExcluir, FormularioPin } from "./formularios";
 
 // Ajustes da mesa: nome, cenário, tom, modo (livre/rodada), dados, estilo do mestre, PIN da rede e exclusão.
 // Pela rede a página abre só para leitura; quem manda no salão é a máquina da taverna.
@@ -39,6 +40,8 @@ export default async function AjustesMesa(props: PageProps<"/mesa/[id]/ajustes">
   const local = await daMaquinaNaPagina();
   const sistema = obterSistema(campanha.sistema);
   const grupo = listarPersonagens(campanha.id);
+  // só a parte pública da aventura aparece aqui: o roteiro continua sendo segredo do mestre
+  const aventura = aventuraDoSistema(campanha.config.aventura, campanha.sistema);
 
   return (
     <main
@@ -80,6 +83,21 @@ export default async function AjustesMesa(props: PageProps<"/mesa/[id]/ajustes">
           bloqueado={!local}
         />
       </Secao>
+
+      {aventura && (
+        <Secao titulo="Aventura em andamento">
+          <p className="titulo text-lg text-ambar">📜 {aventura.titulo}</p>
+          <p className="mt-1 text-sm text-foreground/90">{aventura.chamada}</p>
+          <p className="mt-1 text-xs text-muted">
+            {[aventura.duracao, aventura.recomendado, aventura.tom].filter(Boolean).join(" · ")}
+          </p>
+          <p className="mb-3 mt-3 text-sm text-muted">
+            O mestre conduz com um roteiro secreto (NPCs, pistas, reviravoltas e finais possíveis) e improvisa em cima do que vocês fazem. Se preferir
+            que a história siga totalmente livre daqui em diante, desligue o roteiro.
+          </p>
+          <FormularioAventura acao={desligarAventuraAcao.bind(null, campanha.id)} bloqueado={!local} />
+        </Secao>
+      )}
 
       <Secao titulo="Grupo">
         <p className="mb-3 text-sm text-muted">

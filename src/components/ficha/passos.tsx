@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import type { AventuraPublica } from "@/lib/aventuras/tipos";
 import { DIFICULDADES, FOCOS, MAX_FOCO_LIVRE, MAX_INSTRUCOES, TAMANHOS, type Dificuldade, type TamanhoNarracao } from "@/lib/mestre/estilo";
 import { exemploDoCampo, sementesDe, type ParSemente } from "@/lib/sistemas/sementes";
 import type { AncestralidadeDef, ClasseDef, OpcaoCriacao, SistemaPublico } from "@/lib/sistemas/tipos";
@@ -27,6 +28,8 @@ export type Escolhas = {
   campanha: string;
   cenario: string;
   tom: string;
+  /** id da aventura pronta escolhida (vazio = campanha livre) */
+  aventura: string;
   modoMesa: "livre" | "rodada";
   pin: string;
   adicionarMais: boolean;
@@ -1094,7 +1097,58 @@ export function resumoEstilo(e: Escolhas): string {
     .join(" · ");
 }
 
-export function PassoCampanha({ e, atualizar }: Omit<PropsPasso, "sistema">) {
+/** Escolher uma aventura pronta: preenche nome, cenário e tom da campanha (tudo continua editável). */
+export function comAventura(a: AventuraPublica | undefined): Partial<Escolhas> {
+  return a ? { aventura: a.id, campanha: a.titulo, cenario: a.cenario, tom: a.tom } : {};
+}
+
+/** Desmarcar a aventura: limpa só o que ainda é dela (o que a pessoa reescreveu fica). */
+export function semAventura(e: Escolhas, a: AventuraPublica | undefined): Partial<Escolhas> {
+  if (!a) return { aventura: "" };
+  return {
+    aventura: "",
+    ...(e.campanha === a.titulo ? { campanha: "" } : {}),
+    ...(e.cenario === a.cenario ? { cenario: "" } : {}),
+    ...(e.tom === a.tom ? { tom: "" } : {}),
+  };
+}
+
+/** Cartões das aventuras prontas do sistema, no topo do passo da campanha. */
+function BlocoAventuras({ e, atualizar, aventuras }: Omit<PropsPasso, "sistema"> & { aventuras: AventuraPublica[] }) {
+  const escolhida = aventuras.find((a) => a.id === e.aventura);
+  const alternar = (a: AventuraPublica) => atualizar(a.id === e.aventura ? semAventura(e, a) : comAventura(a));
+  return (
+    <fieldset>
+      <legend className="mb-1 text-sm font-semibold text-pergaminho">📜 Ou comece com uma aventura pronta</legend>
+      <p className="mb-2 text-xs text-muted">
+        Missão escrita para este sistema: o mestre recebe um roteiro secreto (NPCs, pistas, reviravoltas) e improvisa em cima. Você não lê o roteiro, claro.
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {aventuras.map((a) => (
+          <Cartao key={a.id} ativo={a.id === e.aventura} onClick={() => alternar(a)} titulo={a.id === e.aventura ? "Clique de novo para desmarcar" : undefined}>
+            <p className="pr-6 font-semibold leading-tight text-pergaminho">{a.titulo}</p>
+            <p className="mt-1 text-xs leading-snug text-foreground/85">{a.chamada}</p>
+            <p className="mt-auto pt-2 text-[11px] text-muted">
+              {[a.duracao, a.recomendado, a.tom].filter(Boolean).join(" · ")}
+            </p>
+          </Cartao>
+        ))}
+      </div>
+      {escolhida && (
+        <p role="status" className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-musgo/50 bg-musgo/10 px-3 py-2 text-xs">
+          <span>
+            ✓ <span className="font-semibold">{escolhida.titulo}</span> marcada. Nome, cenário e tom abaixo vieram dela e dá para mexer à vontade.
+          </span>
+          <button type="button" onClick={() => atualizar(semAventura(e, escolhida))} className="-my-1 rounded px-2 py-1 text-ambar hover:bg-ambar/10 hover:underline">
+            Desmarcar
+          </button>
+        </p>
+      )}
+    </fieldset>
+  );
+}
+
+export function PassoCampanha({ e, atualizar, aventuras = [] }: Omit<PropsPasso, "sistema"> & { aventuras?: AventuraPublica[] }) {
   const s = sementesDe(e.sistemaId);
   const [inicio, setInicio] = useState(0);
   const cenarios = janela(s.cenarios, inicio, 6);
@@ -1103,6 +1157,8 @@ export function PassoCampanha({ e, atualizar }: Omit<PropsPasso, "sistema">) {
     <>
       <Titulo ajuda="Onde a história começa e como a mesa funciona. Tudo isso pode ser só um rascunho: o mestre improvisa.">A campanha</Titulo>
       <div className="space-y-5">
+        {aventuras.length > 0 && <BlocoAventuras e={e} atualizar={atualizar} aventuras={aventuras} />}
+
         <div>
           <label htmlFor="nome-campanha" className="mb-1 block text-sm text-muted">
             Nome da campanha

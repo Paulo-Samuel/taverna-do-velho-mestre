@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { EfeitosVtm, FaixaDespertar, listaDespertares } from "@/components/chat/cartao-dado";
 import type { Mensagem } from "@/lib/db";
 import type { PersonagemVisivel } from "@/lib/mesa";
 import { COR_GRAU, corDoNome, sinal } from "./cores";
@@ -30,6 +31,8 @@ type DadosPedido = {
   dadoPrincipal?: string;
   sistema?: string;
   modo?: string;
+  /** custos anunciados antes do clique (Vampiro: "Despertar · Celeridade ●●", "Surto +2") */
+  custos?: string[];
   resultado?: Partial<ResultadoRolagem> & ResultadoParada & { bonus?: number; alvo?: number | null };
 };
 
@@ -167,6 +170,13 @@ function Chips({ d, parada, d20, bonus, alvo }: { d: DadosPedido; parada: Parada
       </Chip>,
     );
   }
+  for (const [i, c] of (Array.isArray(d.custos) ? d.custos : []).entries()) {
+    chips.push(
+      <Chip key={`custo${i}`} tom="border-sangue/50 text-sangue">
+        {/^surto/i.test(c) ? "⚡" : "🩸"} {c}
+      </Chip>,
+    );
+  }
   if (d.perigoso) {
     chips.push(
       <Chip key="perigo" tom="border-sangue/60 bg-sangue/10! font-semibold text-sangue">
@@ -175,6 +185,22 @@ function Chips({ d, parada, d20, bonus, alvo }: { d: DadosPedido; parada: Parada
     );
   }
   return <div className="mt-2.5 flex flex-wrap justify-center gap-1.5">{chips}</div>;
+}
+
+/** Vampiro: o Despertar do poder rolado junto com a parada e as pílulas do que mudou (Fome, Surto gasto, Ressonância, frenesi). */
+function SangueDoResultado({ r, centro = false, novo = false }: { r: ResultadoParada; centro?: boolean; novo?: boolean }) {
+  // Despertar e Surto avulsos já mostram tudo na própria parada e na conta
+  if (r.vtm === "despertar" || r.vtm === "surto") return <EfeitosVtm efeitos={r.efeitos} centro={centro} />;
+  const despertares = listaDespertares(r.despertares).filter((x) => !x.previsto);
+  if (!despertares.length && !Array.isArray(r.efeitos)) return null;
+  return (
+    <div className={centro ? "mx-auto max-w-md" : ""}>
+      {despertares.map((x, i) => (
+        <FaixaDespertar key={i} x={x} centro={centro} novo={novo} />
+      ))}
+      <EfeitosVtm efeitos={r.efeitos} centro={centro} />
+    </div>
+  );
 }
 
 export function PedidoTeste({
@@ -273,6 +299,7 @@ export function PedidoTeste({
               {partesDoRotulo(r).resto && <span className="text-muted"> · {partesDoRotulo(r).resto}</span>}
             </span>
           </div>
+          <SangueDoResultado r={r} />
           {r.detalhes && <p className="mt-1.5 line-clamp-2 text-xs text-muted">{r.detalhes}</p>}
         </div>
       );
@@ -363,6 +390,7 @@ export function PedidoTeste({
             </p>
           )}
           <p className="mt-1 text-sm tabular-nums text-foreground/85 sm:text-base">{contaParada(parada, resultado, alvo)}</p>
+          <SangueDoResultado r={resultado} centro novo />
           {resultado.detalhes && <p className="mx-auto mt-2 max-w-md text-xs text-muted">{resultado.detalhes}</p>}
         </div>
       ) : pronto ? (

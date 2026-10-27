@@ -24,6 +24,9 @@ export type ResultadoParada = {
   rotuloGrau?: string;
   detalhes?: string;
   vtm?: string;
+  /** Vampiro: Despertares rolados junto (poder da disciplina, Surto) e pílulas do que mudou (Fome, Ressonância, frenesi) */
+  despertares?: unknown;
+  efeitos?: unknown;
 };
 
 export type FaseParada = "espera" | "rolando" | "assentado";

@@ -102,7 +102,7 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
   const ornamento = historia ? "✦" : tema.ornamento;
   const fonteTitulo = historia ? fonteGotica.className : "titulo";
   const temNarracao = livro.capitulos.some((c) => c.blocos.some((b) => b.tipo === "narracao"));
-  const diarioVazio = !livro.missoes.length && !livro.pessoas.length && !livro.lugares.length && !livro.outros.length;
+  const diarioVazio = !livro.missoes.length && !livro.pessoas.length && !livro.lugares.length && !livro.outros.length && !livro.fatos.length;
   const periodo =
     dataPorExtenso(livro.campanha.criadaEm) === dataPorExtenso(livro.campanha.atualizadaEm)
       ? dataPorExtenso(livro.campanha.criadaEm)
@@ -244,6 +244,21 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
               <ListaDiario titulo="Pessoas" itens={livro.pessoas} rotulo={(e) => (e.status ? `(${e.status})` : null)} />
               <ListaDiario titulo="Lugares" itens={livro.lugares} />
               <ListaDiario titulo="Notas e itens" itens={livro.outros} />
+              {livro.fatos.length > 0 && (
+                <div className="livro-diario-secao">
+                  <h3 className="titulo text-lg text-ambar">Fatos fixados</h3>
+                  <ul className="mt-2 space-y-1.5">
+                    {livro.fatos.map((f, i) => (
+                      <li key={i} className="flex gap-2 text-[0.98rem] leading-relaxed text-foreground/90">
+                        <span className="text-ambar/70" aria-hidden>
+                          📌
+                        </span>
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </section>
         )}

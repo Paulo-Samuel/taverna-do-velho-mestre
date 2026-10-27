@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState, useTransition, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { previaFicha, sugerirAtributos, type PreviaFicha } from "@/app/acoes-ficha";
 import { apelido as apelidoSalvo, salvarApelido } from "@/lib/cliente/identidade";
+import type { AventuraPublica } from "@/lib/aventuras/tipos";
 import type { SistemaPublico } from "@/lib/sistemas/tipos";
 import { temaDoSistema } from "@/lib/temas";
 import { TemaPagina } from "@/components/tema-pagina";
@@ -17,6 +18,8 @@ import {
   PassoOpcoes,
   PassoPericias,
   PassoSistema,
+  comAventura,
+  semAventura,
   type Escolhas,
 } from "./passos";
 import { PreviaLateral, Resumo } from "./previa";
@@ -35,6 +38,10 @@ export type PropsFormulario = {
   sistemaFixo?: string;
   /** sistema já marcado ao abrir (vindo do catálogo, /nova/avancada?sistema=); o jogador ainda pode trocar */
   sistemaInicial?: string;
+  /** aventuras prontas (parte pública, sem o roteiro) que o passo da campanha oferece para o sistema escolhido */
+  aventuras?: AventuraPublica[];
+  /** aventura já marcada ao abrir (vinda do início, /nova/avancada?sistema=&aventura=); vale se for do sistema */
+  aventuraInicial?: string;
   /** server action que recebe o FormData */
   acao: (estado: EstadoFormulario, form: FormData) => Promise<EstadoFormulario>;
   /** "campanha": também pede nome, cenário, tom e modo da mesa; "personagem": só o personagem */
@@ -77,6 +84,7 @@ function escolhasIniciais(sistemaId: string, sistema: SistemaPublico | undefined
     campanha: "",
     cenario: "",
     tom: "",
+    aventura: "",
     modoMesa: "livre",
     pin: "",
     adicionarMais: false,
@@ -154,7 +162,18 @@ function temConteudo(e: Escolhas): boolean {
   );
 }
 
-export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, acao, modo, textoBotao, destino: destinoProp, cabecalho }: PropsFormulario) {
+export function FormularioPersonagem({
+  sistemas,
+  sistemaFixo,
+  sistemaInicial,
+  aventuras = [],
+  aventuraInicial,
+  acao,
+  modo,
+  textoBotao,
+  destino: destinoProp,
+  cabecalho,
+}: PropsFormulario) {
   const [estado, enviar, enviando] = useActionState(acao, { erro: null });
   const formRef = useRef<HTMLFormElement>(null);
   const topoRef = useRef<HTMLDivElement>(null);
@@ -165,7 +184,9 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
 
   const pedido = sistemas.find((s) => s.id === sistemaInicial && s.pronto)?.id;
   const inicial = sistemaFixo ?? pedido ?? sistemas.find((s) => s.pronto)?.id ?? "";
-  const [e, setE] = useState<Escolhas>(() => escolhasIniciais(inicial, sistemas.find((s) => s.id === inicial)));
+  // aventura pedida pelo link do início: só se for do sistema que abriu; já preenche nome, cenário e tom da campanha
+  const aventuraPedida = modo === "campanha" ? aventuras.find((a) => a.id === aventuraInicial && a.sistemas.includes(inicial)) : undefined;
+  const [e, setE] = useState<Escolhas>(() => ({ ...escolhasIniciais(inicial, sistemas.find((s) => s.id === inicial)), ...comAventura(aventuraPedida) }));
   // veio do catálogo com o sistema escolhido: pula direto para o personagem (a barra de passos deixa voltar)
   const [passo, setPasso] = useState<Passo>(sistemaFixo || pedido ? "ancestralidade" : "sistema");
   const [aviso, setAviso] = useState<string | null>(null);
@@ -244,8 +265,8 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
     if (!oferta) return;
     const r = oferta.rascunho;
     const sis = sistemas.find((s) => s.id === r.e.sistemaId);
-    // campos novos que o rascunho antigo não tinha vêm do padrão
-    const restaurado = { ...escolhasIniciais(r.e.sistemaId, sis), ...r.e };
+    // campos novos que o rascunho antigo não tinha vêm do padrão; a aventura pedida pelo link vence a do rascunho
+    const restaurado = { ...escolhasIniciais(r.e.sistemaId, sis), ...r.e, ...(aventuraPedida?.sistemas.includes(r.e.sistemaId) ? comAventura(aventuraPedida) : {}) };
     setE(restaurado);
     setPasso(r.passo);
     setAlcance(r.alcance);
@@ -273,26 +294,31 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
     if (id === e.sistemaId) return;
     const novo = sistemas.find((s) => s.id === id);
     if (!novo?.pronto) return;
-    // trocar de sistema zera as escolhas de regra, mas guarda nome, história e campanha
-    setE((v) => ({
-      ...escolhasIniciais(id, novo),
-      nome: v.nome,
-      historia: v.historia,
-      jogador: v.jogador,
-      campanha: v.campanha,
-      cenario: v.cenario,
-      tom: v.tom,
-      modoMesa: v.modoMesa,
-      pin: v.pin,
-      adicionarMais: v.adicionarMais,
-      dificuldade: v.dificuldade,
-      narracao: v.narracao,
-      foco: v.foco,
-      focoLivre: v.focoLivre,
-      instrucoes: v.instrucoes,
-      dados: v.dados,
-      sugestoes: v.sugestoes,
-    }));
+    // trocar de sistema zera as escolhas de regra, mas guarda nome, história e campanha (a aventura só se rodar no novo)
+    setE((v) => {
+      const velha = aventuras.find((a) => a.id === v.aventura);
+      const c = velha && !velha.sistemas.includes(id) ? { ...v, ...semAventura(v, velha) } : v;
+      return {
+        ...escolhasIniciais(id, novo),
+        nome: v.nome,
+        historia: v.historia,
+        jogador: v.jogador,
+        campanha: c.campanha,
+        cenario: c.cenario,
+        tom: c.tom,
+        aventura: c.aventura,
+        modoMesa: v.modoMesa,
+        pin: v.pin,
+        adicionarMais: v.adicionarMais,
+        dificuldade: v.dificuldade,
+        narracao: v.narracao,
+        foco: v.foco,
+        focoLivre: v.focoLivre,
+        instrucoes: v.instrucoes,
+        dados: v.dados,
+        sugestoes: v.sugestoes,
+      };
+    });
     setOrigemAtributos(null);
     setEditados(false);
     setAviso(null);
@@ -502,6 +528,8 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
   }
 
   const prontos = sistemas.filter((s) => s.pronto);
+  const aventurasDoSistema = aventuras.filter((a) => a.sistemas.includes(e.sistemaId));
+  const aventuraEscolhida = aventurasDoSistema.find((a) => a.id === e.aventura);
   const temaEscolhido = Boolean(sistemaFixo || pedido || tocouSistema || atual !== "sistema");
   // a prévia só faz sentido entre o sistema e o resumo (o resumo já mostra a ficha inteira)
   const mostrarPrevia = Boolean(sistema) && atual !== "sistema" && atual !== "resumo";
@@ -626,6 +654,14 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
             </p>
           )}
 
+          {/* veio do início com uma aventura: lembrete discreto de que a campanha já está pronta, só falta o personagem */}
+          {aventuraEscolhida && atual !== "campanha" && atual !== "resumo" && (
+            <p role="status" className="mb-4 rounded-lg border border-ambar/40 bg-ambar/[0.07] px-3 py-2 text-sm">
+              📜 Aventura pronta: <span className="font-semibold text-pergaminho">{aventuraEscolhida.titulo}</span>.{" "}
+              <span className="text-muted">A campanha já vem preenchida; monte o personagem e confira tudo no passo da campanha.</span>
+            </p>
+          )}
+
           {tropeco && (
             <p role="status" className="mb-4 rounded-lg border border-ambar/40 bg-ambar/10 px-3 py-2 text-xs text-foreground/90">
               {tropeco}
@@ -681,7 +717,7 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
                 />
               )}
               {atual === "identidade" && <PassoIdentidade e={e} atualizar={atualizar} />}
-              {atual === "campanha" && <PassoCampanha e={e} atualizar={atualizar} />}
+              {atual === "campanha" && <PassoCampanha e={e} atualizar={atualizar} aventuras={aventurasDoSistema} />}
               {sistema && atual === "resumo" && (
                 <Resumo
                   sistema={sistema}
@@ -692,6 +728,7 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
                   irPara={(p) => irPara(p as Passo)}
                   previa={previa}
                   carregando={carregandoPrevia}
+                  aventura={aventuraEscolhida}
                 />
               )}
             </div>
@@ -763,6 +800,7 @@ export function FormularioPersonagem({ sistemas, sistemaFixo, sistemaInicial, ac
               <input type="hidden" name="campanha" value={e.campanha.trim()} />
               <input type="hidden" name="cenario" value={e.cenario.trim()} />
               <input type="hidden" name="tom" value={e.tom.trim()} />
+              {aventuraEscolhida && <input type="hidden" name="aventura" value={aventuraEscolhida.id} />}
               <input type="hidden" name="modo_mesa" value={e.modoMesa} />
               <input type="hidden" name="pin" value={e.pin} />
               {e.adicionarMais && <input type="hidden" name="adicionar_mais" value="1" />}

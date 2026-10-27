@@ -1,8 +1,10 @@
 import "server-only";
-import { listarDiario, type Campanha, type Mensagem, type Personagem } from "../db";
+import { listarDiario, listarFatos, type Campanha, type Mensagem, type Personagem } from "../db";
+import { quantosEntram } from "../../components/fatos/limites";
 import type { Cena, EntradaDiario, Sistema, TipoDiario } from "../sistemas/tipos";
 import { DIFICULDADES, dificuldadeDe, FOCOS, MAX_FOCO_LIVRE, MAX_INSTRUCOES, TAMANHOS, tamanhoDe } from "./estilo";
 import { jogadorRolaOsDados } from "./ferramentas";
+import { aventuraDoSistema, roteiroParaMestre } from "../aventuras";
 
 /** Quantas mensagens recentes vão literais para o mestre; o resto vive no resumo. */
 export const JANELA_RECENTE = 40;
@@ -173,12 +175,25 @@ export function promptDoSistema(c: Campanha, sistema: Sistema, personagens: Pers
   } catch (e) {
     console.warn("[taverna] diário indisponível para o prompt:", e);
   }
+  // fatos fixados pelo jogador: em todo turno, com prioridade sobre o resumo (só os que cabem no limite)
+  let fatos = "";
+  try {
+    const textos = listarFatos(c.id).map((f) => f.texto);
+    fatos = textos.slice(0, quantosEntram(textos)).map((t) => `- ${t}`).join("\n");
+  } catch (e) {
+    console.warn("[taverna] fatos fixados indisponíveis para o prompt:", e);
+  }
   const extras = [
     c.config?.modoJogo === "historia" ? MODO_HISTORIA : "",
     jogadorRolaOsDados(c) ? DADOS_DO_JOGADOR : DADOS_DO_MESTRE,
     c.config?.sugestoes !== false ? SUGESTOES : "",
   ].filter(Boolean);
   const tamanho = TAMANHOS.find((t) => t.id === tamanhoDe(c.config?.narracao))!.prompt;
+  // aventura pronta: o roteiro secreto vai em todo turno; a cena de abertura, só enquanto ainda não há resumo
+  const pronta = aventuraDoSistema(c.config?.aventura, sistema.id);
+  const aventura = pronta
+    ? `\n\n## AVENTURA EM ANDAMENTO (roteiro secreto: nunca revele ao jogador; improvise em cima, deixe o jogador mudar o rumo)\n${roteiroParaMestre(pronta, !c.resumo)}`
+    : "";
   return `${regrasDoMestre(tamanho)}\n\n${extras.join("\n\n")}
 
 ## Regras do sistema
@@ -188,11 +203,11 @@ ${sistema.regrasParaMestre}
 - Cenário pedido: ${c.cenario || "livre, surpreenda"}
 - Tom: ${c.tom}
 - Grupo: ${grupo}
-- ${MODOS[c.config?.modo ?? "livre"]}${estiloDaMesa(c)}
+- ${MODOS[c.config?.modo ?? "livre"]}${estiloDaMesa(c)}${aventura}
 
 ## Grupo
 ${fichas}
-
+${fatos ? `\n## FATOS FIXADOS (o jogador marcou: valem acima do resumo e nunca podem ser contrariados)\n${fatos}\n` : ""}
 ## Resumo do que já aconteceu
 ${c.resumo || "(nada ainda: a campanha está começando)"}
 

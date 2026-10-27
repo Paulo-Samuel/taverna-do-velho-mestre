@@ -359,6 +359,35 @@ export function FormularioPin({
   );
 }
 
+/** Aventura pronta em andamento: só leitura, com a opção de desligar o roteiro e seguir livre. */
+export function FormularioAventura({ acao, bloqueado }: { acao: Acao; bloqueado: boolean }) {
+  const [estado, enviar, enviando] = useActionState(acao, { erro: null });
+  const [certeza, setCerteza] = useState(false);
+  if (estado.ok) return <Aviso estado={estado} />;
+  return (
+    <form action={enviar} className="space-y-2">
+      {certeza ? (
+        <>
+          <p className="text-sm">O mestre esquece o roteiro (NPCs, pistas, finais) e segue só com o que já aconteceu. Não dá para religar depois.</p>
+          <div className="flex flex-wrap gap-2">
+            <button className="btn-borda hover:border-sangue hover:text-sangue" disabled={enviando || bloqueado}>
+              {enviando ? "Rasgando o roteiro…" : "Desligar o roteiro"}
+            </button>
+            <button type="button" className="btn-borda" onClick={() => setCerteza(false)}>
+              Deixa como está
+            </button>
+          </div>
+        </>
+      ) : (
+        <button type="button" className="btn-borda" disabled={bloqueado} onClick={() => setCerteza(true)}>
+          Seguir livre, sem o roteiro
+        </button>
+      )}
+      <Aviso estado={estado} />
+    </form>
+  );
+}
+
 export function FormularioExcluir({ acao, nome, bloqueado }: { acao: Acao; nome: string; bloqueado: boolean }) {
   const [estado, enviar, enviando] = useActionState(acao, { erro: null });
   const [aberto, setAberto] = useState(false);

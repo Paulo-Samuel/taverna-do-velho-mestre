@@ -9,6 +9,8 @@ import { Anteriormente } from "@/components/historia/anteriormente";
 import { CabecalhoCena } from "@/components/historia/cabecalho-cena";
 import { CartaoAcao, type DesfechoAcao } from "@/components/historia/cartao-acao";
 import { CeuEstrelado } from "@/components/historia/ceu-estrelado";
+import { FixarSelecao } from "@/components/fatos/fixar-selecao";
+import { useFatos } from "@/components/fatos/use-fatos";
 import { Codex, type AbaCodex } from "@/components/historia/codex";
 import { COR_GRAU, corDoNome, mapaDeNomes, NOME_GRAU } from "@/components/historia/cores";
 import { fonteGotica } from "@/components/historia/fonte-gotica";
@@ -79,6 +81,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   const busca = useSearchParams();
   useState(() => assumirDaUrl(estadoInicial, busca.get("personagem")));
   const [mesa, acoes] = useMesa(estadoInicial);
+  const fatos = useFatos(mesa.campanha.id);
   const [codexAberto, setCodexAberto] = useState(false);
   const [abaCodex, setAbaCodex] = useState<AbaCodex>("personagem");
   const [aviso, setAviso] = useState<string | null>(null);
@@ -560,7 +563,8 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
         </button>
       )}
 
-      <Codex mesa={mesa} acoes={acoes} aberto={codexAberto} aoFechar={fecharCodex} aba={abaCodex} aoMudarAba={setAbaCodex} />
+      <Codex mesa={mesa} acoes={acoes} fatos={fatos} aberto={codexAberto} aoFechar={fecharCodex} aba={abaCodex} aoMudarAba={setAbaCodex} />
+      <FixarSelecao controle={fatos} />
 
       <AjudaAtalhos aberta={ajuda} aoFechar={() => setAjuda(false)} extras={[["C", "abre e fecha o códex"], ...(cenas ? ATALHOS_LEITOR : [])]} />
 

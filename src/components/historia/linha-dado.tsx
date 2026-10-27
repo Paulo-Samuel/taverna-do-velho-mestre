@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { CartaoDado } from "@/components/chat/cartao-dado";
+import { CartaoDado, listaDespertares, MedidorFome } from "@/components/chat/cartao-dado";
 import type { Mensagem } from "@/lib/db";
 import { COR_GRAU, corDoNome } from "./cores";
 
@@ -196,6 +196,40 @@ function LinhaRolagem({ r, m }: { r: Dados; m: Mensagem }) {
   );
 }
 
+/** Despertar e Surto de Sangue do Vampiro: nota de rodapé com as faces e a Fome em losangos ("Despertar · Celeridade ●●: 4 → Fome 2 → 3"). */
+function LinhaSangue({ r, m, novo }: { r: Dados; m: Mensagem; novo: boolean }) {
+  const x = listaDespertares(r.despertares)[0];
+  const surto = r.vtm === "surto";
+  const ganho = num(r.surtoGanho) ?? 0;
+  const pesou = x.falhas > 0 || Boolean(x.estourou);
+  const faces = x.rolagens.map((f) => (f.length > 1 ? `${f[0]}↻${f[1]}` : String(f[0]))).join(", ");
+  const fome = x.estourou
+    ? x.fomeAntes < 5
+      ? `Fome ${x.fomeAntes} → 5, e a Besta cobra`
+      : "Fome 5: o sangue não responde"
+    : x.falhas
+      ? `Fome ${x.fomeAntes} → ${x.fomeDepois}`
+      : `Fome segue ${x.fomeAntes}`;
+  return (
+    <Linha icone={surto ? "⚡" : "🩸"} tom={pesou ? "text-foreground/85" : "text-muted"} titulo={m.texto}>
+      <Nome nome={r.personagem} /> · {surto ? "Surto de Sangue" : `Despertar${x.vezes > 1 ? ` ×${x.vezes}` : ""}${x.motivo ? ` · ${x.motivo}` : ""}`}:{" "}
+      <span className="not-italic tabular-nums text-foreground/85">{faces}</span>
+      {" → "}
+      <span className="not-italic font-semibold" style={{ color: pesou ? "var(--sangue)" : undefined }}>
+        {fome}
+      </span>{" "}
+      <span className="ml-1 inline-flex translate-y-px align-middle not-italic">
+        <MedidorFome antes={x.fomeAntes} depois={x.fomeDepois} novo={novo} />
+      </span>
+      {surto && ganho > 0 && (
+        <span className="block text-xs not-italic" style={{ color: "var(--critico)" }}>
+          +{ganho} dados no próximo teste
+        </span>
+      )}
+    </Linha>
+  );
+}
+
 /** Teste resolvido direto pelo sistema (sem o jogador rolar): uma linha com a conta e o grau. */
 function LinhaTeste({ r }: { r: Dados }) {
   const natural = num(r.natural);
@@ -235,8 +269,14 @@ export function LinhaDado({ mensagem, novo }: { mensagem: Mensagem; novo: boolea
     case "rolagem":
       return <LinhaRolagem r={r} m={mensagem} />;
     case "teste":
-      // testes de parada de dados (Vampiro) e afins ficam com o cartão completo
-      if (r.sistema === "vtm5" || Array.isArray(r.dadosFome)) return <CartaoDado mensagem={mensagem} novo={novo} />;
+      // Despertar e Surto do Vampiro viram nota de rodapé; testes de parada de dados (Vampiro) e afins ficam com o cartão completo
+      if ((r.vtm === "despertar" || r.vtm === "surto") && listaDespertares(r.despertares).length) return <LinhaSangue r={r} m={mensagem} novo={novo} />;
+      if (r.sistema === "vtm5" || Array.isArray(r.dadosFome))
+        return (
+          <div className="my-4">
+            <CartaoDado mensagem={mensagem} novo={novo} />
+          </div>
+        );
       return <LinhaTeste r={r} />;
     case "combate":
       return (
