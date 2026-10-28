@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { calcularLimites, listarUnidades, marcarParagrafos, paginaDoX, textosDasPaginas, unidadeEm, VAO, type Unidade } from "./paginacao";
+import { calcularLimites, centrarFecho, compactarCartoes, limparCompactos, listarUnidades, marcarParagrafos, paginaDoX, textosDasPaginas, unidadeEm, VAO, type Unidade } from "./paginacao";
 
 // Texto que se revela, como alguém contando, e as páginas do turno.
 // O texto inteiro já está no DOM desde o começo (a página não muda de tamanho enquanto revela); o que ainda não foi "dito" fica
@@ -101,6 +101,8 @@ export function useRevelar({
   const seguir = useRef<{ el: HTMLElement; ate: number } | null>(null);
   /** a transição de página em andamento (medir espera ela acabar: o transform mexe nas coordenadas) */
   const animando = useRef<Animation | null>(null);
+  /** tamanho do palco em que os cartões encolhidos foram decididos */
+  const compactadoEm = useRef("");
   /** o medir mais novo, para medir de novo no quadro seguinte (de dentro do próprio medir) */
   const remedir = useRef<() => void>(() => {});
 
@@ -179,7 +181,16 @@ export function useRevelar({
     const folgaAtual = parseFloat(f.style.getPropertyValue("--folga")) || 0;
     const alturaPagina = f.clientHeight - (parseFloat(cs.paddingTop) - folgaAtual) - parseFloat(cs.paddingBottom);
     marcarParagrafos(f, alturaPagina);
+    // cartão grande que pulou de página deixando buraco: encolhe um pouco para caber (a decisão vale até o palco mudar de tamanho)
+    const tamanho = `${v.clientWidth}x${f.clientHeight}`;
+    if (compactadoEm.current !== tamanho) {
+      limparCompactos(f);
+      compactadoEm.current = tamanho;
+    }
+    if (v.scrollWidth > v.clientWidth + 1) compactarCartoes(f, alturaPagina);
     const paginas = Math.max(1, Math.round((v.scrollWidth + VAO) / passo));
+    // o fecho da cena (fim da noite, "o que mudou") sozinho na última página desce para o centro dela
+    centrarFecho(f, alturaPagina, paginas, passo);
     // texto que cabe numa página só: o espaço que sobra vai um pouco para cima, para ele não ficar grudado no topo
     let folga = 0;
     const primeiro = f.firstElementChild;

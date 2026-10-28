@@ -53,6 +53,15 @@ function DesenharBloco({ b, ornamento, capitular }: { b: Bloco; ornamento: strin
         {b.autor && b.autor !== b.nome && <span className="livro-acao-autor"> ({b.autor})</span>} — <em>{b.texto}</em>
       </p>
     );
+  if (b.tipo === "fim")
+    return (
+      <div className="livro-fim-noite" role="separator" aria-label={`Fim da noite${b.sessao ? ` ${b.sessao}` : ""}`}>
+        <p className="livro-separador" aria-hidden>
+          {ornamento} {ornamento} {ornamento}
+        </p>
+        <p className="livro-fim-noite-titulo">— Fim da noite{b.sessao ? ` ${b.sessao}` : ""} —</p>
+      </div>
+    );
   if (b.tipo === "nota")
     return (
       <p className="livro-nota">
@@ -165,6 +174,7 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
             <ol className="mt-4 space-y-1.5">
               {livro.capitulos.map((c) => (
                 <li key={c.numero}>
+                  {c.noite && <p className="mb-1 mt-3 text-center text-[10.5px] font-semibold uppercase tracking-[0.3em] text-ambar/80">Noite {c.noite}</p>}
                   <a href={`#capitulo-${c.numero}`} className="flex items-baseline gap-2 text-foreground/90 hover:text-ambar">
                     <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted">{romano(c.numero)}</span>
                     <span className="min-w-0 flex-1 truncate">{tituloDoCapitulo(c)}</span>
@@ -184,6 +194,11 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
           livro.capitulos.map((c) => (
             <section key={c.numero} id={`capitulo-${c.numero}`} className="livro-capitulo scroll-mt-16 pt-14" aria-labelledby={`capitulo-${c.numero}-titulo`}>
               <header className="mb-8 text-center">
+                {c.noite && (c.titulo || c.local) && (
+                  <p className={`${fonteTitulo} livro-noite mb-3 text-lg text-ambar`}>
+                    <span aria-hidden>☾ </span>Noite {c.noite}
+                  </p>
+                )}
                 <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-muted">Capítulo {romano(c.numero)}</p>
                 <h2 id={`capitulo-${c.numero}-titulo`} className={`${fonteTitulo} mt-2 text-3xl leading-tight text-pergaminho sm:text-4xl`}>
                   {tituloDoCapitulo(c)}

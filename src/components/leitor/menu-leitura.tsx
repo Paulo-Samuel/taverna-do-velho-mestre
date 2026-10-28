@@ -6,6 +6,8 @@ import { suportaRevelar } from "./use-revelar";
 
 // Botão do cabeçalho das mesas: escolhe como ler a história ("📖 Cena a cena" ou "📜 Rolagem") e liga/desliga o texto se
 // revelando aos poucos e o tamanho da letra (A− / A+). Preferência deste navegador (localStorage).
+// Embaixo, o "🌙 Encerrar a noite" (com confirmação): o mestre fecha a cena, distribui XP e, no Vampiro, faz o teste de Remorso
+// (POST /api/campanhas/[id]/encerrar; 409 quando ele está narrando ou há teste esperando o dado).
 
 function Icone({ modo }: { modo: ModoLeitura }) {
   return modo === "cenas" ? (
@@ -30,12 +32,60 @@ const OPCOES: [ModoLeitura, string, string, string][] = [
 
 const DICAS_FONTE = ["Miúda, para quem tem olho de águia.", "A de sempre.", "Mais folgada.", "Grande, para ler de longe da tela."];
 
-/** acima: o menu abre para cima (botão no pé de um painel); esquerda: alinhado pela esquerda do botão (botão no canto esquerdo). */
-export function MenuLeitura({ className = "", acima = false, esquerda = false }: { className?: string; acima?: boolean; esquerda?: boolean }) {
+type EstadoEncerrar = { fase: "quieto" | "confirmar" | "enviando"; erro: string | null };
+
+const minuscula = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
+
+/** Pede ao servidor para encerrar a noite. Devolve null quando deu certo, ou o recado para mostrar. */
+async function pedirEncerrar(campanhaId: number): Promise<string | null> {
+  try {
+    const r = await fetch(`/api/campanhas/${campanhaId}/encerrar`, { method: "POST" });
+    const corpo = (await r.json().catch(() => null)) as { erro?: string } | null;
+    if (r.ok) return null;
+    // a rota ainda não existe (404 sem o JSON da taverna)
+    if (r.status === 404 && !corpo?.erro) return "Ainda não disponível: o mestre ainda está aprendendo a fechar a noite.";
+    if (r.status === 409) return `Agora não: ${minuscula(corpo?.erro ?? "o mestre está narrando ou há um teste esperando o dado.")}`;
+    return corpo?.erro ?? `O mestre tropeçou no tapete (erro ${r.status}). Tente de novo.`;
+  } catch {
+    return "Sem conexão com a taverna. Tente de novo.";
+  }
+}
+
+/**
+ * acima: o menu abre para cima (botão no pé de um painel); esquerda: alinhado pela esquerda do botão (botão no canto esquerdo).
+ * campanhaId: mostra o "Encerrar a noite"; aoEncerrar avisa a mesa que deu certo.
+ */
+export function MenuLeitura({
+  className = "",
+  acima = false,
+  esquerda = false,
+  campanhaId,
+  aoEncerrar,
+}: {
+  className?: string;
+  acima?: boolean;
+  esquerda?: boolean;
+  campanhaId?: number;
+  aoEncerrar?: () => void;
+}) {
   const { modo, animar, fonte } = usePreferenciasLeitor();
   const menos = useMenosMovimento();
   const [aberto, setAberto] = useState(false);
+  const [encerrar, setEncerrar] = useState<EstadoEncerrar>({ fase: "quieto", erro: null });
   const caixa = useRef<HTMLDivElement>(null);
+
+  async function confirmarEncerrar() {
+    if (!campanhaId) return;
+    setEncerrar({ fase: "enviando", erro: null });
+    const erro = await pedirEncerrar(campanhaId);
+    if (erro) {
+      setEncerrar({ fase: "quieto", erro });
+      return;
+    }
+    setEncerrar({ fase: "quieto", erro: null });
+    setAberto(false);
+    aoEncerrar?.();
+  }
 
   useEffect(() => {
     if (!aberto) return;
@@ -56,7 +106,10 @@ export function MenuLeitura({ className = "", acima = false, esquerda = false }:
     <div ref={caixa} className={`relative shrink-0 ${className}`} data-menu-leitura>
       <button
         type="button"
-        onClick={() => setAberto((v) => !v)}
+        onClick={() => {
+          setAberto((v) => !v);
+          setEncerrar({ fase: "quieto", erro: null });
+        }}
         aria-expanded={aberto}
         aria-haspopup="dialog"
         aria-label={`Modo de leitura: ${atual[2]}`}
@@ -66,7 +119,7 @@ export function MenuLeitura({ className = "", acima = false, esquerda = false }:
         <Icone modo={modo} />
       </button>
       {aberto && (
-        <div role="dialog" aria-label="Modo de leitura" className={`cartao surgir bg-surface! absolute z-50 w-72 max-w-[calc(100vw-1rem)] p-3 text-foreground ${acima ? "bottom-full mb-2" : "top-full mt-2"} ${esquerda ? "left-0" : "right-0"}`}>
+        <div role="dialog" aria-label="Modo de leitura" className={`cartao surgir bg-surface! absolute z-50 max-h-[calc(100dvh-5rem)] w-72 max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain p-3 text-foreground ${acima ? "bottom-full mb-2" : "top-full mt-2"} ${esquerda ? "left-0" : "right-0"}`}>
           <p className="titulo mb-2 text-sm text-ambar">Como ler a história</p>
           <div role="radiogroup" aria-label="Modo de leitura" className="space-y-1.5">
             {OPCOES.map(([id, emoji, nome, dica]) => (
@@ -150,6 +203,54 @@ export function MenuLeitura({ className = "", acima = false, esquerda = false }:
               </span>
             </span>
           </label>
+          {campanhaId !== undefined && (
+            <div className="mt-3 border-t border-border pt-2.5 text-xs" data-encerrar>
+              {encerrar.fase === "quieto" ? (
+                <button
+                  type="button"
+                  onClick={() => setEncerrar({ fase: "confirmar", erro: null })}
+                  className="flex min-h-10 w-full items-center gap-2.5 rounded-lg border border-border px-3 py-1.5 text-left transition hover:border-ambar/60 hover:text-ambar"
+                  data-encerrar-noite
+                >
+                  <span aria-hidden className="text-base">
+                    🌙
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold">Encerrar a noite</span>
+                    <span className="block text-[11px] leading-snug text-muted">Fecha a sessão; o livro ganha um fim de capítulo.</span>
+                  </span>
+                </button>
+              ) : (
+                <div className="rounded-lg border border-ambar/50 bg-ambar/5 p-2.5" role="alertdialog" aria-label="Encerrar a noite?">
+                  <p className="leading-snug text-foreground/90">O mestre fecha a cena, distribui XP e, no Vampiro, faz o teste de Remorso. Encerrar?</p>
+                  <div className="mt-2 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEncerrar({ fase: "quieto", erro: null })}
+                      disabled={encerrar.fase === "enviando"}
+                      className="min-h-9 rounded-md px-3 text-muted hover:text-foreground disabled:opacity-50"
+                    >
+                      Ainda não
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void confirmarEncerrar()}
+                      disabled={encerrar.fase === "enviando"}
+                      className="btn-ambar min-h-9 px-3 py-1.5 text-xs"
+                      data-confirmar-encerrar
+                    >
+                      {encerrar.fase === "enviando" ? "Encerrando…" : "🌙 Encerrar"}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {encerrar.erro && (
+                <p className="mt-2 rounded-md border border-sangue/50 bg-sangue/10 px-2.5 py-1.5 leading-snug text-foreground/90" role="alert" data-erro-encerrar>
+                  {encerrar.erro}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

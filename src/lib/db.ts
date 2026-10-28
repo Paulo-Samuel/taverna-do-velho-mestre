@@ -151,6 +151,8 @@ export type ConfigCampanha = {
   instrucoes?: string;
   /** id de uma aventura pronta (lib/aventuras): o roteiro secreto entra no prompt do mestre; ausente = campanha livre */
   aventura?: string;
+  /** próxima sessão (espelho: o número real vem dos marcadores fim_sessao no chat) */
+  sessao?: number;
 };
 
 export type Campanha = {
@@ -380,12 +382,12 @@ export function atualizarMensagem(id: number, texto: string, dados: unknown): Me
   return obterMensagem(id);
 }
 
-/** Testes que o mestre pediu e que o jogador ainda não rolou (modo história). */
+/** Testes que o mestre pediu e que ainda não fecharam: o jogador não rolou ("pendente") ou rolou e decide se rerrola ("decidir"). */
 export function testesPendentes(campanhaId: number): Mensagem[] {
   return (
     db
       .prepare(
-        "SELECT * FROM mensagens WHERE campanha_id = ? AND tipo = 'dado' AND json_extract(dados, '$.tipo') = 'pedido_teste' AND json_extract(dados, '$.status') = 'pendente' ORDER BY id",
+        "SELECT * FROM mensagens WHERE campanha_id = ? AND tipo = 'dado' AND json_extract(dados, '$.tipo') = 'pedido_teste' AND json_extract(dados, '$.status') IN ('pendente', 'decidir') ORDER BY id",
       )
       .all(campanhaId) as LinhaMensagem[]
   ).map(paraMensagem);

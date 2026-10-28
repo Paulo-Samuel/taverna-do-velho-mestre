@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 
 // Atalhos de teclado das mesas (só quando o foco NÃO está num campo de texto):
 // 1/2/3 escolhem a sugestão, R rola o teste pendente deste aparelho, / foca o campo de ação, Esc fecha, ? mostra a lista.
+// Vampiro, teste em decisão: F rerrola com Força de Vontade e Enter aceita (clicam nos botões do cartão; Enter num botão focado é dele).
 // A tecla C (códex do modo história) continua com a mesa-historia.
 
 export type OpcoesAtalhos = {
@@ -48,6 +49,10 @@ export function useAtalhos(opcoes: OpcoesAtalhos) {
         o.escolherSugestao(Number(k) - 1);
       } else if (k === "r" || k === "R") {
         if (o.rolarTeste()) e.preventDefault();
+      } else if (k === "f" || k === "F") {
+        if (clicarDecisao("rerrolar")) e.preventDefault();
+      } else if (k === "Enter" && !(e.target as HTMLElement | null)?.closest?.("button, a, summary, [role=button]")) {
+        if (clicarDecisao("aceitar")) e.preventDefault();
       } else if (k === "/") {
         e.preventDefault();
         o.focarCampo();
@@ -72,9 +77,20 @@ export function rolarPedido(mensagemId: number | null | undefined, rolarAte = tr
   return true;
 }
 
+/** Clica no "Rerrolar com Força de Vontade" ou no "Aceitar o resultado" de um teste em decisão à vista (só aparece para quem controla). */
+function clicarDecisao(qual: "rerrolar" | "aceitar"): boolean {
+  const botoes = [...document.querySelectorAll<HTMLButtonElement>(`[data-decisao] button[data-${qual}]`)];
+  const botao = botoes.find((b) => !b.disabled && b.getClientRects().length > 0);
+  if (!botao) return false;
+  botao.click();
+  return true;
+}
+
 const LISTA: [string, string][] = [
   ["1 2 3", "escolhe a sugestão do mestre"],
   ["R", "rola o teste que o mestre pediu"],
+  ["F", "rerrola com Força de Vontade (Vampiro, teste em decisão)"],
+  ["Enter", "aceita o resultado do teste em decisão"],
   ["/", "vai para o campo de ação"],
   ["Esc", "fecha painéis e janelas"],
   ["?", "mostra esta lista"],
@@ -111,7 +127,7 @@ export function AjudaAtalhos({ aberta, aoFechar, extras = [] }: { aberta: boolea
         </button>
       </div>
       <dl className="space-y-1.5 text-sm">
-        {[...LISTA.slice(0, 3), ...extras, ...LISTA.slice(3)].map(([teclas, oque]) => (
+        {[...LISTA.slice(0, 5), ...extras, ...LISTA.slice(5)].map(([teclas, oque]) => (
           <div key={teclas} className="flex items-baseline gap-3">
             <dt className="flex w-24 shrink-0 gap-1">
               {teclas.split(" ").map((t) => (

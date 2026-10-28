@@ -2,12 +2,15 @@
 
 import { useRef, useState, type ReactNode } from "react";
 import { SugestoesCompactas } from "@/components/chat/sugestoes-compactas";
+import { foraDoJogo } from "@/components/leitor/cena";
+import { BotaoPerguntar } from "@/components/leitor/pecas";
 import type { SugestaoAcao } from "@/lib/sistemas/tipos";
 
 // Rodapé da mesa do modo história, enxuto para o palco ganhar altura: as ações que o mestre sugeriu (linhas baixas no desktop,
 // uma linha que abre no celular) e o campo "O que fulano faz?", de uma linha que cresce, com o retrato do personagem ao lado.
 // O espaço das sugestões fica reservado enquanto há personagem (com um recado no lugar quando não há sugestão), para o palco
 // não mudar de tamanho a cada turno e as páginas não se refazerem no meio da leitura. Enter envia; Shift+Enter quebra a linha.
+// O "💬 Perguntar" ao lado do campo manda a mensagem ao mestre entre (( )), fora do jogo (regras, opções, chances).
 
 export function PainelAcao({
   sugestoes,
@@ -52,15 +55,21 @@ export function PainelAcao({
     setTexto(preencher.texto);
   }
   const [enviando, setEnviando] = useState(false);
+  const [perguntar, setPerguntar] = useState(false);
   const proprio = useRef<HTMLTextAreaElement>(null);
   const campo = campoRef ?? proprio;
 
   async function mandar(t: string, limpar: boolean) {
     const limpo = t.trim();
     if (!limpo || enviando || bloqueio) return;
+    // pergunta ao mestre (só o que veio do campo; sugestão é sempre ação)
+    const pergunta = limpar && perguntar;
     setEnviando(true);
     try {
-      if ((await enviar(limpo)) && limpar) setTexto("");
+      if ((await enviar(pergunta && !foraDoJogo(limpo) ? `(( ${limpo} ))` : limpo)) && limpar) {
+        setTexto("");
+        setPerguntar(false);
+      }
     } finally {
       setEnviando(false);
     }
@@ -123,14 +132,22 @@ export function PainelAcao({
             }}
             rows={1}
             maxLength={2000}
-            aria-label={rotuloCampo}
-            placeholder={placeholder}
-            className="campo field-sizing-content max-h-36 min-h-11 flex-1 resize-none bg-surface-2/80 py-2.5 leading-snug"
+            aria-label={perguntar ? "Pergunta ao mestre, fora do jogo" : rotuloCampo}
+            placeholder={perguntar ? "Pergunte ao mestre (regras, opções, chances)…" : placeholder}
+            className={`campo field-sizing-content max-h-36 min-h-11 flex-1 resize-none bg-surface-2/80 py-2.5 leading-snug ${perguntar ? "border-dashed! border-ambar/60! bg-ambar/5!" : ""}`}
+            data-campo-acao
+          />
+          <BotaoPerguntar
+            ligado={perguntar}
+            aoAlternar={() => {
+              setPerguntar((v) => !v);
+              campo.current?.focus();
+            }}
           />
           <button
             className="grid size-11 shrink-0 place-items-center rounded-md bg-ambar text-lg text-[#1a120c] shadow-[0_0_24px_-6px_var(--ambar)] transition hover:bg-[#f0b762] disabled:cursor-not-allowed disabled:opacity-40"
             disabled={!texto.trim() || enviando}
-            aria-label={enviando ? "Enviando a ação" : "Enviar ação"}
+            aria-label={enviando ? "Enviando" : perguntar ? "Enviar a pergunta" : "Enviar ação"}
             title="Enviar (Enter · Shift+Enter quebra a linha)"
           >
             {enviando ? (

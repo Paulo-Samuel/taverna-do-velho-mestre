@@ -78,6 +78,15 @@ export type ResultadoVtm = ResultadoTeste & {
   caca?: CacaVtm;
   remorso?: { humanidadeAntes: number; humanidadeDepois: number; manchas: number };
   efeitos?: EfeitoVtm[];
+  /** rerrolagem com Força de Vontade (vtm5/forca-de-vontade.ts): índices em `dados` (só normais) e a Força de Vontade gasta */
+  rerrolado?: RerroladoVtm;
+};
+
+export type RerroladoVtm = {
+  dados: { indice: number; antes: number; depois: number }[];
+  vontade: { antes: number; depois: number; max: number };
+  /** grau antes da rerrolagem ("Falha", "Falha Bestial") */
+  grauAntes: string;
 };
 
 // ---------- leitura da ficha ----------
@@ -394,7 +403,7 @@ function concluir(b: Base, av: Avaliacao, alvo: number | null, notas: string[]):
 }
 
 /** Notas de grau: Crítico Sujo, Falha Bestial e vitória a um custo. `fome` = Fome que valeu na parada. */
-function notasDoGrau(av: Avaliacao, alvo: number | null, fome: number, comFome: boolean): string[] {
+export function notasDoGrau(av: Avaliacao, alvo: number | null, fome: number, comFome: boolean): string[] {
   const notas: string[] = [];
   if (av.pares) notas.push(`${av.pares} par${av.pares > 1 ? "es" : ""} de 10 (+${av.pares * 2} sucessos)`);
   if (av.sujo) notas.push("Crítico Sujo: a Besta ajudou — sucesso brutal ou exagerado; o narrador pode acionar a compulsão do clã");

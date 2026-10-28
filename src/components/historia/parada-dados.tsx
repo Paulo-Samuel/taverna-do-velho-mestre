@@ -27,6 +27,8 @@ export type ResultadoParada = {
   /** Vampiro: Despertares rolados junto (poder da disciplina, Surto) e pílulas do que mudou (Fome, Ressonância, frenesi) */
   despertares?: unknown;
   efeitos?: unknown;
+  /** Vampiro: dados rerrolados com Força de Vontade (índice em `dados`, face antes e depois) */
+  rerrolado?: { dados?: { indice: number; antes: number; depois: number }[]; vontade?: { antes: number; depois: number; max?: number }; grauAntes?: string };
 };
 
 export type FaseParada = "espera" | "rolando" | "assentado";
@@ -56,7 +58,14 @@ const CSS = `
 .pd-brilho { filter: drop-shadow(0 0 6px color-mix(in srgb, currentColor 55%, transparent)) }
 @keyframes pd-depois { from { opacity: 0; transform: translateY(4px) scale(.96) } to { opacity: 1; transform: none } }
 .pd-depois { animation: pd-depois .35s cubic-bezier(.2, .8, .3, 1) both; animation-delay: var(--atraso, 0ms) }
-@media (prefers-reduced-motion: reduce) { .pd-rolando, .pd-assentar, .pd-assentar .pd-face, .pd-pulso, .pd-depois { animation: none } }
+@keyframes pd-rerrolar {
+  0% { transform: translateY(-16px) rotate(200deg) scale(1.25); opacity: .2 }
+  60% { transform: translateY(3px) rotate(-12deg) scale(.94); opacity: 1 }
+  100% { transform: none }
+}
+.pd-rerrolar { animation: pd-rerrolar .7s cubic-bezier(.2, .8, .3, 1) both; animation-delay: calc(var(--i, 0) * 120ms + .1s) }
+.pd-rerrolar .pd-face { animation: pd-valor .25s ease-out both; animation-delay: calc(var(--i, 0) * 120ms + .5s) }
+@media (prefers-reduced-motion: reduce) { .pd-rolando, .pd-assentar, .pd-assentar .pd-face, .pd-pulso, .pd-depois, .pd-rerrolar, .pd-rerrolar .pd-face { animation: none } }
 `;
 
 export function EstiloParada() {
@@ -114,11 +123,13 @@ function colunas(n: number) {
   return n <= 6 ? n : Math.ceil(n / Math.ceil(n / 6));
 }
 
-type Visual = { fase: FaseParada; novo: boolean; compacto: boolean };
+/** `rerrolar`: a rerrolagem com Força de Vontade acabou de chegar (só os dados trocados assentam de novo) */
+type Visual = { fase: FaseParada; novo: boolean; compacto: boolean; rerrolar?: boolean };
 
 /** Casca de cada dado: tamanho, tremida, assentamento e o índice para escalonar. */
-function Casca({ i, v, children, rotulo, classe = "" }: { i: number; v: Visual; children: ReactNode; rotulo: string; classe?: string }) {
-  const anim = v.fase === "rolando" ? "pd-rolando" : v.fase === "assentado" && v.novo ? "pd-assentar" : "";
+function Casca({ i, v, children, rotulo, classe = "", rerrolado = false }: { i: number; v: Visual; children: ReactNode; rotulo: string; classe?: string; rerrolado?: boolean }) {
+  const anim =
+    v.fase === "rolando" ? "pd-rolando" : v.fase === "assentado" && rerrolado && v.rerrolar ? "pd-rerrolar" : v.fase === "assentado" && v.novo ? "pd-assentar" : "";
   return (
     <span
       className={`relative inline-grid shrink-0 place-items-center ${v.compacto ? "size-7" : "size-11 sm:size-12"} ${anim} ${classe}`}
@@ -159,8 +170,10 @@ function Gota() {
   return <path d="M50,30 C50,30 38,46 38,53 a12,12 0 0 0 24,0 C62,46 50,30 50,30 Z" fill="var(--sangue)" fillOpacity=".75" />;
 }
 
-function D10Vtm({ valor, fome, bestial, i, v }: { valor: number | null; fome: boolean; bestial: boolean; i: number; v: Visual }) {
+/** `antes`: face antes da rerrolagem com Força de Vontade (o dado ganha contorno âmbar, "↻" e o antes→depois). */
+function D10Vtm({ valor, fome, bestial, i, v, antes }: { valor: number | null; fome: boolean; bestial: boolean; i: number; v: Visual; antes?: number }) {
   const assentado = valor !== null && v.fase === "assentado";
+  const rerrolado = antes !== undefined && assentado;
   const dez = assentado && valor === 10;
   const sucesso = assentado && valor >= 6;
   const um = assentado && fome && valor === 1;
@@ -175,12 +188,25 @@ function D10Vtm({ valor, fome, bestial, i, v }: { valor: number | null; fome: bo
       : "dado"
     : fome
       ? `dado de Fome: ${valor}${dez ? " (10 da Besta)" : um ? " (1 de Fome)" : ""}`
-      : `${valor}${dez ? " (crítico)" : sucesso ? " (sucesso)" : ""}`;
+      : `${valor}${dez ? " (crítico)" : sucesso ? " (sucesso)" : ""}${rerrolado ? ` — rerrolado com Força de Vontade (era ${antes})` : ""}`;
   return (
-    <Casca i={i} v={v} rotulo={rotulo} classe={`${cor} ${assentado && !sucesso && !fome ? "opacity-70" : ""}`}>
+    <Casca i={i} v={v} rotulo={rotulo} rerrolado={rerrolado} classe={`${cor} ${assentado && !sucesso && !fome && !rerrolado ? "opacity-70" : ""}`}>
       <SvgD10 preenchimento={fome ? "var(--sangue)" : "currentColor"} opacidade={opacidade} traco={traco} grossura={dez ? 7 : 5} brilho={dez} pulso={um && bestial && v.novo}>
         {!assentado && fome && v.fase === "espera" && <Gota />}
+        {rerrolado && (
+          <polygon points="50,-8 105,32 105,66 50,108 -5,66 -5,32" fill="none" stroke="var(--ambar)" strokeWidth="4" strokeDasharray="9 6" strokeLinejoin="round" />
+        )}
       </SvgD10>
+      {rerrolado && (
+        <span className={`pd-face absolute -left-1.5 -top-2 font-bold text-ambar ${v.compacto ? "text-[10px]" : "text-sm"}`} aria-hidden>
+          ↻
+        </span>
+      )}
+      {rerrolado && !v.compacto && (
+        <span className="absolute -bottom-4 whitespace-nowrap text-[10px] font-semibold tabular-nums text-ambar" aria-hidden>
+          {antes}→{valor}
+        </span>
+      )}
       {assentado && (
         <span className={`pd-face relative mb-[10%] font-bold leading-none tabular-nums ${v.compacto ? "text-[11px]" : "text-base sm:text-lg"}`} style={{ color: corNumero }}>
           {valor}
@@ -205,11 +231,14 @@ function ParadaVtm({ p, r, v }: { p: Parada; r: ResultadoParada | null; v: Visua
   const bestial = r?.grau === "falha_critica" || r?.rotuloGrau === "Falha Bestial";
   const despertar = r?.vtm === "despertar";
   const todos = [...normais.map((x) => ({ x, fome: false })), ...fome.map((x) => ({ x, fome: true }))];
+  // rerrolagem com Força de Vontade: só dados normais; a chave muda para o dado trocado assentar de novo
+  const trocas = new Map((r?.rerrolado?.dados ?? []).map((t, ordem) => [t.indice, { antes: t.antes, ordem }]));
   return (
-    <Fileira n={todos.length} v={v}>
-      {todos.map((d, i) => (
-        <D10Vtm key={i} valor={d.x} fome={d.fome} bestial={bestial && !despertar} i={i} v={v} />
-      ))}
+    <Fileira n={todos.length} v={v} folga={trocas.size > 0}>
+      {todos.map((d, i) => {
+        const t = d.fome ? undefined : trocas.get(i);
+        return <D10Vtm key={t ? `${i}r` : i} valor={d.x} fome={d.fome} bestial={bestial && !despertar} i={t ? t.ordem : i} v={v} antes={t?.antes} />;
+      })}
     </Fileira>
   );
 }
@@ -329,11 +358,14 @@ function Mod({ mod, v }: { mod: number; v: Visual }) {
 }
 
 /** Fileira que quebra em linhas iguais no cartão grande e corre solta no compacto. */
-function Fileira({ n, v, children }: { n: number; v: Visual; children: ReactNode }) {
+function Fileira({ n, v, children, folga = false }: { n: number; v: Visual; children: ReactNode; folga?: boolean }) {
   if (v.compacto) return <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-2">{children}</span>;
   // largura máxima = colunas × (dado + espaço): o flex-wrap faz o resto e as linhas saem do mesmo tamanho
   return (
-    <span className="mx-auto flex flex-wrap items-center justify-center gap-1.5 sm:gap-2" style={{ maxWidth: `calc(${colunas(n)} * 3.5rem)` }}>
+    <span
+      className={`mx-auto flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 ${folga ? "gap-y-6! pb-4" : ""}`}
+      style={{ maxWidth: `calc(${colunas(n)} * 3.5rem)` }}
+    >
       {children}
     </span>
   );
@@ -345,6 +377,7 @@ export function ParadaDados({
   fase,
   novo = false,
   compacto = false,
+  rerrolar = false,
 }: {
   parada: Parada;
   resultado: ResultadoParada | null;
@@ -352,8 +385,10 @@ export function ParadaDados({
   /** acabou de rolar neste aparelho: os dados assentam com animação */
   novo?: boolean;
   compacto?: boolean;
+  /** a rerrolagem com Força de Vontade acabou de chegar: os dados trocados rolam de novo */
+  rerrolar?: boolean;
 }) {
-  const v: Visual = { fase: resultado ? fase : fase === "assentado" ? "espera" : fase, novo, compacto };
+  const v: Visual = { fase: resultado ? fase : fase === "assentado" ? "espera" : fase, novo, compacto, rerrolar };
   const r = v.fase === "assentado" ? resultado : null;
   let conteudo: ReactNode;
   if (parada.sabor === "vtm5") conteudo = <ParadaVtm p={parada} r={r} v={v} />;

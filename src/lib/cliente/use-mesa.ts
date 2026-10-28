@@ -6,7 +6,7 @@ import type { EstadoMesa, PersonagemVisivel } from "@/lib/mesa";
 import type { Cena, EntradaDiario } from "@/lib/sistemas/tipos";
 import type { EventoMesa, Jogador } from "@/lib/tempo-real";
 import * as identidade from "./identidade";
-import { RESULTADO_TESTE } from "@/lib/constantes";
+import { FIM_DE_SESSAO, RESULTADO_TESTE } from "@/lib/constantes";
 
 // Estado vivo de uma mesa no navegador: começa com o estado do servidor e segue o fluxo de eventos (SSE).
 
@@ -50,8 +50,8 @@ export type AcoesMesa = {
   rolarTeste: (mensagemId: number) => Promise<{ natural: number | null; total: number; dados: number[]; grau: string; rotuloGrau: string } | null>;
 };
 
-/** A fila mostrada esconde as ações internas (resultado de teste rolado pelo jogador). */
-const semInternas = (fila: AcaoPendente[]) => fila.filter((a) => !a.acao.startsWith(RESULTADO_TESTE));
+/** A fila mostrada esconde as ações internas (resultado de teste rolado pelo jogador, o fechamento da noite). */
+const semInternas = (fila: AcaoPendente[]) => fila.filter((a) => !a.acao.startsWith(RESULTADO_TESTE) && a.acao !== FIM_DE_SESSAO);
 
 function deEstado(e: EstadoMesa) {
   return {

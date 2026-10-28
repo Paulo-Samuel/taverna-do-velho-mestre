@@ -20,7 +20,11 @@ import { NarracaoLivro, montarDestaque, trecho } from "@/components/historia/nar
 import { PainelAcao } from "@/components/historia/painel-acao";
 import { PedidoTeste, dadosDoPedido } from "@/components/historia/pedido-teste";
 import { Retrato } from "@/components/historia/retrato";
+import { dadosFimSessao, montarCena, paragrafosDaNarracao, rastrearMudancas, separarFecho, textoParaOuvir } from "@/components/leitor/cena";
 import { AcaoTopo, ATALHOS_LEITOR, LeitorCenas, type BlocoCauda, type ControleLeitor, type Prosa } from "@/components/leitor/leitor-cenas";
+import { Mudancas } from "@/components/leitor/mudancas";
+import { FimDaNoite, MestreEscrevendo, ProsaCena } from "@/components/leitor/pecas";
+import { agruparTurnos } from "@/components/leitor/turnos";
 import { MenuLeitura } from "@/components/leitor/menu-leitura";
 import { useEscalaLeitor, usePreferenciasLeitor } from "@/components/leitor/preferencias";
 import { EstiloProsa, Ornamento } from "@/components/leitor/prosa";
@@ -37,7 +41,8 @@ import type { EstadoMesa } from "@/lib/mesa";
 // Mesa do modo história, no estilo de um livro: céu estrelado, coluna central de texto corrido, cabeçalhos de
 // capítulo, ações dos jogadores em cartões, o dado 3D quando o mestre pede um teste e as ações sugeridas no rodapé.
 // O códex (ficha, missões, pessoas, lugares, grupo) fica numa gaveta à esquerda. A mesa avançada continua em mesa.tsx.
-// Dois jeitos de ler (preferência local): cena a cena (padrão; src/components/leitor) ou a rolagem contínua de sempre.
+// Dois jeitos de ler (preferência local): cena a cena (padrão; src/components/leitor) ou a rolagem contínua de sempre. Nos dois a
+// cena é montada igual (src/components/leitor/cena.ts): prosa contínua, apartes ((fora do jogo)) em caixa e "o que mudou" em chips.
 
 /** Distância do fim (px) a partir da qual o leitor "subiu" e a rolagem automática para. */
 const LONGE_DO_FIM = 160;
@@ -260,6 +265,12 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
     cartao.querySelector<HTMLButtonElement>("button[data-rolar]")?.focus({ preventScroll: true });
   }
 
+  /** Pediu para encerrar a noite e o servidor aceitou: o mestre fecha a cena (chega pelos eventos). */
+  function aoEncerrar() {
+    setCodexAberto(false);
+    setAviso("🌙 O mestre apaga as velas: a noite vai acabando…");
+  }
+
   /** Depois de desfazer: a ação do personagem ativo volta ao campo para ser reescrita (refazer não devolve nada). */
   function aoDesfazer(r: Desfeito, refazer: boolean) {
     pararVoz();
@@ -304,11 +315,20 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
 
   // ---------- leitor cena a cena ----------
 
+  // modo 📜 Rolagem: a história inteira, turno a turno, montada como no leitor
+  const cenasRolagem = useMemo(() => {
+    if (cenas) return [];
+    const rastro = rastrearMudancas(mesa.mensagens);
+    return agruparTurnos(mesa.mensagens).map((turno) => ({ turno, cena: montarCena(turno, rastro) }));
+  }, [cenas, mesa.mensagens]);
+
   const prosa = useMemo<Prosa>(
     () => ({
       classe: "narracao-livro text-foreground/90",
       inline: (t, k) => trecho(t, destaque, k),
       separador: <Ornamento simbolo="✦" />,
+      simbolo: "✦",
+      corDe: corDoNome,
     }),
     [destaque],
   );
@@ -371,6 +391,8 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
     }
     if (m.tipo === "dado") {
       const d = (m.dados ?? {}) as Record<string, unknown>;
+      const fim = dadosFimSessao(m);
+      if (fim) return <FimDaNoite key={m.id} sessao={fim.sessao} data={fim.data} simbolo="✦" />;
       if (d.tipo === "cena_titulo")
         return <CabecalhoCena key={m.id} titulo={d.titulo as string | null} local={d.local as string | null} momento={d.momento as string | null} />;
       if (d.tipo === "pedido_teste") {
@@ -389,9 +411,21 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   // o "agora" que ainda não é mensagem: abertura sendo preparada, ações na fila, rodada, mestre pensando, erro
   const cauda: BlocoCauda[] = [];
   if (comecando && total === 0 && !mesa.ocupado)
-    cauda.push({ chave: "comecando", no: <p className="my-10 text-center italic text-muted">O mestre arruma a mesa e abre o livro…</p> });
-  for (const a of acoesNaFila)
-    cauda.push({ chave: `fila-${a.id}`, no: <CartaoAcao personagem={personagemDe(a.personagemId)} autor={a.autor} texto={a.acao} naFila /> });
+    cauda.push({ chave: "comecando", no: cenas ? <MestreEscrevendo frase="O mestre arruma a mesa e abre o livro" /> : <p className="my-10 text-center italic text-muted">O mestre arruma a mesa e abre o livro…</p> });
+  // cena a cena: as ações na fila ficam no topo do palco, como a ação da cena; na rolagem, cartões tracejados
+  if (cenas && acoesNaFila.length)
+    cauda.push({
+      chave: "fila",
+      no: (
+        <div className="leitor-topo mb-2 space-y-1.5">
+          {acoesNaFila.map((a) => (
+            <Fragment key={a.id}>{acaoTopo({ id: -a.id, tipo: "jogador", texto: a.acao, dados: null, personagemId: a.personagemId, autor: a.autor, criadaEm: "" })}</Fragment>
+          ))}
+          <div className="mt-3 h-px bg-linear-to-r from-border/80 via-border/30 to-transparent" aria-hidden />
+        </div>
+      ),
+    });
+  else for (const a of acoesNaFila) cauda.push({ chave: `fila-${a.id}`, no: <CartaoAcao personagem={personagemDe(a.personagemId)} autor={a.autor} texto={a.acao} naFila /> });
   if (rodada && acoesNaFila.length > 0 && !mesa.ocupado)
     cauda.push({
       chave: "rodada",
@@ -409,7 +443,9 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   if (mesa.ocupado && !mesa.aoVivo)
     cauda.push({
       chave: "pensando",
-      no: (
+      no: cenas ? (
+        <MestreEscrevendo frase={comecando ? "O mestre arruma a mesa e abre o livro" : undefined} />
+      ) : (
         <p className="my-8 flex items-center justify-center gap-2 text-sm italic text-muted" role="status">
           O mestre está pensando
           <span className="pensando text-ambar" aria-hidden>
@@ -528,7 +564,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
             </svg>
           </Link>
           {/* no celular o modo de leitura mora no pé do códex */}
-          <MenuLeitura className="max-sm:hidden" />
+          <MenuLeitura className="max-sm:hidden" campanhaId={mesa.campanha.id} aoEncerrar={aoEncerrar} />
           <BotaoVoz compacto />
           <Musica musica={mesa.cena.musica} sistema={mesa.sistema.id} />
           <button
@@ -562,7 +598,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
         </button>
       )}
 
-      <Codex mesa={mesa} acoes={acoes} fatos={fatos} aberto={codexAberto} aoFechar={fecharCodex} aba={abaCodex} aoMudarAba={setAbaCodex} />
+      <Codex mesa={mesa} acoes={acoes} fatos={fatos} aberto={codexAberto} aoFechar={fecharCodex} aba={abaCodex} aoMudarAba={setAbaCodex} aoEncerrar={aoEncerrar} />
       <FixarSelecao controle={fatos} />
 
       <AjudaAtalhos aberta={ajuda} aoFechar={() => setAjuda(false)} extras={[["C", "abre e fecha o códex"], ...(cenas ? ATALHOS_LEITOR : [])]} />
@@ -613,12 +649,39 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
               <div ref={conteudo} className="leitor-medida mx-auto box-content px-5 pb-10 pt-4 sm:px-6 sm:pt-8">
                 {telaVazia}
 
-                {mesa.mensagens.map(desenhar)}
+                {/* turno a turno, montado como no leitor: prosa contínua, cartões no lugar e "o que mudou" no fim */}
+                {cenasRolagem.map(({ turno, cena }, t) => {
+                  const { corpo, fecho } = separarFecho(cena.pecas);
+                  const ultimaProsa = corpo.findLast((p) => p.tipo === "prosa");
+                  const comFerramentas = t === cenasRolagem.length - 1 && podeDesfazer && ultimoMestre !== null && turno.itens.some((m) => m.id === ultimoMestre);
+                  return (
+                    <Fragment key={turno.chave}>
+                      {turno.acoes.map(desenhar)}
+                      {corpo.map((p) =>
+                        p.tipo === "prosa" ? (
+                          <div key={p.chave} className="surgir group my-5">
+                            <ProsaCena paragrafos={p.paragrafos} inline={prosa.inline} separador={prosa.separador} classe={prosa.classe} />
+                            <div className="mt-1 flex min-h-8 flex-wrap items-center justify-end gap-1">
+                              {comFerramentas && p === ultimaProsa && (
+                                <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={setAviso} className="mr-auto -ml-2.5" />
+                              )}
+                              {textoParaOuvir(p.paragrafos) && <Ouvir id={`msg-${p.ids[0]}`} texto={textoParaOuvir(p.paragrafos)} />}
+                            </div>
+                          </div>
+                        ) : (
+                          desenhar(p.m)
+                        ),
+                      )}
+                      {cena.mudancas.length > 0 && <Mudancas grupos={cena.mudancas} corDe={corDoNome} className="mb-8" />}
+                      {fecho.map((p) => (p.tipo === "item" ? desenhar(p.m) : null))}
+                    </Fragment>
+                  );
+                })}
 
                 {/* texto do mestre chegando agora */}
                 {mesa.aoVivo && (
                   <div className="my-5">
-                    <NarracaoLivro texto={mesa.aoVivo} destaque={destaque} escrevendo />
+                    <ProsaCena paragrafos={paragrafosDaNarracao(mesa.aoVivo, -1)} inline={prosa.inline} separador={prosa.separador} classe={prosa.classe} escrevendo />
                   </div>
                 )}
 

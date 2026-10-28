@@ -114,6 +114,85 @@ export function marcarParagrafos(fluxo: HTMLElement, alturaPagina: number) {
   }
 }
 
+/** Menor escala de um cartão encolhido para caber no fim da página (abaixo disso, ele pula de página mesmo). */
+const ESCALA_MINIMA = 0.75;
+
+/**
+ * Cartão grande (pedido de teste, teste) que não coube no fim da página e pulou para a seguinte, deixando um buraco: se encolhido
+ * um pouco (zoom até 75%, sem o respiro grande em volta) ele cabe no espaço que sobrou, encolhe e fica. Devolve true quando mexeu em algum (medir de novo).
+ * Cada cartão é avaliado uma vez por tamanho de palco (data-compacto guarda a decisão; limparCompactos desfaz).
+ */
+export function compactarCartoes(fluxo: HTMLElement, alturaPagina: number): boolean {
+  const cs = getComputedStyle(fluxo);
+  const caixa = fluxo.getBoundingClientRect();
+  const topo = caixa.top + parseFloat(cs.paddingTop);
+  const fundo = topo + alturaPagina;
+  const pecas = [...fluxo.querySelectorAll<HTMLElement>("[data-revelar],[data-cartao]")];
+  let mexeu = false;
+  for (const el of fluxo.querySelectorAll<HTMLElement>("[data-compactavel]:not([data-compacto])")) {
+    const r = el.getClientRects()[0];
+    if (!r || r.height < 40) continue;
+    // só cartão no topo de uma página que não é a primeira
+    if (r.top - topo > 28 || r.left - caixa.left < 10) continue;
+    const i = pecas.indexOf(el);
+    const antes = i > 0 ? pecas[i - 1] : null;
+    const rs = antes ? antes.getClientRects() : null;
+    const ultimo = rs && rs.length ? rs[rs.length - 1] : null;
+    if (!ultimo || ultimo.left >= r.left - 10) continue;
+    // encolhido, o cartão perde o respiro grande (margem de 0,6rem, ver o ESTILO do leitor) e a escala cobre o resto
+    const margens = 2 * 0.6 * parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const livre = fundo - ultimo.bottom - 12;
+    const escala = Math.floor(Math.min(0.97, livre / (r.height + margens)) * 100) / 100;
+    if (escala < ESCALA_MINIMA) {
+      el.setAttribute("data-compacto", "não");
+      continue;
+    }
+    el.setAttribute("data-compacto", "tentando");
+    el.style.setProperty("zoom", String(escala));
+    // não voltou para a página de antes (quebra de linha, regra de órfãs): desiste e deixa como era
+    const depois = el.getClientRects()[0];
+    if (depois && Math.abs(depois.left - r.left) < 10) {
+      el.style.removeProperty("zoom");
+      el.setAttribute("data-compacto", "não");
+      continue;
+    }
+    el.setAttribute("data-compacto", String(escala));
+    mexeu = true;
+  }
+  return mexeu;
+}
+
+/**
+ * Fecho da cena sozinho na última página (o "Fim da noite", os chips de "o que mudou"): em vez de grudado no topo de uma página
+ * vazia, desce para perto do centro ótico, como a última página de um capítulo. Usa padding (margem some na quebra de coluna).
+ */
+export function centrarFecho(fluxo: HTMLElement, alturaPagina: number, paginas: number, passo: number) {
+  const filhos = [...fluxo.children] as HTMLElement[];
+  for (const el of filhos) if (el.style.paddingTop) el.style.removeProperty("padding-top");
+  if (paginas < 2) return;
+  const base = fluxo.getBoundingClientRect().left;
+  const ultima = base + (paginas - 1) * passo - 2;
+  // o que tem algum pedaço na última página (a prosa que começou antes e termina nela também conta)
+  const naUltima = filhos.filter((el) => {
+    const rs = el.getClientRects();
+    return rs.length > 0 && rs[rs.length - 1].left >= ultima;
+  });
+  if (!naUltima.length || !naUltima.every((el) => el.hasAttribute("data-fecho"))) return;
+  if (naUltima[0].getClientRects()[0].left < ultima) return;
+  const topo = naUltima[0].getBoundingClientRect().top;
+  const fundo = Math.max(...naUltima.map((el) => el.getBoundingClientRect().bottom));
+  const livre = alturaPagina - (fundo - topo) - 24;
+  if (livre > 60) naUltima[0].style.setProperty("padding-top", `${Math.round(livre * 0.36)}px`);
+}
+
+/** Desfaz os cartões encolhidos (o palco mudou de tamanho: a conta muda). */
+export function limparCompactos(fluxo: HTMLElement) {
+  for (const el of fluxo.querySelectorAll<HTMLElement>("[data-compacto]")) {
+    el.removeAttribute("data-compacto");
+    el.style.removeProperty("zoom");
+  }
+}
+
 /** O texto de cada página (para ouvir a página atual): parágrafos separados por linha em branco. */
 export function textosDasPaginas(unidades: Unidade[], limites: number[]): string[] {
   const textos = limites.map(() => "");

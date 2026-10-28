@@ -434,7 +434,10 @@ export function Codex({
   aba,
   aoMudarAba,
   fatos,
+  aoEncerrar,
 }: {
+  /** "Encerrar a noite" deu certo (o menu de leitura do celular mora aqui) */
+  aoEncerrar?: () => void;
   mesa: Mesa;
   acoes: AcoesMesa;
   /** fatos fixados (aba 📌 e o 📌 de cada entrada) */
@@ -560,7 +563,7 @@ export function Codex({
             <span aria-hidden>⚙</span> Ajustes da mesa
           </Link>
           {/* no celular o cabeçalho não tem espaço: o modo de leitura (cena a cena / rolagem) mora aqui */}
-          <MenuLeitura acima className="sm:hidden" />
+          <MenuLeitura acima className="sm:hidden" campanhaId={mesa.campanha.id} aoEncerrar={aoEncerrar ?? aoFechar} />
         </div>
       </aside>
     </>

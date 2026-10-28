@@ -428,6 +428,9 @@ function TesteVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: b
   const despertares = listaDespertares(r.despertares).filter((x) => !x.previsto);
   const dezes = [...normais, ...fome].filter((v) => v === 10).length;
   const pares = Math.floor(dezes / 2);
+  // rerrolagem com Força de Vontade (vtm5/forca-de-vontade.ts): índice em `dados` → face de antes
+  const rr = r.rerrolado as { dados?: { indice: number; antes: number; depois: number }[]; vontade?: { antes: number; depois: number } } | undefined;
+  const trocas = new Map((rr?.dados ?? []).map((t) => [t.indice, t.antes]));
   return (
     <Moldura mensagem={mensagem} destaque={destaque} tom={tom}>
       <Cabecalho r={r} mensagem={mensagem} />
@@ -456,9 +459,19 @@ function TesteVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: b
         <Grau r={r} cor={cor} novo={novo} />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1">
-        {normais.map((v, i) => (
-          <D10 key={`n${i}`} valor={v} fome={false} i={i} novo={novo} />
-        ))}
+        {normais.map((v, i) =>
+          trocas.has(i) ? (
+            // rerrolado com Força de Vontade: contorno âmbar e o valor de antes no título
+            <span key={`n${i}`} className="relative rounded-md ring-1 ring-ambar/80 ring-offset-1 ring-offset-transparent" title={`rerrolado com Força de Vontade: ${trocas.get(i)} → ${v}`}>
+              <D10 valor={v} fome={false} i={i} novo={novo} />
+              <span className="absolute -left-1 -top-1.5 text-[10px] font-bold text-ambar" aria-hidden>
+                ↻
+              </span>
+            </span>
+          ) : (
+            <D10 key={`n${i}`} valor={v} fome={false} i={i} novo={novo} />
+          ),
+        )}
         {fome.length > 0 && normais.length > 0 && <span className="mx-0.5 h-6 w-px bg-sangue/40" aria-hidden />}
         {fome.map((v, i) => (
           <D10 key={`f${i}`} valor={v} fome despertar={despertar} i={normais.length + i} novo={novo} />
@@ -468,6 +481,14 @@ function TesteVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: b
         <FaixaDespertar key={k} x={x} novo={novo} />
       ))}
       <EfeitosVtm efeitos={r.efeitos} />
+      {rr?.vontade && (
+        <p className="mt-1.5 text-xs text-ambar">
+          <span className="font-semibold">
+            ↻ Força de Vontade {rr.vontade.antes} → {rr.vontade.depois}
+          </span>{" "}
+          <span className="text-muted">(superficial)</span> · rerrolou {(rr.dados ?? []).map((t) => `${t.antes}→${t.depois}`).join(", ")}
+        </p>
+      )}
       {r.detalhes && <p className={`mt-1.5 text-xs ${sujo || bestial ? "text-sangue/90" : "text-muted"}`}>{r.detalhes}</p>}
     </Moldura>
   );

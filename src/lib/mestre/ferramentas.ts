@@ -290,7 +290,7 @@ export function definirFerramentas(ctx: ContextoFerramentas): DefFerramenta[] {
     const i = lista.findIndex((f) => f.name === "teste");
     lista.splice(i, 1, {
       name: "pedir_teste",
-      description: `Pede um teste a um personagem do jogador (${ctx.sistema.nomeCurto}). Quem rola é o JOGADOR, clicando no dado na tela; depois você recebe o resultado como nova mensagem e continua. Use só quando o resultado for incerto e importar. Depois de pedir, TERMINE a narração do turno com suspense, sem contar o resultado e sem narrar o que vem depois. No máximo um teste por personagem por turno. Testes comuns: ${ctx.sistema.testesSugeridos.join(", ")}.${notaVampiro}`,
+      description: `Pede um teste a um personagem do jogador (${ctx.sistema.nomeCurto}). Quem rola é o JOGADOR, clicando no dado na tela; depois você recebe o resultado como nova mensagem e continua. Use só quando o resultado for incerto e importar. Narre ANTES de pedir, terminando no suspense, sem contar o resultado; depois de pedir não escreva mais nada (no máximo chame sugerir_acoes). No máximo um teste por personagem por turno. Testes comuns: ${ctx.sistema.testesSugeridos.join(", ")}.${notaVampiro}`,
       input_schema: {
         type: "object",
         properties: {
@@ -1288,7 +1288,7 @@ export async function executarFerramenta(ctx: ContextoFerramentas, nome: string,
       teste: previa.teste,
       alvo: e.alvo,
       instrucao:
-        "O jogador vai rolar o dado agora. Termine a narração deste turno com suspense, sem revelar o resultado nem narrar o que acontece depois. O resultado chega no próximo turno.",
+        "O cartão do dado já está na tela e o jogador vai rolar. A narração já terminou no suspense: NÃO escreva mais nada (nem \"o dado é seu\", nem resumo do teste); se ainda faltar, chame sugerir_acoes e encerre respondendo só \"—\". O resultado chega no próximo turno.",
     };
   }
 

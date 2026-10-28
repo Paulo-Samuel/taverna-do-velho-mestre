@@ -69,6 +69,21 @@
   letter-spacing: 0.3em;
   color: var(--muted);
 }
+/* fim de sessão: fecha o capítulo da noite */
+.livro-fim-noite {
+  margin: 3rem 0 1rem;
+  text-align: center;
+  break-after: page;
+}
+.livro-fim-noite .livro-separador {
+  margin: 0 0 0.6rem;
+}
+.livro-fim-noite-titulo {
+  font-family: var(--font-titulo);
+  font-size: 1.15rem;
+  letter-spacing: 0.06em;
+  color: var(--pergaminho);
+}
 .livro-etiqueta {
   font-size: 0.8em;
   color: var(--muted);

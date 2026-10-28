@@ -5,10 +5,13 @@ import { Fragment, useCallback, useEffect, useImperativeHandle, useMemo, useRef,
 import { emCampoDeTexto } from "@/components/chat/atalhos";
 import { Ouvir } from "@/components/voz/voz";
 import type { Mensagem } from "@/lib/db";
+import { dadosFimSessao, foraDoJogo, montarCena, paragrafosDaNarracao, rastrearMudancas, separarFecho, type Paragrafo, type Peca } from "./cena";
+import { Mudancas } from "./mudancas";
 import { VAO } from "./paginacao";
+import { Aparte, FimDaNoite, linhasDoAparte } from "./pecas";
 import { useMenosMovimento, usePreferenciasLeitor } from "./preferencias";
 import { capitularCabe, EstiloProsa } from "./prosa";
-import { agruparTurnos, dividirParagrafos, SEPARADOR, type Turno } from "./turnos";
+import { agruparTurnos, SEPARADOR, type Turno } from "./turnos";
 import { suportaRevelar, useRevelar, type Transicao } from "./use-revelar";
 
 // Leitor cena a cena das duas mesas (modo história e avançado), no lugar da conversa que rola.
@@ -18,6 +21,8 @@ import { suportaRevelar, useRevelar, type Transicao } from "./use-revelar";
 // à esquerda o "reler a história" (o Livro da campanha) e, no fim da cena, desfazer/outra resposta. Cenas antigas não voltam
 // ao palco: para reler há o Livro e o modo 📜 Rolagem do menu de leitura.
 // Cada mesa entrega como desenhar a prosa, a ação e os cartões; o leitor cuida de agrupar, paginar, revelar e virar a página.
+// A cena é montada em cena.ts: as narrações seguidas viram uma prosa só (os "é a sua vez" redundantes saem), os ((apartes)) do
+// mestre ganham caixa própria e as linhas de ficha/diário/XP viram os chips de "o que mudou na cena", no fim.
 
 export type Prosa = {
   /** classes extras do bloco de narração (cor do texto); o tamanho e a entrelinha vêm do .leitor-prosa */
@@ -26,6 +31,10 @@ export type Prosa = {
   inline: (texto: string, chave: string) => ReactNode;
   /** o enfeite do separador de cena (---) */
   separador: ReactNode;
+  /** símbolo do enfeite (sem ele, o --ornamento do tema): fim da noite */
+  simbolo?: string;
+  /** cor do nome de um personagem (os chips de "o que mudou") */
+  corDe?: (nome: string) => string | undefined;
 };
 
 /** Coisas do "agora" que não são mensagens: o mestre pensando, ações na fila, controles da rodada, erro. */
@@ -49,6 +58,7 @@ const ESTILO = `
 .leitor-topo,.leitor-grudar{break-after:avoid}
 .leitor-fluxo [data-cartao]{transition:opacity .45s ease}
 .leitor-fluxo [data-leitor-oculto]{visibility:hidden;opacity:0}
+.leitor-fluxo [data-compacto]:not([data-compacto="não"])>*{margin-top:.6rem!important;margin-bottom:.6rem!important}
 @keyframes leitor-chamar{0%,100%{opacity:.55;transform:none}50%{opacity:1;transform:translateX(2px)}}
 .leitor-chamar{animation:leitor-chamar 2.2s ease-in-out infinite}
 @media (prefers-reduced-motion:reduce){.leitor-fluxo [data-cartao]{transition:none}.leitor-chamar{animation:none}}
@@ -74,16 +84,16 @@ export function AcaoTopo({
   detalhe?: ReactNode;
 }) {
   const t = texto.trim();
-  if (t.startsWith("((") || !nome)
+  if (foraDoJogo(t) || !nome)
     return (
-      <p className="text-center text-sm italic text-muted">
-        <span className="not-italic text-muted/80">{autor || nome || "Alguém"}, fora do jogo:</span> {t.replace(/^\(\(|\)\)$/g, "").trim()}
-      </p>
+      <Aparte quem={autor || nome || "Alguém"} className="my-0! text-[0.92rem]">
+        <p>{t.replace(/^\(\(|\)\)$/g, "").trim()}</p>
+      </Aparte>
     );
   return (
-    <div className="flex min-w-0 items-start gap-2.5 text-[0.92rem] leading-snug" title={t.length > 160 ? t : undefined}>
+    <div className="flex min-w-0 flex-wrap items-start gap-x-2.5 gap-y-1 text-[0.92rem] leading-snug sm:flex-nowrap" title={t.length > 160 ? t : undefined}>
       {icone && <span className="mt-px shrink-0 opacity-90">{icone}</span>}
-      <p className="line-clamp-2 min-w-0 flex-1 break-words text-foreground/65">
+      <p className="line-clamp-2 min-w-0 flex-1 break-words text-foreground/75">
         <span
           className={`font-semibold tracking-[0.06em] [font-variant-caps:all-small-caps] ${cor ? "" : "text-ambar"}`}
           style={cor ? { color: cor } : undefined}
@@ -91,50 +101,64 @@ export function AcaoTopo({
           {nome}
         </span>
         {autor && autor !== nome && <span className="text-xs text-muted"> ({autor})</span>}
-        <span className="mx-1.5 text-muted/60" aria-hidden>
+        <span className="mx-1.5 text-muted/70" aria-hidden>
           —
         </span>
         <span className="italic">{t}</span>
       </p>
-      {detalhe && <span className="mt-0.5 shrink-0 text-xs">{detalhe}</span>}
+      {/* o teste que a ação virou: no canto no desktop, numa linha própria no celular (a ação não fica espremida) */}
+      {detalhe && <span className={`mt-0.5 shrink-0 text-xs max-sm:w-full ${icone ? "max-sm:pl-8" : ""}`}>{detalhe}</span>}
     </div>
   );
 }
 
 function BlocoNarracao({
-  texto,
+  paragrafos,
   chave,
   prosa,
   escrevendo,
   capitular,
+  continua = false,
 }: {
-  texto: string;
+  paragrafos: Paragrafo[];
   chave: string;
   prosa: Prosa;
   escrevendo: boolean;
-  /** primeiro bloco da cena: o primeiro parágrafo ganha capitular (se couber) */
+  /** primeiro bloco da cena: o primeiro parágrafo de narração (não o aparte) ganha capitular (se couber) */
   capitular: boolean;
+  /** continua a prosa anterior (texto ao vivo depois da narração): sem o respiro de bloco novo */
+  continua?: boolean;
 }) {
-  const paragrafos = dividirParagrafos(texto);
-  const comCapitular = capitular && paragrafos.length > 0 && capitularCabe(paragrafos[0]);
+  const primeira = capitular ? paragrafos.findIndex((p) => !p.aparte && !SEPARADOR.test(p.texto)) : -1;
+  const comCapitular = primeira >= 0 && capitularCabe(paragrafos[primeira].texto);
   return (
-    <div className={`leitor-prosa ${prosa.classe} my-6 first:mt-0`} data-fixavel>
-      {paragrafos.map((p, i) =>
-        SEPARADOR.test(p) ? (
-          <div key={i} data-cartao aria-hidden className="leitor-grudar">
-            {prosa.separador}
-          </div>
-        ) : (
+    <div className={`leitor-prosa ${prosa.classe} ${continua ? "mb-6 mt-[0.9em]" : "my-6"} first:mt-0`} data-fixavel>
+      {paragrafos.map((p, i) => {
+        const k = `${chave}-${i}`;
+        // aparte ((fora do jogo)): caixa própria, aparece inteira quando o texto chega nela e fica fora do "ouvir"
+        if (p.aparte)
+          return (
+            <div key={k} data-cartao data-aparte>
+              <Aparte>{linhasDoAparte(p.texto, prosa.inline, k)}</Aparte>
+            </div>
+          );
+        if (SEPARADOR.test(p.texto))
+          return (
+            <div key={k} data-cartao aria-hidden className="leitor-grudar">
+              {prosa.separador}
+            </div>
+          );
+        return (
           <p
-            key={i}
+            key={k}
             data-revelar
-            data-capitular={comCapitular && i === 0 ? "" : undefined}
-            className={`${comCapitular && i === 0 ? "leitor-capitular" : ""} ${escrevendo && i === paragrafos.length - 1 ? "cursor" : ""}`}
+            data-capitular={comCapitular && i === primeira ? "" : undefined}
+            className={`${comCapitular && i === primeira ? "leitor-capitular" : ""} ${escrevendo && i === paragrafos.length - 1 ? "cursor" : ""}`}
           >
-            {prosa.inline(p, `${chave}-${i}`)}
+            {prosa.inline(p.texto, k)}
           </p>
-        ),
-      )}
+        );
+      })}
       {escrevendo && paragrafos.length === 0 && <p className="cursor" />}
     </div>
   );
@@ -194,6 +218,8 @@ export function LeitorCenas({
   transicao?: Transicao;
 }) {
   const turnos = useMemo(() => agruparTurnos(mensagens), [mensagens]);
+  // o que cada linha de ficha/diário/XP mudou precisa da história inteira (a ficha manda só o valor novo)
+  const rastro = useMemo(() => rastrearMudancas(mensagens), [mensagens]);
   const chaveUltima = turnos.at(-1)?.chave ?? "";
 
   // ação enviada esperando o mestre: o palco vira uma cena nova (fica até a ação virar mensagem, mesmo com o mestre já ocupado)
@@ -341,8 +367,32 @@ export function LeitorCenas({
   const extras = noFim && ferramentas ? ferramentas(turno) : null;
   const botaoNav =
     "inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-md px-2 text-sm text-muted transition hover:text-ambar disabled:pointer-events-none disabled:opacity-0 sm:min-h-9";
+  const cena = useMemo(() => montarCena(turno, rastro), [turno, rastro]);
+  const { corpo, fecho } = separarFecho(cena.pecas);
   // a capitular vai no primeiro parágrafo da primeira narração da cena
-  const primeiraNarracao = turno.itens.find((m) => m.tipo === "mestre")?.id ?? null;
+  const primeiraProsa = cena.pecas.find((p) => p.tipo === "prosa")?.chave ?? null;
+  const ultimaPeca = corpo.at(-1);
+  /** uma peça da cena: prosa contínua, fim da noite ou o cartão que a mesa desenha */
+  const desenharPeca = (p: Peca) => {
+    if (p.tipo === "prosa")
+      return <BlocoNarracao key={p.chave} paragrafos={p.paragrafos} chave={p.chave} prosa={prosa} escrevendo={false} capitular={p.chave === primeiraProsa} />;
+    const m = p.m;
+    const fim = dadosFimSessao(m);
+    if (fim)
+      return (
+        <div key={m.id} data-cartao data-msg={m.id} data-fecho>
+          <FimDaNoite sessao={fim.sessao} data={fim.data} simbolo={prosa.simbolo} />
+        </div>
+      );
+    const no = item(m);
+    if (no === null || no === undefined || no === false) return null;
+    const grudar = (m.dados as { tipo?: string } | null)?.tipo === "cena_titulo";
+    return (
+      <div key={m.id} data-cartao data-msg={m.id} className={grudar ? "leitor-grudar" : undefined} data-compactavel={grudar ? undefined : ""}>
+        {no}
+      </div>
+    );
+  };
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col" data-leitor>
@@ -380,19 +430,23 @@ export function LeitorCenas({
                         <div className="mt-3 h-px bg-linear-to-r from-border/80 via-border/30 to-transparent" aria-hidden />
                       </div>
                     )}
-                    {turno.itens.map((m) => {
-                      if (m.tipo === "mestre")
-                        return <BlocoNarracao key={m.id} texto={m.texto} chave={`m${m.id}`} prosa={prosa} escrevendo={false} capitular={m.id === primeiraNarracao} />;
-                      const no = item(m);
-                      if (no === null || no === undefined || no === false) return null;
-                      const grudar = (m.dados as { tipo?: string } | null)?.tipo === "cena_titulo";
-                      return (
-                        <div key={m.id} data-cartao data-msg={m.id} className={grudar ? "leitor-grudar" : undefined}>
-                          {no}
-                        </div>
-                      );
-                    })}
-                    {aoVivo && <BlocoNarracao texto={aoVivo} chave="vivo" prosa={prosa} escrevendo={terminou} capitular={primeiraNarracao === null} />}
+                    {corpo.map(desenharPeca)}
+                    {aoVivo && (
+                      <BlocoNarracao
+                        paragrafos={paragrafosDaNarracao(aoVivo, -1)}
+                        chave="vivo"
+                        prosa={prosa}
+                        escrevendo={terminou}
+                        capitular={primeiraProsa === null}
+                        continua={ultimaPeca?.tipo === "prosa"}
+                      />
+                    )}
+                    {cena.mudancas.length > 0 && (
+                      <div data-cartao data-fecho>
+                        <Mudancas grupos={cena.mudancas} corDe={prosa.corDe} />
+                      </div>
+                    )}
+                    {fecho.map(desenharPeca)}
                     {cauda.map((c) => (
                       <div key={c.chave} data-cartao>
                         {c.no}

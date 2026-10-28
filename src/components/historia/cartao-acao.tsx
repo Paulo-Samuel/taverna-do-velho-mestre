@@ -1,5 +1,7 @@
 "use client";
 
+import { foraDoJogo } from "@/components/leitor/cena";
+import { Aparte } from "@/components/leitor/pecas";
 import type { PersonagemVisivel } from "@/lib/mesa";
 import { COR_GRAU, NOME_GRAU, corDoNome } from "./cores";
 import { Retrato } from "./retrato";
@@ -26,12 +28,11 @@ export function CartaoAcao({
   /** ainda esperando o mestre (fila) */
   naFila?: boolean;
 }) {
-  const foraDoJogo = texto.trim().startsWith("((");
-  if (foraDoJogo || (!personagem && !nomeReserva)) {
+  if (foraDoJogo(texto) || (!personagem && !nomeReserva)) {
     return (
-      <p className={`surgir my-4 text-center text-sm italic text-muted ${naFila ? "opacity-60" : ""}`}>
-        <span className="not-italic text-muted/80">{autor || "Alguém"}, fora do jogo:</span> {texto.replace(/^\(\(|\)\)$/g, "").trim()}
-      </p>
+      <Aparte quem={autor || personagem?.ficha.nome || "Alguém"} className={`surgir my-5! text-[0.95rem] ${naFila ? "opacity-70" : ""}`}>
+        <p>{texto.trim().replace(/^\(\(|\)\)$/g, "").trim()}</p>
+      </Aparte>
     );
   }
   const nome = personagem?.ficha.nome ?? nomeReserva ?? "";

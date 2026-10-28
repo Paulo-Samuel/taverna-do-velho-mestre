@@ -13,12 +13,16 @@ import { Retrato } from "./retrato";
 // Pendente → cartão grande com os dados e o botão. Rolado aqui → d20 3D gira e assenta na face do servidor; nos outros sistemas a
 // parada (d10 do Vampiro, d100, Fate, 2d6) treme e assenta dado a dado. Rolado em outro aparelho (ou ao recarregar) → resultado
 // compacto: d20 numa linha, os outros com a mesma parada assentada em tamanho pequeno.
+// Vampiro: teste que falhou com Força de Vontade sobrando fica "decidir" — o cartão oferece rerrolar até 3 dados normais (−1 FV) ou
+// aceitar; o servidor aceita sozinho no prazo (rota /rerrolar) e só então manda o resultado ao mestre.
 
 export type ResultadoRolagem = { natural: number | null; total: number; dados: number[]; grau: string; rotuloGrau: string };
 
 type DadosPedido = {
   tipo?: string;
-  status?: "pendente" | "resolvido" | "cancelado";
+  status?: "pendente" | "decidir" | "resolvido" | "cancelado";
+  /** status "decidir": até quando o servidor espera (epoch ms) e a mesa (para a rota /rerrolar) */
+  decisao?: { ate?: number; campanhaId?: number };
   personagem?: string;
   personagemId?: number;
   teste?: string;
@@ -43,6 +47,9 @@ type Rolagem = { fase: "girando" | "assentando" | "pronto" | "recolhido"; result
 
 /** Tempo máximo esperando o dado 3D avisar que parou (se o aviso não vier, mostra o resultado assim mesmo). */
 const ESPERA_MAXIMA_MS = 4000;
+
+/** Prazo da decisão de rerrolar (igual ao PRAZO_DECISAO_MS do servidor; só para a barrinha). */
+const PRAZO_DECISAO_MS = 20_000;
 
 /** Quanto tempo o dado grande fica na tela depois do resultado. Depois vira o resumo compacto: cada Dado3D usa um contexto
  * WebGL e o navegador só aguenta uns 16 por página, então só o teste ativo mantém o dado montado. */
@@ -203,6 +210,159 @@ function SangueDoResultado({ r, centro = false, novo = false }: { r: ResultadoPa
   );
 }
 
+// ---------- rerrolar com Força de Vontade (Vampiro) ----------
+
+/** Linha do que a rerrolagem custou: "↻ Força de Vontade 7 → 6 (superficial) · rerrolou 2→8, 4→6". */
+function LinhaVontade({ r, centro = false }: { r: ResultadoParada; centro?: boolean }) {
+  const x = r.rerrolado;
+  if (!x?.vontade) return null;
+  return (
+    <p className={`mt-1.5 text-xs text-ambar ${centro ? "text-center" : ""}`}>
+      <span className="font-semibold">
+        ↻ Força de Vontade {x.vontade.antes} → {x.vontade.depois}
+      </span>{" "}
+      <span className="text-muted">(superficial)</span>
+      {x.dados?.length ? <> · rerrolou {x.dados.map((t) => `${t.antes}→${t.depois}`).join(", ")}</> : null}
+      {x.grauAntes && <span className="text-muted"> · antes: {x.grauAntes}</span>}
+    </p>
+  );
+}
+
+/** Os dados normais que o servidor vai rolar de novo (os menores abaixo de 6, até 3), só para o cartão mostrar. */
+function escolhaDaRerrolagem(r: ResultadoParada): number[] {
+  const dados = r.dados ?? [];
+  const normais = dados.slice(0, dados.length - (Array.isArray(r.dadosFome) ? r.dadosFome.length : 0));
+  return normais
+    .map((v, i) => ({ v, i }))
+    .filter((x) => x.v < 6)
+    .sort((a, b) => a.v - b.v || a.i - b.i)
+    .slice(0, 3)
+    .map((x) => x.v);
+}
+
+/** Teste em decisão: quem controla o personagem rerrola ou aceita; os outros esperam. Prazo vencido sem resposta do servidor
+ * (reiniciou no meio) → o navegador aceita (o servidor ignora se já fechou). */
+function DecisaoVontade({
+  mensagemId,
+  d,
+  r,
+  podeRolar,
+  quem,
+  vontade,
+  aoRerrolar,
+}: {
+  mensagemId: number;
+  d: DadosPedido;
+  r: ResultadoParada;
+  podeRolar: boolean;
+  quem: string;
+  vontade: { atual: number; max: number } | null;
+  aoRerrolar: (novo: Resultado) => void;
+}) {
+  const ate = d.decisao?.ate ?? 0;
+  const campanhaId = d.decisao?.campanhaId;
+  const [agora, setAgora] = useState(0);
+  const [enviando, setEnviando] = useState<"rerrolar" | "aceitar" | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    const tique = () => setAgora(Date.now());
+    const t0 = setTimeout(tique, 0);
+    const t = setInterval(tique, 250);
+    return () => {
+      clearTimeout(t0);
+      clearInterval(t);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!ate || !campanhaId) return;
+    const t = setTimeout(
+      () => {
+        void fetch(`/api/campanhas/${campanhaId}/rerrolar`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mensagemId, aceitar: true, sozinho: true }),
+        }).catch(() => undefined);
+      },
+      Math.max(0, ate + 2500 - Date.now()),
+    );
+    return () => clearTimeout(t);
+  }, [ate, campanhaId, mensagemId]);
+
+  async function decidir(aceitar: boolean) {
+    if (enviando || !campanhaId) return;
+    setEnviando(aceitar ? "aceitar" : "rerrolar");
+    setErro(null);
+    const resp = await fetch(`/api/campanhas/${campanhaId}/rerrolar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(aceitar ? { mensagemId, aceitar: true } : { mensagemId }),
+    }).catch(() => null);
+    const corpo = resp ? ((await resp.json().catch(() => ({}))) as { resultado?: Resultado; erro?: string }) : {};
+    if (!resp?.ok) {
+      setErro(corpo.erro ?? "Não deu certo. Tente de novo.");
+      setEnviando(null);
+      return;
+    }
+    // a mensagem atualizada chega pelo fluxo de eventos e tira os botões; o resultado já anima aqui
+    if (!aceitar && corpo.resultado) aoRerrolar(corpo.resultado);
+  }
+
+  const resta = agora ? Math.max(0, ate - agora) : PRAZO_DECISAO_MS;
+  const escolha = escolhaDaRerrolagem(r);
+  return (
+    <div className="surgir mx-auto mt-4 max-w-md rounded-xl border border-ambar/45 bg-background/35 px-3 py-3 text-center" data-decisao={mensagemId}>
+      <p className="text-sm text-foreground/90">
+        Gastar <span className="font-semibold text-ambar">Força de Vontade</span>?
+        {vontade && (
+          <span className="text-muted">
+            {" "}
+            ({vontade.atual}/{vontade.max})
+          </span>
+        )}
+      </p>
+      {escolha.length > 0 && (
+        <p className="mt-0.5 text-xs text-muted">
+          Rola de novo {escolha.length === 1 ? "o dado normal que falhou" : `os ${escolha.length} dados normais que falharam`} ({escolha.join(", ")}); os de Fome ficam.
+        </p>
+      )}
+      {podeRolar ? (
+        <div className="mt-3 flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:flex-wrap">
+          <button
+            type="button"
+            data-rerrolar
+            disabled={enviando !== null}
+            onClick={() => void decidir(false)}
+            className="btn-ambar min-h-11 flex-col gap-0 px-4 py-2 leading-tight focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ambar"
+          >
+            <span>{enviando === "rerrolar" ? "Rerrolando…" : "↻ Rerrolar com Força de Vontade"}</span>
+            <span className="text-[11px] font-normal opacity-80">até 3 dados normais · −1 FV</span>
+          </button>
+          <button
+            type="button"
+            data-aceitar
+            disabled={enviando !== null}
+            onClick={() => void decidir(true)}
+            className="btn-borda min-h-11 px-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ambar"
+          >
+            {enviando === "aceitar" ? "Aceitando…" : "Aceitar o resultado"}
+          </button>
+        </div>
+      ) : (
+        <p className="mt-2 text-sm italic text-muted">Aguardando {quem} decidir…</p>
+      )}
+      <div className="mx-auto mt-3 h-1 max-w-xs overflow-hidden rounded-full bg-border/60" aria-hidden>
+        <div className="h-full bg-ambar/80 transition-[width] duration-300 ease-linear" style={{ width: `${Math.min(100, (resta / PRAZO_DECISAO_MS) * 100)}%` }} />
+      </div>
+      <p className="mt-1 text-[11px] text-muted">
+        aceita sozinho em {Math.ceil(resta / 1000)} s{podeRolar ? " · F rerrola, Enter aceita" : ""}
+      </p>
+      {erro && <p className="mt-1 text-xs text-sangue">{erro}</p>}
+    </div>
+  );
+}
+
 export function PedidoTeste({
   mensagem,
   personagem,
@@ -223,6 +383,16 @@ export function PedidoTeste({
     setStatusVisto(d.status);
     if (d.status === "pendente" && rolagem && rolagem.fase !== "girando") setRolagem(null);
   }
+  // a rerrolagem com Força de Vontade chegou com o cartão aberto (aqui ou em outro aparelho): os dados trocados rolam de novo
+  const temRerrolagem = Boolean(d.resultado?.rerrolado);
+  const [rerrolagemVista, setRerrolagemVista] = useState(temRerrolagem);
+  const [rerrolagemNova, setRerrolagemNova] = useState(false);
+  if (temRerrolagem !== rerrolagemVista) {
+    setRerrolagemVista(temRerrolagem);
+    setRerrolagemNova(temRerrolagem);
+  }
+  const decidindo = d.status === "decidir";
+  const vontade = personagem?.ficha.recursos?.vontade ?? null;
   const nome = personagem?.ficha.nome ?? d.personagem ?? "Alguém";
   const cor = corDoNome(nome);
   const bonus = typeof d.bonus === "number" ? d.bonus : (d.resultado?.bonus ?? 0);
@@ -239,11 +409,30 @@ export function PedidoTeste({
     return () => clearTimeout(t);
   }, [fase]);
 
+  // em decisão (rerrolar ou aceitar) o cartão grande fica até o jogador escolher
   useEffect(() => {
-    if (fase !== "pronto") return;
+    if (fase !== "pronto" || decidindo) return;
     const t = setTimeout(() => setRolagem((r) => (r ? { ...r, fase: "recolhido" } : r)), DADO_NA_TELA_MS);
     return () => clearTimeout(t);
-  }, [fase]);
+  }, [fase, decidindo]);
+
+  function aoRerrolar(novo: Resultado) {
+    setRolagem((r) => (r ? { ...r, resultado: novo } : r));
+    setRerrolagemVista(true);
+    setRerrolagemNova(true);
+  }
+  const decisao = (r: ResultadoParada) =>
+    decidindo ? (
+      <DecisaoVontade
+        mensagemId={mensagem.id}
+        d={d}
+        r={r}
+        podeRolar={podeRolar}
+        quem={personagem?.jogador || nome}
+        vontade={vontade ? { atual: vontade.atual, max: vontade.max } : null}
+        aoRerrolar={aoRerrolar}
+      />
+    ) : null;
 
   async function clicar() {
     if (rolagem) return;
@@ -271,15 +460,19 @@ export function PedidoTeste({
   }
 
   // resolvido em outro aparelho, numa visita anterior ou já recolhido: resultado compacto (sem Dado3D)
-  if ((!rolagem && d.status === "resolvido") || fase === "recolhido") {
+  if ((!rolagem && (d.status === "resolvido" || decidindo)) || fase === "recolhido") {
     const r = d.resultado ?? rolagem?.resultado ?? {};
     if (!d20) {
       const corGrau = corParada(r);
       const forte = r.rotuloGrau === "Crítico Sujo" || r.rotuloGrau === "Falha Bestial" || r.grau === "falha_critica";
       return (
         <div
-          className={`surgir mx-auto my-5 max-w-xl rounded-lg border px-3 py-2.5 text-sm ${forte ? "border-sangue/55 bg-sangue/5" : "border-border/70 bg-surface/50"}`}
+          id={`pedido-${mensagem.id}`}
+          className={`surgir mx-auto my-5 max-w-xl scroll-mt-24 rounded-lg border px-3 py-2.5 text-sm ${
+            forte ? "border-sangue/55 bg-sangue/5" : decidindo ? "border-ambar/60 bg-surface/60" : "border-border/70 bg-surface/50"
+          }`}
           aria-label={`Teste de ${tituloDoTeste(teste)} de ${nome}: ${rotuloParada(r)}`}
+          aria-live="polite"
         >
           <div className="flex items-start justify-between gap-3">
             <p className="min-w-0 truncate pt-0.5 text-xs text-muted">
@@ -293,14 +486,16 @@ export function PedidoTeste({
             </span>
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <ParadaDados parada={parada} resultado={r} fase="assentado" compacto />
+            <ParadaDados parada={parada} resultado={r} fase="assentado" compacto rerrolar={rerrolagemNova} />
             <span className="tabular-nums text-foreground/80">
               {contaParada(parada, r, alvo)}
               {partesDoRotulo(r).resto && <span className="text-muted"> · {partesDoRotulo(r).resto}</span>}
             </span>
           </div>
           <SangueDoResultado r={r} />
+          <LinhaVontade r={r} />
           {r.detalhes && <p className="mt-1.5 line-clamp-2 text-xs text-muted">{r.detalhes}</p>}
+          {decisao(r)}
         </div>
       );
     }
@@ -334,7 +529,8 @@ export function PedidoTeste({
   }
 
   // pendente (ou rolado agora neste aparelho): o cartão grande com os dados
-  const resultado = rolagem?.resultado ?? null;
+  // depois da rerrolagem vale o resultado novo (chega pela rota ou pelo fluxo de eventos)
+  const resultado = ((d.resultado?.rerrolado ? d.resultado : null) as Resultado | null) ?? rolagem?.resultado ?? null;
   const pronto = rolagem?.fase === "pronto" && resultado;
   const natural = resultado?.natural ?? null;
   const destaque = natural === 20 ? "critico" : natural === 1 ? "falha" : null;
@@ -375,7 +571,13 @@ export function PedidoTeste({
         </div>
       ) : (
         <div className="mt-5 flex min-h-14 justify-center">
-          <ParadaDados parada={parada} resultado={resultado} fase={!rolagem ? "espera" : rolagem.fase === "girando" ? "rolando" : "assentado"} novo />
+          <ParadaDados
+            parada={parada}
+            resultado={resultado}
+            fase={!rolagem ? "espera" : rolagem.fase === "girando" ? "rolando" : "assentado"}
+            novo
+            rerrolar={rerrolagemNova}
+          />
         </div>
       )}
 
@@ -391,7 +593,9 @@ export function PedidoTeste({
           )}
           <p className="mt-1 text-sm tabular-nums text-foreground/85 sm:text-base">{contaParada(parada, resultado, alvo)}</p>
           <SangueDoResultado r={resultado} centro novo />
+          <LinhaVontade r={resultado} centro />
           {resultado.detalhes && <p className="mx-auto mt-2 max-w-md text-xs text-muted">{resultado.detalhes}</p>}
+          {decisao(resultado)}
         </div>
       ) : pronto ? (
         <p className="surgir mt-4 text-lg tabular-nums sm:text-xl">
