@@ -2,18 +2,27 @@
 
 import { useSyncExternalStore, type CSSProperties } from "react";
 
-// Preferências locais do leitor (deste navegador): cena a cena ou rolagem contínua, o texto se revelando aos poucos e o tamanho
-// da letra. localStorage pode não existir (aba anônima, bloqueio): tudo em try/catch, com o padrão "cena a cena, animado, letra média".
+// Preferências locais do leitor (deste navegador): cena a cena ou rolagem contínua, o texto se revelando aos poucos, o tamanho
+// da letra e, com a tela baixa (palco com menos de ~180 px: notebook a 150 %+, zoom 200 %), insistir nas páginas em vez de cair
+// sozinho para a rolagem. localStorage pode não existir (aba anônima, bloqueio): tudo em try/catch, com o padrão "cena a cena,
+// animado, letra média, rolagem quando a tela é baixa".
 
 export type ModoLeitura = "cenas" | "rolagem";
-export type PreferenciasLeitor = { modo: ModoLeitura; animar: boolean; /** passo do tamanho da letra (índice de ESCALAS_FONTE) */ fonte: number };
+export type PreferenciasLeitor = {
+  modo: ModoLeitura;
+  animar: boolean;
+  /** passo do tamanho da letra (índice de ESCALAS_FONTE) */
+  fonte: number;
+  /** tela baixa: continuar em páginas (curtas) em vez da rolagem automática */
+  paginasEmTelaBaixa: boolean;
+};
 
 /** Multiplicadores do tamanho da letra da narração (A− / A+ no menu de leitura). */
 export const ESCALAS_FONTE = [0.88, 1, 1.12, 1.25];
 const FONTE_PADRAO = 1;
 
 const CHAVE = "taverna:leitor";
-const PADRAO: PreferenciasLeitor = { modo: "cenas", animar: true, fonte: FONTE_PADRAO };
+const PADRAO: PreferenciasLeitor = { modo: "cenas", animar: true, fonte: FONTE_PADRAO, paginasEmTelaBaixa: false };
 
 const fonteValida = (f: unknown) => (typeof f === "number" && Number.isInteger(f) && f >= 0 && f < ESCALAS_FONTE.length ? f : FONTE_PADRAO);
 
@@ -24,7 +33,12 @@ function ler(): PreferenciasLeitor {
   if (atual) return atual;
   try {
     const bruto = JSON.parse(localStorage.getItem(CHAVE) ?? "null") as Partial<PreferenciasLeitor> | null;
-    atual = { modo: bruto?.modo === "rolagem" ? "rolagem" : "cenas", animar: bruto?.animar !== false, fonte: fonteValida(bruto?.fonte) };
+    atual = {
+      modo: bruto?.modo === "rolagem" ? "rolagem" : "cenas",
+      animar: bruto?.animar !== false,
+      fonte: fonteValida(bruto?.fonte),
+      paginasEmTelaBaixa: bruto?.paginasEmTelaBaixa === true,
+    };
   } catch {
     atual = PADRAO;
   }
@@ -78,4 +92,33 @@ function assinarMovimento(f: () => void) {
 /** A pessoa pediu menos movimento no sistema? */
 export function useMenosMovimento(): boolean {
   return useSyncExternalStore(assinarMovimento, () => window.matchMedia(CONSULTA_MOVIMENTO).matches, () => false);
+}
+
+// ---------- consultas de mídia da mesa ----------
+// Os pontos de corte são os mesmos das classes do Tailwind nos componentes (sm = 40rem; baixo = altura até 600 px, ver globals.css).
+
+/** Tela larga E alta: desktop de verdade. Abaixo disso (celular ou tela baixa) a interface fica compacta. */
+export const CONSULTA_LARGO = "(min-width: 40rem) and (min-height: 601px)";
+/** Largura de celular (abaixo do `sm` do Tailwind). */
+export const CONSULTA_CELULAR = "(max-width: 639.98px)";
+/** Tela baixa (notebook a 150 %+, zoom 200 % em 768 px): cabeçalho e barras encolhem (variante `baixo:` do Tailwind). */
+export const CONSULTA_BAIXO = "(max-height: 600px)";
+
+const assinaturas = new Map<string, (f: () => void) => () => void>();
+function assinarConsulta(consulta: string) {
+  let a = assinaturas.get(consulta);
+  if (!a) {
+    a = (f) => {
+      const mq = window.matchMedia(consulta);
+      mq.addEventListener("change", f);
+      return () => mq.removeEventListener("change", f);
+    };
+    assinaturas.set(consulta, a);
+  }
+  return a;
+}
+
+/** A consulta de mídia bate agora? (`padrao` vale no servidor.) */
+export function useConsulta(consulta: string, padrao = false): boolean {
+  return useSyncExternalStore(assinarConsulta(consulta), () => window.matchMedia(consulta).matches, () => padrao);
 }

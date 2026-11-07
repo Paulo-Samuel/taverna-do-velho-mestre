@@ -6,7 +6,22 @@ import { DIFICULDADES, FOCOS, MAX_FOCO_LIVRE, MAX_INSTRUCOES, TAMANHOS, type Dif
 import { exemploDoCampo, sementesDe, type ParSemente } from "@/lib/sistemas/sementes";
 import type { AncestralidadeDef, ClasseDef, OpcaoCriacao, SistemaPublico } from "@/lib/sistemas/tipos";
 import { temaDoSistema } from "@/lib/temas";
-import { bloqueadosPara, nomeAoAcaso, sortear, sortearOutro, sortearPericias, sugerirPar, sugerirTexto, valoresDe } from "./sugestoes";
+import {
+  bloqueadosPara,
+  contagemNiveis,
+  moverPericia,
+  nivelDasPericias,
+  niveisDePericias,
+  nomeAoAcaso,
+  proximoNivel,
+  sortear,
+  sortearOutro,
+  sortearPericias,
+  sugerirPar,
+  sugerirTexto,
+  valoresDe,
+  type GrupoOpcao,
+} from "./sugestoes";
 import { agrupar, capitalizar, casaBusca, sinal } from "./utilidades";
 
 // Passos do assistente de criação. São componentes controlados: o estado mora no formulário,
@@ -41,9 +56,16 @@ export type Escolhas = {
   instrucoes: string;
   dados: "jogador" | "automatico";
   sugestoes: boolean;
+  /** id do personagem de outra mesa que vai ser copiado no lugar da ficha montada aqui (null = ficha nova) */
+  copiaDe: number | null;
+  /** na cópia: começar com XP zerado */
+  zerarXp: boolean;
 };
 
 export type PropsPasso = { sistema: SistemaPublico; e: Escolhas; atualizar: (parcial: Partial<Escolhas>) => void };
+
+/** Personagem de outra mesa oferecido no cartão "Trazer um personagem" (montado no servidor, só nesta máquina). */
+export type PersonagemParaTrazer = { id: number; nome: string; sistema: string; linha: string; campanha: string; campanhaId: number };
 
 /* ---------- peças pequenas ---------- */
 
@@ -202,6 +224,44 @@ function Nada({ children }: { children: ReactNode }) {
   return <p className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted">{children}</p>;
 }
 
+/** Primeira frase de uma descrição (o cartão compacto mostra só ela; o resto fica para o cartão escolhido). */
+export function primeiraFrase(texto: string): string {
+  const m = /^.*?[.!?](?=\s|$)/.exec(texto.trim());
+  return m ? m[0] : texto.trim();
+}
+
+/** "Rótulo: resto" → só o rótulo curto para virar chip ("Especialidade", "+1 em Animalismo ou Proteanismo"). */
+function chipDeTraco(t: string): string {
+  const [cabeca, ...resto] = t.split(/:\s+/);
+  if (!resto.length) return t.length <= 28 ? t : `${t.slice(0, 26).trimEnd()}…`;
+  return cabeca;
+}
+
+/** "detalhes ▾" dentro do cartão compacto: abre a descrição completa e todos os traços sem escolher o cartão. */
+function Detalhes({ aberto, alternar }: { aberto: boolean; alternar: () => void }) {
+  if (aberto) return null;
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={(ev) => {
+        ev.stopPropagation();
+        alternar();
+      }}
+      onKeyDown={(ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          alternar();
+        }
+      }}
+      className="inline-block rounded px-1 py-0.5 text-[11px] text-ambar hover:bg-ambar/10 hover:underline"
+    >
+      detalhes ▾
+    </span>
+  );
+}
+
 const abrevDe = (sistema: SistemaPublico, id: string) => sistema.atributos.find((a) => a.id === id)?.abrev ?? id.toUpperCase();
 
 export function ajustesTexto(sistema: SistemaPublico, a: AncestralidadeDef): string[] {
@@ -248,8 +308,13 @@ export function PassoSistema({ sistemas, e, escolher }: { sistemas: SistemaPubli
 
 export function PassoAncestralidade({ sistema, e, atualizar }: PropsPasso) {
   const [busca, setBusca] = useState("");
+  // cartões abertos à mão ("detalhes"); o escolhido abre sozinho
+  const [abertos, setAbertos] = useState<string[]>([]);
   const rotulo = sistema.rotulos.ancestralidade;
   const lista = sistema.ancestralidades.filter((a) => casaBusca(busca, a.nome, a.descricao, ...(a.tracos ?? [])));
+  // catálogos grandes (18 predadores, 48 ancestralidades) mostram só nome, primeira frase e dois chips por cartão
+  const compacto = sistema.ancestralidades.length > 6;
+  const alternarDetalhes = (id: string) => setAbertos((v) => (v.includes(id) ? v.filter((x) => x !== id) : [...v, id]));
   function sortearAqui() {
     const id = sortearOutro(
       sistema.ancestralidades.map((a) => a.id),
@@ -273,13 +338,18 @@ export function PassoAncestralidade({ sistema, e, atualizar }: PropsPasso) {
         </div>
       )}
       {lista.length === 0 && <Nada>Ninguém com esse nome entrou na taverna hoje.</Nada>}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className={`grid gap-3 sm:grid-cols-2 ${compacto ? "lg:grid-cols-3" : ""}`}>
         {lista.map((a) => {
           const ajustes = ajustesTexto(sistema, a);
+          const ativo = e.ancestralidade === a.id;
+          const tracos = a.tracos ?? [];
+          const inteiro = !compacto || ativo || abertos.includes(a.id);
+          const resumo = primeiraFrase(a.descricao);
+          const temMais = tracos.length > 2 || resumo.length < a.descricao.trim().length || tracos.some((t) => t.length > 28);
           return (
-            <Cartao key={a.id} id={a.id} ativo={e.ancestralidade === a.id} onClick={() => atualizar({ ancestralidade: a.id })}>
-              <p className="titulo pr-6 text-lg leading-tight text-pergaminho">{a.nome}</p>
-              <p className="mt-1 text-sm text-foreground/90">{a.descricao}</p>
+            <Cartao key={a.id} id={a.id} ativo={ativo} onClick={() => atualizar({ ancestralidade: a.id })}>
+              <p className={`titulo pr-6 leading-tight text-pergaminho ${compacto ? "text-base" : "text-lg"}`}>{a.nome}</p>
+              <p className="mt-1 text-sm text-foreground/90">{inteiro ? a.descricao : resumo}</p>
               {(ajustes.length > 0 || a.pv || a.deslocamento) && (
                 <p className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ambar">
                   {ajustes.length > 0 && <span>{ajustes.join(", ")}</span>}
@@ -287,7 +357,18 @@ export function PassoAncestralidade({ sistema, e, atualizar }: PropsPasso) {
                   {a.deslocamento && <span className="text-muted">deslocamento {a.deslocamento}</span>}
                 </p>
               )}
-              <Tracos tracos={a.tracos ?? []} />
+              {inteiro ? (
+                <Tracos tracos={tracos} />
+              ) : (
+                (tracos.length > 0 || temMais) && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1">
+                    {tracos.slice(0, 2).map((t) => (
+                      <Selo key={t}>{chipDeTraco(t)}</Selo>
+                    ))}
+                    {temMais && <Detalhes aberto={false} alternar={() => alternarDetalhes(a.id)} />}
+                  </div>
+                )
+              )}
             </Cartao>
           );
         })}
@@ -305,6 +386,7 @@ export function PassoClasse({ sistema, e, atualizar }: PropsPasso) {
   const [papel, setPapel] = useState("");
   const [fonte, setFonte] = useState("");
   const rotulo = sistema.rotulos.classe;
+  const compacto = sistema.classes.length > 6;
   const papeis = [...new Set(sistema.classes.map((c) => c.papel || SEM_PAPEL))];
   const fontes = [...new Set(sistema.classes.map((c) => c.fonte).filter((f): f is string => Boolean(f)))];
   const nomePericia = (id: string) => sistema.pericias.find((p) => p.id === id)?.nome ?? id;
@@ -386,16 +468,17 @@ export function PassoClasse({ sistema, e, atualizar }: PropsPasso) {
                 {capitalizar(grupo)} <span className="h-px flex-1 bg-border" aria-hidden />
               </h3>
             )}
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className={`grid gap-3 sm:grid-cols-2 ${compacto ? "lg:grid-cols-3" : ""}`}>
               {classes.map((c) => {
                 const ativo = e.classe === c.id;
                 return (
                   <Cartao key={c.id} id={c.id} ativo={ativo} onClick={() => atualizar({ classe: c.id })}>
                     <div className="flex flex-wrap items-center gap-1.5 pr-6">
-                      <p className="titulo text-lg leading-tight text-pergaminho">{c.nome}</p>
+                      <p className={`titulo leading-tight text-pergaminho ${compacto ? "text-base" : "text-lg"}`}>{c.nome}</p>
                       {c.fonte && fontes.length > 1 && <Selo>{c.fonte}</Selo>}
                     </div>
-                    <p className="mt-1 text-sm text-foreground/90">{c.descricao}</p>
+                    {/* catálogo grande: só a primeira frase até escolher (o 16 clãs do Vampiro descrevem disciplinas, perdição e compulsão) */}
+                    <p className="mt-1 text-sm text-foreground/90">{compacto && !ativo ? primeiraFrase(c.descricao) : c.descricao}</p>
                     <p className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted">
                       {c.atributoChave && (
                         <span>
@@ -704,6 +787,9 @@ export function PassoPericias({ sistema, e, atualizar }: PropsPasso) {
 
 /* ---------- 7. opções do sistema ---------- */
 
+/** Até este tamanho a descrição cabe em duas linhas de um botão compacto (três colunas no desktop, duas no celular). */
+const DESCRICAO_CURTA = 60;
+
 type PropsCampo = {
   opcao: OpcaoCriacao;
   valores: string[];
@@ -738,8 +824,10 @@ function CampoOpcao({ opcao, valores, mudar, destaque, bloqueados, exemplo, suge
       else if (valores.length < max) mudar([...valores, id]);
     };
     const sobra = valores.length - max;
-    // listas longas de múltipla escolha (perícias do Vampiro) e opções sem descrição (atributos) viram botões compactos
-    const compacta = opcoes.every((o) => !o.descricao) || (multipla && opcoes.length > 8);
+    // botões compactos em três colunas (descrição em até duas linhas; inteira no escolhido): opções sem descrição (atributos),
+    // listas longas de múltipla escolha e descrições curtas (disciplinas e recursos do Vampiro). Descrição longa numa escolha
+    // única (heranças do PF2e, linhagens) fica em cartão com o texto inteiro à vista: é ela que decide a escolha.
+    const compacta = opcoes.every((o) => !o.descricao) || (multipla && opcoes.length > 8) || opcoes.every((o) => (o.descricao ?? "").length <= DESCRICAO_CURTA);
     return (
       <div>
         {multipla && (
@@ -773,11 +861,13 @@ function CampoOpcao({ opcao, valores, mudar, destaque, bloqueados, exemplo, suge
                   <span className="text-sm font-semibold leading-tight">
                     {ativo && <span aria-hidden>✓ </span>}
                     {o.nome}
+                    {parcial && combina(o) && <span className="ml-1.5 text-[10px] font-normal text-ambar">✦ {destaque}</span>}
                   </span>
                   {ondeEsta ? (
                     <span className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-muted">em {ondeEsta.toLowerCase()}</span>
                   ) : (
-                    o.descricao && <span className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-muted">{o.descricao}</span>
+                    // no item escolhido a descrição aparece inteira (no celular não há title para ler o resto)
+                    o.descricao && <span className={`mt-0.5 text-[11px] leading-snug ${ativo ? "text-ambar/80" : "line-clamp-2 text-muted"}`}>{o.descricao}</span>
                   )}
                 </button>
               );
@@ -934,9 +1024,109 @@ function CampoPar({ par, a, b, e, atualizar }: { par: ParSemente; a: OpcaoCriaca
   );
 }
 
-type PropsOpcoes = PropsPasso & { opcoes: OpcaoCriacao[]; sortearOpcoes: (modo: "faltam" | "tudo") => void };
+/**
+ * Uma grade só com todas as perícias e bolinhas (Vampiro: pericias_4..1). Clicar sobe um ponto até a cota do nível;
+ * sem vaga acima, o clique limpa. Continua gravando em extras.pericias_N, como as opções separadas faziam.
+ */
+function GradePericiasNiveis({ sistema, e, atualizar, niveis, legendaOculta }: PropsPasso & { niveis: [number, OpcaoCriacao][]; legendaOculta?: boolean }) {
+  const [busca, setBusca] = useState("");
+  const todas = niveis[0][1].opcoes ?? [];
+  const atual = nivelDasPericias(niveis, e.extras);
+  const contagem = contagemNiveis(niveis, e.extras);
+  const maxNivel = niveis[0][0];
+  // níveis sem nenhuma perícia: é neles que o clã completa (todos vazios depois de "Personagem pronto"; só alguns se o jogador marcou poucas)
+  const vazios = contagem.filter((c) => c.usadas === 0 && c.cota > 0);
+  const classe = sistema.classes.find((c) => c.id === e.classe);
+  const nomePericia = (id: string) => sistema.pericias.find((p) => p.id === id)?.nome ?? id;
+  const lista = todas.filter((o) => casaBusca(busca, o.nome, o.descricao));
+  const bolinhas = (n: number) => `${"●".repeat(n)}${"○".repeat(Math.max(0, maxNivel - n))}`;
+  const clicar = (id: string) => {
+    const n = atual.get(id) ?? 0;
+    atualizar({ extras: moverPericia(id, proximoNivel(n, niveis, e.extras), niveis, e.extras) });
+  };
+  // o que o servidor faz com as cotas vazias (vtm5.criarFicha): primeiro as perícias do clã, depois a do tipo de predador e as comuns
+  const doCla = (classe?.pericias ?? []).map(nomePericia);
+  return (
+    <fieldset>
+      <legend className={legendaOculta ? "sr-only" : "mb-1 font-semibold text-pergaminho"}>Perícias</legend>
+      <p className="mb-2 text-xs leading-relaxed text-muted">
+        Clique numa perícia para subir um ponto; quando a cota do nível enche, o clique seguinte passa ao próximo nível livre ou limpa. A mesma
+        perícia entra uma vez só.
+      </p>
+      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm tabular-nums" role="status" aria-label="Cotas por nível">
+        {contagem.map((c) => (
+          <span
+            key={c.nivel}
+            className={`rounded-full border px-2.5 py-0.5 ${c.usadas > c.cota ? "border-sangue text-sangue" : c.usadas === c.cota ? "border-ambar text-ambar" : "border-border text-muted"}`}
+            title={c.usadas > c.cota ? `Passou da cota: tire ${c.usadas - c.cota}` : `${c.usadas} de ${c.cota} em ${"●".repeat(c.nivel)}`}
+          >
+            <span aria-hidden>{"●".repeat(c.nivel)}</span>
+            <span className="sr-only">{c.nivel} ponto{c.nivel === 1 ? "" : "s"}:</span> {c.usadas}/{c.cota}
+            {c.usadas > c.cota && <span className="ml-1 text-xs">· tire {c.usadas - c.cota}</span>}
+          </span>
+        ))}
+      </div>
+      {vazios.length > 0 && (
+        <p className="mb-2 rounded-lg border border-musgo/50 bg-musgo/10 px-3 py-2 text-xs text-foreground/90">
+          Em branco{vazios.length < contagem.length ? ` em ${vazios.map((c) => "●".repeat(c.nivel)).join(" e ")}` : ""}: o clã completa
+          {doCla.length ? ` (${doCla.join(", ")}…)` : ""}, depois a perícia de caça do tipo de predador e as perícias comuns, dentro das cotas do estilo.
+        </p>
+      )}
+      {todas.length > 8 && (
+        <div className="mb-2">
+          <Busca valor={busca} mudar={setBusca} placeholder="Buscar perícia…" />
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4">
+        {lista.map((o) => {
+          const n = atual.get(o.id) ?? 0;
+          const prox = proximoNivel(n, niveis, e.extras);
+          const parado = n === 0 && prox === 0;
+          return (
+            <button
+              key={o.id}
+              type="button"
+              aria-pressed={n > 0}
+              aria-label={`${o.nome}: ${n} ponto${n === 1 ? "" : "s"}`}
+              disabled={parado}
+              onClick={() => clicar(o.id)}
+              title={parado ? "Todas as cotas estão cheias: tire uma perícia para trocar" : prox > n ? `Subir para ${bolinhas(prox)}` : "Limpar"}
+              className={`flex min-h-11 flex-col justify-center rounded-lg border px-3 py-1.5 text-left transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                n > 0 ? "border-ambar bg-ambar/10 text-ambar" : "border-border bg-surface/60 text-pergaminho hover:border-ambar/50"
+              }`}
+            >
+              <span className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold leading-tight">{o.nome}</span>
+                <span className="shrink-0 text-xs tracking-wider" aria-hidden>
+                  {bolinhas(n)}
+                </span>
+              </span>
+              {o.descricao && <span className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-muted">{o.descricao}</span>}
+            </button>
+          );
+        })}
+      </div>
+      {lista.length === 0 && <Nada>Nada com esse nome.</Nada>}
+    </fieldset>
+  );
+}
 
-export function PassoOpcoes({ sistema, e, atualizar, opcoes, sortearOpcoes }: PropsOpcoes) {
+type PropsOpcoes = PropsPasso & {
+  /** as opções deste passo (todas, ou só as do subpasso quando o sistema divide as Escolhas) */
+  opcoes: OpcaoCriacao[];
+  sortearOpcoes: (modo: "faltam" | "tudo") => void;
+  /** subpasso das Escolhas (Vampiro: Perícias, Disciplinas, Quem você é); sem isso é o passo único "Escolhas de X" */
+  grupo?: GrupoOpcao | null;
+};
+
+/** Título e ajuda de cada subpasso das Escolhas. */
+const CABECALHO_GRUPOS: Record<GrupoOpcao, { titulo: string; ajuda: (classe: string | undefined) => string }> = {
+  pericias: { titulo: "Perícias", ajuda: () => "O estilo define as cotas; a grade distribui os pontos. O que ficar em branco o clã completa." },
+  disciplinas: { titulo: "Disciplinas", ajuda: (classe) => `Os poderes do sangue${classe ? ` de ${classe}` : ""}: a principal em ●●, a secundária em ●, e mais um ponto do tipo de predador.` },
+  alma: { titulo: "Quem você é", ajuda: () => "O que sobrou de humano e o que a eternidade fez com isso. Os marcados com * são obrigatórios; o 🎲 sugere." },
+};
+
+export function PassoOpcoes({ sistema, e, atualizar, opcoes, sortearOpcoes, grupo }: PropsOpcoes) {
   const classe = sistema.classes.find((c) => c.id === e.classe);
   const anc = sistema.ancestralidades.find((a) => a.id === e.ancestralidade);
   const s = sementesDe(sistema.id);
@@ -944,11 +1134,74 @@ export function PassoOpcoes({ sistema, e, atualizar, opcoes, sortearOpcoes }: Pr
   // pares (Convicção ↔ Pedra de Toque) viram um bloco só, no lugar da primeira das duas opções
   const pares = (s.pares ?? []).filter((p) => opcoes.some((o) => o.id === p.campo) && opcoes.some((o) => o.id === p.par));
   const segundos = new Set(pares.map((p) => p.par));
+  // perícias por nível (pericias_4..1) viram uma grade só, no lugar da primeira delas
+  const niveis = niveisDePericias(opcoes);
+  const idsNiveis = new Set(niveis.map(([, o]) => o.id));
+  const primeiraDeNivel = opcoes.find((o) => idsNiveis.has(o.id))?.id;
   const faltam = opcoes.some((o) => !valoresDe(o, e.extras).length && !s.deixarParaOSistema?.includes(o.id) && (o.opcoes?.length || s.campos?.[o.id]?.gerar || pares.some((p) => p.campo === o.id)));
+  // campos de texto seguidos (conceito, ambição, desejo, senhor; vantagens, defeitos) vão dois por linha no desktop
+  const deTexto = (o: OpcaoCriacao) => o.tipo === "texto" || o.tipo === "lista-texto" || (o.tipo === "escolha" && !o.opcoes?.length);
+  const umaOpcao = (o: OpcaoCriacao) => {
+    const campo = s.campos?.[o.id];
+    return (
+      <fieldset key={o.id}>
+        <legend className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-pergaminho">
+          <span>
+            {o.rotulo}
+            {o.obrigatoria && (
+              <span className="ml-1 text-sangue" title="obrigatório">
+                *<span className="sr-only"> (obrigatório)</span>
+              </span>
+            )}
+          </span>
+          {o.classes?.length ? <Selo destaque>de {classe?.nome ?? "classe"}</Selo> : null}
+        </legend>
+        {o.ajuda && <p className="mb-2 text-xs leading-relaxed text-muted">{o.ajuda}</p>}
+        <CampoOpcao
+          opcao={o}
+          destaque={anc?.nome}
+          valores={e.extras[o.id] ?? []}
+          mudar={(v) => atualizar({ extras: { ...e.extras, [o.id]: v } })}
+          bloqueados={o.exclusivaCom?.length ? bloqueadosPara(o, opcoes, e.extras) : undefined}
+          exemplo={exemploDoCampo(campo, ctx)}
+          sugerir={campo?.gerar ? (linhas) => sugerirTexto(sistema.id, o.id, e, { ...e.extras, [o.id]: linhas }) : undefined}
+        />
+      </fieldset>
+    );
+  };
+  // blocos na ordem das opções: grade de perícias, par, corrida de campos de texto (2 colunas) ou uma opção sozinha
+  const blocos: ReactNode[] = [];
+  let corrida: OpcaoCriacao[] = [];
+  const fecharCorrida = () => {
+    if (corrida.length > 1) blocos.push(<div key={`texto-${corrida[0].id}`} className="grid gap-x-6 gap-y-4 sm:grid-cols-2">{corrida.map(umaOpcao)}</div>);
+    else if (corrida.length === 1) blocos.push(umaOpcao(corrida[0]));
+    corrida = [];
+  };
+  for (const o of opcoes) {
+    if (segundos.has(o.id)) continue;
+    const par = pares.find((p) => p.campo === o.id);
+    const b = par && opcoes.find((x) => x.id === par.par);
+    if (deTexto(o) && !par) {
+      corrida.push(o);
+      continue;
+    }
+    fecharCorrida();
+    if (idsNiveis.has(o.id)) {
+      if (o.id === primeiraDeNivel)
+        blocos.push(<GradePericiasNiveis key="pericias-niveis" sistema={sistema} e={e} atualizar={atualizar} niveis={niveis} legendaOculta={grupo === "pericias"} />);
+    } else if (par && b) blocos.push(<CampoPar key={o.id} par={par} a={o} b={b} e={e} atualizar={atualizar} />);
+    else blocos.push(umaOpcao(o));
+  }
+  fecharCorrida();
+  const cabecalho = grupo ? CABECALHO_GRUPOS[grupo] : null;
   return (
     <>
       <Titulo
-        ajuda={`Os detalhes que fazem ${classe ? `este ${classe.nome.toLowerCase()}` : "este personagem"} ser diferente do resto. Os marcados com * são obrigatórios; o 🎲 sugere.`}
+        ajuda={
+          cabecalho
+            ? cabecalho.ajuda(classe?.nome)
+            : `Os detalhes que fazem ${classe ? `este ${classe.nome.toLowerCase()}` : "este personagem"} ser diferente do resto. Os marcados com * são obrigatórios; o 🎲 sugere.`
+        }
         acao={
           faltam ? (
             <BotaoSortear onClick={() => sortearOpcoes("faltam")} titulo="Preenche só o que está vazio">
@@ -961,52 +1214,59 @@ export function PassoOpcoes({ sistema, e, atualizar, opcoes, sortearOpcoes }: Pr
           )
         }
       >
-        Escolhas de {sistema.nomeCurto}
+        {cabecalho ? cabecalho.titulo : `Escolhas de ${sistema.nomeCurto}`}
       </Titulo>
-      {/* uma linha separando cada pergunta: no Vampiro são mais de dez em sequência */}
+      {/* uma linha separando cada bloco: no Vampiro são mais de dez em sequência */}
       <div className="divide-y divide-border/70">
-        {opcoes.map((o) => {
-          if (segundos.has(o.id)) return null;
-          const par = pares.find((p) => p.campo === o.id);
-          const b = par && opcoes.find((x) => x.id === par.par);
-          if (par && b) {
-            return (
-              <div key={o.id} className="py-5 first:pt-0 last:pb-0">
-                <CampoPar par={par} a={o} b={b} e={e} atualizar={atualizar} />
-              </div>
-            );
-          }
-          const campo = s.campos?.[o.id];
-          return (
-            <div key={o.id} className="py-5 first:pt-0 last:pb-0">
-              <fieldset>
-                <legend className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-pergaminho">
-                  <span>
-                    {o.rotulo}
-                    {o.obrigatoria && (
-                      <span className="ml-1 text-sangue" title="obrigatório">
-                        *<span className="sr-only"> (obrigatório)</span>
-                      </span>
-                    )}
-                  </span>
-                  {o.classes?.length ? <Selo destaque>de {classe?.nome ?? "classe"}</Selo> : null}
-                </legend>
-                {o.ajuda && <p className="mb-2 text-xs leading-relaxed text-muted">{o.ajuda}</p>}
-                <CampoOpcao
-                  opcao={o}
-                  destaque={anc?.nome}
-                  valores={e.extras[o.id] ?? []}
-                  mudar={(v) => atualizar({ extras: { ...e.extras, [o.id]: v } })}
-                  bloqueados={o.exclusivaCom?.length ? bloqueadosPara(o, opcoes, e.extras) : undefined}
-                  exemplo={exemploDoCampo(campo, ctx)}
-                  sugerir={campo?.gerar ? (linhas) => sugerirTexto(sistema.id, o.id, e, { ...e.extras, [o.id]: linhas }) : undefined}
-                />
-              </fieldset>
-            </div>
-          );
-        })}
+        {blocos.map((bloco, i) => (
+          <div key={i} className="py-4 first:pt-0 last:pb-0">
+            {bloco}
+          </div>
+        ))}
       </div>
     </>
+  );
+}
+
+/* ---------- trazer um personagem de outra mesa ---------- */
+
+/** Cartão com os personagens de outras mesas do mesmo sistema: escolher um copia a ficha (descansada) em vez de montar outra. */
+export function BlocoTrazer({ sistema, lista, escolher }: { sistema: SistemaPublico; lista: PersonagemParaTrazer[]; escolher: (p: PersonagemParaTrazer) => void }) {
+  const [aberto, setAberto] = useState(false);
+  const [busca, setBusca] = useState("");
+  const doSistema = lista.filter((p) => p.sistema === sistema.id);
+  if (!doSistema.length) return null;
+  const visiveis = doSistema.filter((p) => casaBusca(busca, p.nome, p.linha, p.campanha));
+  return (
+    <div className="cartao mb-4 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="min-w-0 flex-1 basis-64 text-sm">
+          <span className="font-semibold text-pergaminho">Trazer um personagem de outra mesa?</span>{" "}
+          <span className="text-muted">
+            {doSistema.length === 1 ? "Uma ficha" : `${doSistema.length} fichas`} de {sistema.nomeCurto} já {doSistema.length === 1 ? "passou" : "passaram"} por aqui. A
+            cópia chega descansada: vida e recursos cheios, sem condições{sistema.id === "vtm5" ? ", Fome 1" : ""}.
+          </span>
+        </p>
+        <button type="button" className="btn-borda shrink-0" aria-expanded={aberto} onClick={() => setAberto((v) => !v)}>
+          {aberto ? "Fechar" : "Ver personagens"}
+        </button>
+      </div>
+      {aberto && (
+        <div className="mt-3 space-y-2">
+          {doSistema.length > 6 && <Busca valor={busca} mudar={setBusca} placeholder="Buscar personagem ou campanha…" />}
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {visiveis.map((p) => (
+              <Cartao key={p.id} ativo={false} onClick={() => escolher(p)} titulo={`Trazer ${p.nome} de ${p.campanha}`}>
+                <p className="pr-6 font-semibold leading-tight text-pergaminho">{p.nome}</p>
+                {p.linha && <p className="mt-0.5 text-xs text-muted">{p.linha}</p>}
+                <p className="mt-1 text-[11px] text-muted">de {p.campanha}</p>
+              </Cartao>
+            ))}
+          </div>
+          {visiveis.length === 0 && <Nada>Ninguém com esse nome em outra mesa.</Nada>}
+        </div>
+      )}
+    </div>
   );
 }
 

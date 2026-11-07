@@ -8,8 +8,8 @@ import { acessoNaPagina, daMaquinaNaPagina } from "@/lib/rede/acesso";
 import { obterSistema } from "@/lib/sistemas";
 import { temaDoSistema } from "@/lib/temas";
 import { TemaPagina } from "@/components/tema-pagina";
-import { desligarAventuraAcao, excluirCampanhaAcao, salvarAjustesAcao } from "./acoes";
-import { FormularioAventura, FormularioCampanha, FormularioExcluir, FormularioPin } from "./formularios";
+import { desligarAventuraAcao, duplicarCampanhaAcao, excluirCampanhaAcao, salvarAjustesAcao } from "./acoes";
+import { FormularioAventura, FormularioCampanha, FormularioDuplicar, FormularioExcluir, FormularioPin } from "./formularios";
 
 // Ajustes da mesa: nome, cenário, tom, modo (livre/rodada), dados, estilo do mestre, PIN da rede e exclusão.
 // Pela rede a página abre só para leitura; quem manda no salão é a máquina da taverna.
@@ -114,6 +114,14 @@ export default async function AjustesMesa(props: PageProps<"/mesa/[id]/ajustes">
         </p>
         {/* o PIN em si só vai para a página quando ela está aberta na própria máquina */}
         <FormularioPin campanhaId={campanha.id} temPin={Boolean(campanha.config.pin)} pinAtual={local ? (campanha.config.pin ?? null) : null} bloqueado={!local} />
+      </Secao>
+
+      <Secao titulo="Duplicar campanha">
+        <p className="mb-3 text-sm text-muted">
+          Uma mesa boa vira molde para a próxima noite: a cópia nasce com o mesmo cenário, tom, estilo do mestre e grupo (fichas descansadas), sem o chat
+          nem o PIN. Para levar só um personagem para outra mesa, use “Trazer um personagem de outra mesa” na criação avançada.
+        </p>
+        <FormularioDuplicar acao={duplicarCampanhaAcao.bind(null, campanha.id)} nome={campanha.nome} personagens={grupo.map((p) => p.ficha.nome)} bloqueado={!local} />
       </Secao>
 
       <Secao titulo="Excluir campanha" perigo>

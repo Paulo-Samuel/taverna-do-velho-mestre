@@ -63,8 +63,8 @@ function paginaDaPosicao(unidades: Unidade[], pos: number, base: number, passo: 
     const r = u.el.getClientRects()[0];
     return r ? paginaDoX(r.left, base, passo) : null;
   }
-  if (!faixa) return null;
-  const off = Math.min(u.tamanho - 1, Math.max(0, pos - u.inicio));
+  if (!faixa || !u.no.data.length) return null;
+  const off = Math.min(u.tamanho - 1, u.no.data.length - 1, Math.max(0, pos - u.inicio));
   faixa.setStart(u.no, off);
   faixa.setEnd(u.no, off + 1);
   const r = faixa.getClientRects()[0] ?? faixa.getBoundingClientRect();
@@ -116,22 +116,60 @@ export function marcarParagrafos(fluxo: HTMLElement, alturaPagina: number) {
 
 /** Menor escala de um cartão encolhido para caber no fim da página (abaixo disso, ele pula de página mesmo). */
 const ESCALA_MINIMA = 0.75;
+/** No celular a tela já é apertada e o cartão nasce grande: aceita encolher um pouco mais. */
+const ESCALA_MINIMA_CELULAR = 0.7;
+
+/** A menor escala aceitável para um cartão encolhido caber no fim da página. */
+export function escalaMinima(celular: boolean): number {
+  return celular ? ESCALA_MINIMA_CELULAR : ESCALA_MINIMA;
+}
+
+/**
+ * O conteúdo de que depende a decisão de encolher: a posição no fio de cada cartão encolhível (o que vem ANTES dele). O que vem
+ * depois (a narração do mestre chegando, o "pensando" da cauda) e o que muda dentro do próprio cartão (o dado girando, a linha do
+ * resultado) não entram: senão o cartão que a pessoa acabou de tocar era remedido a cada mudança, oscilava entre a página em que
+ * coube encolhido e a seguinte, e a página ia atrás dele e ficava vazia. Cartão novo ou texto chegando antes de um cartão mudam a
+ * assinatura (e aí a conta é refeita por limparCompactos + compactarCartoes).
+ */
+export function assinaturaDosCompactaveis(unidades: Unidade[]): string {
+  return unidades
+    .filter((u) => u.tipo === "cartao" && u.el.hasAttribute("data-compactavel"))
+    .map((u) => u.inicio)
+    .join(",");
+}
 
 /**
  * Cartão grande (pedido de teste, teste) que não coube no fim da página e pulou para a seguinte, deixando um buraco: se encolhido
- * um pouco (zoom até 75%, sem o respiro grande em volta) ele cabe no espaço que sobrou, encolhe e fica. Devolve true quando mexeu em algum (medir de novo).
- * Cada cartão é avaliado uma vez por tamanho de palco (data-compacto guarda a decisão; limparCompactos desfaz).
+ * um pouco (zoom até a escala mínima, sem o respiro grande em volta) ele cabe no espaço que sobrou, encolhe e fica. O pedido de
+ * teste pendente (.pedido-teste) tem ainda uma versão compacta (sem retrato, motivo numa linha, menos respiro: data-versao-compacta,
+ * desenhada pelo ESTILO do leitor), tentada quando o cartão inteiro não cabe nem encolhido. Roda também com o cartão ainda
+ * escondido pelo revelar (data-leitor-oculto: visibility hidden conserva as caixas). Devolve true quando mexeu em algum.
+ * Cada cartão é avaliado uma vez por tamanho de palco e conteúdo (data-compacto guarda a decisão; limparCompactos desfaz).
  */
-export function compactarCartoes(fluxo: HTMLElement, alturaPagina: number): boolean {
+export function compactarCartoes(fluxo: HTMLElement, alturaPagina: number, minima = ESCALA_MINIMA): boolean {
   const cs = getComputedStyle(fluxo);
   const caixa = fluxo.getBoundingClientRect();
   const topo = caixa.top + parseFloat(cs.paddingTop);
   const fundo = topo + alturaPagina;
   const pecas = [...fluxo.querySelectorAll<HTMLElement>("[data-revelar],[data-cartao]")];
+  // encolhido, o cartão perde o respiro grande (margem de 0,6rem, ver o ESTILO do leitor) e a escala cobre o resto
+  const margens = 2 * 0.6 * parseFloat(getComputedStyle(document.documentElement).fontSize);
   let mexeu = false;
   for (const el of fluxo.querySelectorAll<HTMLElement>("[data-compactavel]:not([data-compacto])")) {
     const r = el.getClientRects()[0];
     if (!r || r.height < 40) continue;
+    // cartão mais alto que a página inteira (tela baixa, notebook a 125 %+): nem sozinho numa página ele cabe e o botão de rolar
+    // fica cortado embaixo. Vai para a versão compacta e encolhe o que for preciso para caber numa página (aqui não há mínimo
+    // que valha a pena: cortado é pior que miúdo).
+    if (r.height + margens > alturaPagina - 4) {
+      if (el.querySelector(".pedido-teste")) el.setAttribute("data-versao-compacta", "");
+      const rv = el.getClientRects()[0] ?? r;
+      const escala = Math.max(0.5, Math.floor(Math.min(0.97, (alturaPagina - margens - 8) / rv.height) * 100) / 100);
+      el.setAttribute("data-compacto", String(escala));
+      el.style.setProperty("zoom", String(escala));
+      mexeu = true;
+      continue;
+    }
     // só cartão no topo de uma página que não é a primeira
     if (r.top - topo > 28 || r.left - caixa.left < 10) continue;
     const i = pecas.indexOf(el);
@@ -139,11 +177,19 @@ export function compactarCartoes(fluxo: HTMLElement, alturaPagina: number): bool
     const rs = antes ? antes.getClientRects() : null;
     const ultimo = rs && rs.length ? rs[rs.length - 1] : null;
     if (!ultimo || ultimo.left >= r.left - 10) continue;
-    // encolhido, o cartão perde o respiro grande (margem de 0,6rem, ver o ESTILO do leitor) e a escala cobre o resto
-    const margens = 2 * 0.6 * parseFloat(getComputedStyle(document.documentElement).fontSize);
     const livre = fundo - ultimo.bottom - 12;
-    const escala = Math.floor(Math.min(0.97, livre / (r.height + margens)) * 100) / 100;
-    if (escala < ESCALA_MINIMA) {
+    const escalaPara = (altura: number) => Math.floor(Math.min(0.97, livre / (altura + margens)) * 100) / 100;
+    let escala = escalaPara(r.height);
+    // nem encolhido cabe: o pedido de teste pendente tem a versão compacta; mede de novo com ela (já é miúda: aceita até 0,7)
+    let piso = minima;
+    if (escala < minima && el.querySelector(".pedido-teste")) {
+      el.setAttribute("data-versao-compacta", "");
+      const rv = el.getClientRects()[0];
+      escala = rv ? escalaPara(rv.height) : 0;
+      piso = Math.min(minima, ESCALA_MINIMA_CELULAR);
+      if (escala < piso) el.removeAttribute("data-versao-compacta");
+    }
+    if (escala < piso) {
       el.setAttribute("data-compacto", "não");
       continue;
     }
@@ -153,6 +199,7 @@ export function compactarCartoes(fluxo: HTMLElement, alturaPagina: number): bool
     const depois = el.getClientRects()[0];
     if (depois && Math.abs(depois.left - r.left) < 10) {
       el.style.removeProperty("zoom");
+      el.removeAttribute("data-versao-compacta");
       el.setAttribute("data-compacto", "não");
       continue;
     }
@@ -163,8 +210,29 @@ export function compactarCartoes(fluxo: HTMLElement, alturaPagina: number): bool
 }
 
 /**
- * Fecho da cena sozinho na última página (o "Fim da noite", os chips de "o que mudou"): em vez de grudado no topo de uma página
- * vazia, desce para perto do centro ótico, como a última página de um capítulo. Usa padding (margem some na quebra de coluna).
+ * O que a barra faz quando o cartão em destaque (o teste pendente do personagem ativo) caiu em outra página: nada enquanto ele
+ * está nesta página ou antes dela (ou a página ainda se revela); quando a página termina, avança sozinho se a pessoa acompanhou o
+ * texto se revelando (ou a cena já estava lida ao abrir), senão só chama ("continuar para o dado ▸") e deixa a pessoa virar.
+ */
+export function rumoAoDado({
+  paginaDoDestaque,
+  paginaAtual,
+  completa,
+  automatico,
+}: {
+  paginaDoDestaque: number | null;
+  paginaAtual: number;
+  completa: boolean;
+  automatico: boolean;
+}): "nada" | "chamar" | "avancar" {
+  if (paginaDoDestaque === null || paginaDoDestaque <= paginaAtual || !completa) return "nada";
+  return automatico ? "avancar" : "chamar";
+}
+
+/**
+ * Fecho da cena sozinho na última página (o "Fim da noite"; os chips de "o que mudou" ficam fora do fluxo, na faixa acima da
+ * barra): em vez de grudado no topo de uma página vazia, desce para perto do centro ótico, como a última página de um capítulo.
+ * Usa padding (margem some na quebra de coluna).
  */
 export function centrarFecho(fluxo: HTMLElement, alturaPagina: number, paginas: number, passo: number) {
   const filhos = [...fluxo.children] as HTMLElement[];
@@ -185,10 +253,17 @@ export function centrarFecho(fluxo: HTMLElement, alturaPagina: number, paginas: 
   if (livre > 60) naUltima[0].style.setProperty("padding-top", `${Math.round(livre * 0.36)}px`);
 }
 
-/** Desfaz os cartões encolhidos (o palco mudou de tamanho: a conta muda). */
-export function limparCompactos(fluxo: HTMLElement) {
-  for (const el of fluxo.querySelectorAll<HTMLElement>("[data-compacto]")) {
+/**
+ * Desfaz os cartões encolhidos (o palco mudou de tamanho ou chegou conteúdo: a conta muda), menos o `protegido`: o cartão com que
+ * a pessoa está mexendo agora (rolando o dado) fica como está, porque no meio da rolagem ele passa por tamanhos passageiros (botão
+ * → "o dado corre pela mesa" → resultado) e uma conta feita nesse instante o deixaria encolhido de menos, pulando de página logo
+ * em seguida; e a própria rolagem mexe no palco (a barra de "role o dado" vira o campo de ação).
+ */
+export function limparCompactos(fluxo: HTMLElement, protegido: Element | null = null) {
+  for (const el of fluxo.querySelectorAll<HTMLElement>("[data-compacto],[data-versao-compacta]")) {
+    if (el === protegido) continue;
     el.removeAttribute("data-compacto");
+    el.removeAttribute("data-versao-compacta");
     el.style.removeProperty("zoom");
   }
 }

@@ -38,18 +38,16 @@ import { publicar } from "../tempo-real";
 import { visivel } from "../visivel";
 import { arremateRedundante } from "./arremate";
 import { definirFerramentas, executarFerramenta, type ContextoFerramentas } from "./ferramentas";
+import { LIMITE_SEM_RESUMO, MANTER_LITERAIS } from "./memoria";
 import { encerrarTurno, enderecoInterno, registrarTurno } from "./ponte";
-import { nomeDoPersonagem, promptDoResumo, promptDoSistema, promptDoTurno, SISTEMA_RESUMO, type AcaoDoTurno, type FimDeSessao } from "./prompt";
+import { nomeDoPersonagem, promptDeContinuacao, promptDoResumo, promptDoSistema, promptDoTurno, SISTEMA_RESUMO, type AcaoDoTurno, type FimDeSessao } from "./prompt";
 import { criarProvedorApi } from "./provedor-api";
 import { criarProvedorCli } from "./provedor-cli";
 import { provedorFalso } from "./provedor-falso";
-import type { Provedor } from "./tipos";
+import { filaPronta } from "./rodada";
+import type { EventoMestre, Provedor } from "./tipos";
 
 export { FIM_DE_SESSAO, INICIO };
-
-/** Acima disto, as mensagens mais antigas saem da transcrição e vão para o resumo. */
-const LIMITE_SEM_RESUMO = 50;
-const MANTER_LITERAIS = 30;
 
 // ---------- provedor ----------
 
@@ -192,17 +190,17 @@ export function cancelarTurno(campanhaId: number) {
   execucao(campanhaId).controlador?.abort();
 }
 
+/** A regra em si (modo livre, rodada, testes pendentes, resultado de teste) vive em rodada.ts, sem banco, para ser testada. */
 function prontoParaNarrar(campanhaId: number, forcar: boolean): boolean {
   const fila = listarFila(campanhaId);
   if (!fila.length) return false;
-  // modo história: o mestre espera os jogadores rolarem os testes que ele pediu
-  if (testesPendentes(campanhaId).length) return false;
-  if (forcar || fila.some((a) => a.acao === INICIO || a.acao === FIM_DE_SESSAO)) return true;
-  const campanha = obterCampanha(campanhaId);
-  if (campanha?.config.modo !== "rodada") return true;
-  const personagens = listarPersonagens(campanhaId);
-  const agiram = new Set(fila.map((a) => a.personagemId));
-  return personagens.every((p) => agiram.has(p.id));
+  return filaPronta({
+    fila,
+    personagens: listarPersonagens(campanhaId).map((p) => p.id),
+    modo: obterCampanha(campanhaId)?.config.modo,
+    testePendente: testesPendentes(campanhaId).length > 0,
+    forcar,
+  });
 }
 
 function agendar(campanhaId: number, forcar = false) {
@@ -282,15 +280,22 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
   let trecho = "";
   let narrado = 0;
   // quanto de narração cobrar antes de sugestões/testes: a abertura precisa da cena inteira; fala fora do jogo não cobra nada
-  // (o mestre de teste tem falas prontas e curtas: não cobra)
+  // (o mestre de teste tem falas prontas e curtas: não cobra, salvo no ensaio da rede de segurança: "[mudo]" na ação faz
+  // ele pular a narração de propósito, para ver a continuação funcionar sem IA)
   const soForaDoJogo = doTurno.length > 0 && doTurno.every((a) => /^\s*\(\(.*\)\)\s*$/s.test(a.acao));
-  const exigirNarracao = provedor.id === "falso" || soForaDoJogo || fim ? 0 : inicio && !doTurno.length ? 400 : 150;
+  const ensaioMudo = provedor.id === "falso" && doTurno.some((a) => /\[mudo/i.test(a.acao));
+  const exigirNarracao = (provedor.id === "falso" && !ensaioMudo) || soForaDoJogo || fim ? 0 : inicio && !doTurno.length ? 400 : 150;
   // primeira jogada depois de "Encerrar a noite": o mestre recapitula antes de responder
   const recapitular = !inicio && !fim && !soForaDoJogo && doTurno.length > 0 && depoisDoFimDeSessao(recentes);
   // tudo o que o jogador leu neste turno (para a rede de segurança do fim) e onde estava o trecho na última ferramenta
   let lido = "";
   let marca = 0;
   let ferramentasUsadas = 0;
+  // o que rodou (a continuação não repete) e a última ferramenta fora `sugerir_acoes`, com a posição do trecho nela:
+  // depois de `pedir_teste` o rabo começa no cartão do dado, mesmo que `sugerir_acoes` tenha vindo em seguida
+  const nomesUsados: string[] = [];
+  let ultimaFerramenta = "";
+  let marcaUltima = 0;
   const fecharTrecho = () => {
     const texto = trecho.trim();
     trecho = "";
@@ -313,14 +318,30 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
   const ferramentas = definirFerramentas(ctx).filter((f) => !fim || !FORA_DO_FIM.includes(f.name));
   const executar = async (nome: string, entrada: unknown) => {
     ferramentasUsadas++;
+    nomesUsados.push(nome);
     try {
       if (fim && FORA_DO_FIM.includes(nome)) throw new Error("A noite está sendo encerrada: sem testes nem sugestões. Termine o fechamento.");
       return await executarFerramenta(ctx, nome, entrada);
     } finally {
       marca = trecho.length;
+      if (nome !== "sugerir_acoes" || !ultimaFerramenta) {
+        ultimaFerramenta = nome;
+        marcaUltima = marca;
+      }
     }
   };
   const token = registrarTurno({ ferramentas, executar });
+  const sistemaPrompt = promptDoSistema(campanha, sistema, personagens);
+  const aoEmitir = (ev: EventoMestre) => {
+    if (ev.tipo === "texto") {
+      trecho += ev.texto;
+      lido += ev.texto;
+      narrado += ev.texto.trim().length;
+      publicar(campanhaId, { e: "texto", texto: ev.texto });
+    } else if (ev.tipo === "limite") {
+      publicar(campanhaId, { e: "limite", janela: ev.janela, uso: ev.uso, renovaEm: ev.renovaEm });
+    }
+  };
 
   // pedido do turno: abertura, fim de sessão (com as regras de XP do sistema e quem precisa do Remorso) ou as ações
   const pedidoFim: FimDeSessao | null = fim
@@ -332,40 +353,67 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
       }
     : null;
 
+  const pedido = promptDoTurno(recentes, personagens, inicio && !doTurno.length ? "inicio" : pedidoFim && !doTurno.length ? pedidoFim : doTurno, { recapitular });
   let concluido = false;
   try {
-    await provedor.turno({
-      sistema: promptDoSistema(campanha, sistema, personagens),
-      prompt: promptDoTurno(recentes, personagens, inicio && !doTurno.length ? "inicio" : pedidoFim && !doTurno.length ? pedidoFim : doTurno, { recapitular }),
-      ferramentas,
-      executar,
-      ponte: { url: enderecoInterno(), token },
-      sinal,
-      emitir: (ev) => {
-        if (ev.tipo === "texto") {
-          trecho += ev.texto;
-          lido += ev.texto;
-          narrado += ev.texto.trim().length;
-          publicar(campanhaId, { e: "texto", texto: ev.texto });
-        } else if (ev.tipo === "limite") {
-          publicar(campanhaId, { e: "limite", janela: ev.janela, uso: ev.uso, renovaEm: ev.renovaEm });
-        }
-      },
-    });
+    await provedor.turno({ sistema: sistemaPrompt, prompt: pedido, ferramentas, executar, ponte: { url: enderecoInterno(), token }, sinal, emitir: aoEmitir });
     concluido = !sinal.aborted;
   } finally {
     // rede de segurança: o texto depois da última ferramenta que só repete a vez ou resume a mecânica não é gravado
-    // (a narração anterior já entregou a vez; juntar a ela duplicaria a passagem de vez na mesma mensagem)
+    // (a narração anterior já entregou a vez; juntar a ela duplicaria a passagem de vez na mesma mensagem; nunca se anexa
+    // texto a uma narração que o jogador já leu: ou o rabo fica como veio, ou sai)
     if (ferramentasUsadas && !sinal.aborted) {
-      const rabo = trecho.slice(marca);
+      const depoisDeTeste = ultimaFerramenta === "pedir_teste";
+      const corte = Math.min(depoisDeTeste ? marcaUltima : marca, trecho.length);
+      const rabo = trecho.slice(corte);
       const antes = lido.slice(0, lido.length - rabo.length);
-      if (arremateRedundante(rabo, antes, [...personagens.map((p) => p.ficha.nome), ...doTurno.map((a) => a.acao)])) {
-        console.info(`[taverna] fim de turno repetido descartado (mesa ${campanhaId}): ${JSON.stringify(rabo.trim().slice(0, 160))}`);
-        trecho = trecho.slice(0, marca);
+      const conhecidos = [...personagens.map((p) => p.ficha.nome), ...doTurno.map((a) => a.acao)];
+      if (arremateRedundante(rabo, antes, conhecidos, { depoisDeTeste })) {
+        console.info(`[taverna] fim de turno repetido descartado${depoisDeTeste ? " (depois de pedir_teste)" : ""} (mesa ${campanhaId}): ${JSON.stringify(rabo.trim().slice(0, 160))}`);
+        trecho = trecho.slice(0, corte);
+        narrado = Math.max(0, narrado - rabo.trim().length);
+      } else if (rabo.trim()) {
+        console.info(`[taverna] fim de turno mantido (mesa ${campanhaId}): ${JSON.stringify(rabo.trim().slice(0, 160))}`);
       }
     }
     fecharTrecho();
     encerrarTurno(token);
+  }
+
+  // rede de segurança do turno inteiro: terminou sem narração suficiente (o modelo narrou só no raciocínio, ou insistiu em
+  // pular o `narrar` depois da única recusa de cobrarNarracao). UMA chamada de continuação, só com a ferramenta narrar,
+  // com o mesmo pedido mais o que já rodou; se ainda vier vazio, o jogador recebe o erro em vez de uma mesa muda.
+  if (concluido && exigirNarracao > 0 && narrado < exigirNarracao) {
+    const antesDaContinuacao = narrado;
+    console.warn(`[taverna] turno sem narração (mesa ${campanhaId}: ${narrado} de ${exigirNarracao} caracteres): pedindo a continuação só com narrar.`);
+    const soNarrar = ferramentas.filter((f) => f.name === "narrar");
+    const executarNarrar = async (nome: string, entrada: unknown) => {
+      if (nome !== "narrar") throw new Error("Nesta continuação só a ferramenta narrar está disponível: chame narrar com a narração completa.");
+      return executarFerramenta(ctx, nome, entrada);
+    };
+    const tokenContinuacao = registrarTurno({ ferramentas: soNarrar, executar: executarNarrar });
+    let falha: string | null = null;
+    try {
+      await provedor.turno({
+        sistema: sistemaPrompt,
+        prompt: promptDeContinuacao(pedido, nomesUsados, lido),
+        ferramentas: soNarrar,
+        executar: executarNarrar,
+        ponte: { url: enderecoInterno(), token: tokenContinuacao },
+        sinal,
+        emitir: aoEmitir,
+      });
+    } catch (e) {
+      falha = e instanceof Error ? e.message : String(e);
+      console.error("[taverna] continuação do turno falhou:", e);
+    } finally {
+      fecharTrecho();
+      encerrarTurno(tokenContinuacao);
+    }
+    if (!sinal.aborted && narrado <= antesDaContinuacao) {
+      console.error(`[taverna] o mestre não narrou nada neste turno, nem na continuação (mesa ${campanhaId}).`);
+      publicar(campanhaId, { e: "erro", erro: `O mestre não narrou nada neste turno${falha ? ` (${falha})` : ""}. Use "Outra resposta" para ele tentar de novo.` });
+    }
   }
 
   // turno só de conversa fora do jogo (nenhuma ferramenta): as sugestões da cena continuam valendo

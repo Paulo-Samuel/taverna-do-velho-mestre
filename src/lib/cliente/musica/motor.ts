@@ -6,9 +6,12 @@ import { criarAleatorio, impulsoReverb } from "./sintese";
 import { criarCompositor, notasDoDrone, VOLUME_ENERGIA, type Compositor, type Energia, type Nota } from "./teoria";
 
 // Motor da trilha: um AudioContext por página (singleton), criado só depois de um gesto do usuário.
-// Cada humor toca numa "camada" com ganho próprio; trocar de humor é um crossfade entre camadas.
+// Cada humor toca numa "camada" com ganho próprio; trocar de humor é um crossfade (de potência igual) entre camadas.
 // A camada é "gerada" (compositor do estilo do sistema) ou "arquivo" (músicas da pessoa em musica/, via <audio>).
 // O agendador acorda a cada 100 ms e agenda as notas que caem nos próximos 300 ms pelo relógio do áudio.
+// O motor sobrevive à navegação dentro da mesa (Ajustes, Livro, ficha): quando o último <Musica> sai, a trilha continua por
+// PRAZO_SOLTAR_MS; se outro componente a retém nesse prazo, segue do ponto em que estava. Só depois fecha, com fade.
+// Fora de uma mesa (página inicial) fecha logo, também com fade.
 
 const ANTECEDENCIA = 0.3;
 const INTERVALO_MS = 100;
@@ -17,6 +20,100 @@ const CROSSFADE = 3;
 const GANHO_MAXIMO = 2.4;
 /** o mesmo para as músicas locais: uma faixa masterizada (~-14 dBFS RMS) no volume padrão sai perto dos ~-28 dB da síntese */
 const GANHO_MAXIMO_ARQUIVO = 1.4;
+/** quanto a trilha continua depois que o último componente saiu (ir a Ajustes/Livro e voltar não recomeça do zero) */
+export const PRAZO_SOLTAR_MS = 90_000;
+/** fora da mesa (página inicial, nova campanha) não há volta a esperar: confere a URL logo depois de soltar e fecha */
+export const PRAZO_FORA_DA_MESA_MS = 1000;
+const ROTA_MESA = /^\/mesa\/\d+/;
+/** ao fechar de verdade: constante de tempo do fade no mestre e quanto esperar antes do close() */
+const FADE_FIM = 0.15;
+const FECHAR_APOS_MS = 500;
+/** quanto esperar o resume() virar running antes de concluir que o gesto não valeu (toque sem ativação) */
+const PRAZO_GESTO_MS = 1000;
+/** piso dos ganhos (nunca zero: dá para continuar com rampas exponenciais) */
+const PISO = 0.0001;
+const PONTOS_CURVA = 65;
+/** sem cancelAndHoldAtTime (Firefox) a curva vira rampas lineares por trechos: estas podem ser cortadas depois */
+const TRECHOS_RAMPA = 8;
+
+/**
+ * A ativação do usuário é pegajosa no documento: depois do primeiro clique/toque da visita, um AudioContext novo pode
+ * começar sem outro gesto. Por isso a flag vive no módulo, não na instância: um Motor novo (depois do prazo) já nasce
+ * desbloqueado. Volta a false quando um resume() não vinga (ver retomar), para o próximo gesto tentar de novo, e volta a
+ * true assim que o contexto reporta "running" (mesmo um resume atrasado prova que a ativação valeu).
+ */
+let desbloqueado = false;
+
+/**
+ * Curva de potência igual para o crossfade: quem entra sobe em seno, quem sai desce em cosseno. Como sin² + cos² = 1,
+ * a potência somada das duas camadas fica constante e o volume não afunda no meio, como acontece no cruzamento linear.
+ * `alvo` é a ponta que não é silêncio (o fim da entrada ou o começo da saída).
+ */
+export function curvaPotenciaIgual(alvo: number, forma: "entrada" | "saida", pontos = PONTOS_CURVA): Float32Array {
+  const curva = new Float32Array(pontos);
+  for (let i = 0; i < pontos; i++) {
+    const x = (i / (pontos - 1)) * (Math.PI / 2);
+    curva[i] = Math.max(PISO, alvo * (forma === "entrada" ? Math.sin(x) : Math.cos(x)));
+  }
+  return curva;
+}
+
+const temSegurar = (g: AudioParam) => typeof g.cancelAndHoldAtTime === "function";
+
+/** corta a automação pendente segurando o valor atual (cancelAndHoldAtTime onde existe; Firefox só tem o cancelar) */
+function cancelarAutomacao(g: AudioParam, t: number) {
+  try {
+    if (temSegurar(g)) g.cancelAndHoldAtTime(t);
+    else g.cancelScheduledValues(t);
+  } catch {
+    // parâmetro de um contexto já fechado
+  }
+}
+
+/**
+ * agenda a curva de potência igual. Com cancelAndHoldAtTime, setValueCurveAtTime (o navegador sabe truncá-la depois).
+ * Sem ele (Firefox), cancelScheduledValues não corta uma curva em curso e qualquer automação seguinte sobre ela lança;
+ * então a curva vai em rampas lineares por trechos, que o cancelar remove sem lançar.
+ */
+function agendarCurva(g: AudioParam, curva: Float32Array, inicio: number, duracao: number) {
+  if (temSegurar(g)) {
+    g.setValueCurveAtTime(curva, inicio, duracao);
+    return;
+  }
+  const ultimo = curva.length - 1;
+  g.setValueAtTime(curva[0], inicio);
+  for (let s = 1; s <= TRECHOS_RAMPA; s++) {
+    const i = Math.round((s * ultimo) / TRECHOS_RAMPA);
+    g.linearRampToValueAtTime(curva[i], inicio + (duracao * i) / ultimo);
+  }
+}
+
+/** fade-in de uma camada nova (sem automação anterior no parâmetro) */
+function fadeEntrada(g: AudioParam, inicio: number, alvo: number, duracao: number) {
+  g.value = PISO;
+  try {
+    agendarCurva(g, curvaPotenciaIgual(alvo, "entrada"), inicio, duracao);
+  } catch {
+    g.setValueAtTime(PISO, inicio);
+    g.linearRampToValueAtTime(alvo, inicio + duracao);
+  }
+}
+
+/** fade-out da camada que sai, a partir do valor em que está (mesmo no meio de um fade-in) */
+function fadeSaida(g: AudioParam, agora: number, duracao: number) {
+  const valor = Math.max(PISO, g.value);
+  cancelarAutomacao(g, agora);
+  try {
+    agendarCurva(g, curvaPotenciaIgual(valor, "saida"), agora, duracao);
+  } catch {
+    try {
+      g.setValueAtTime(valor, agora);
+      g.linearRampToValueAtTime(PISO, agora + duracao);
+    } catch {
+      // automação sobreposta que o navegador não deixou cortar: a camada some no liberar
+    }
+  }
+}
 
 type Agendada = { t: number; nota: Nota; segundosPorBatida: number };
 
@@ -118,6 +215,7 @@ class Motor {
   private camadas: Camada[] = [];
   private relogio: ReturnType<typeof setInterval> | null = null;
   private desligarTimer: ReturnType<typeof setTimeout> | null = null;
+  private gestoTimer: ReturnType<typeof setTimeout> | null = null;
 
   private pedido: { humor: HumorMusical; energia: Energia; estilo: EstiloMusical } = { humor: "taverna", energia: "baixa", estilo: "fantasia" };
   private faixas: FaixasLocais = {};
@@ -125,9 +223,29 @@ class Motor {
   private quebradas = new Set<string>();
   private ligado = true;
   private volume = 0.35;
-  private desbloqueado = false;
 
   private readonly aoMudarVisibilidade = () => this.sincronizar();
+  /**
+   * o "esperando gesto" da interface sai do estado real do contexto, não da flag. "running" também devolve a flag:
+   * um resume() que demorou mais que PRAZO_GESTO_MS (fone Bluetooth, celular voltando do sono) zerou-a em retomar, e sem
+   * isto a próxima volta da aba cairia no ramo de parar (querTocar = ligado && desbloqueado) e a trilha não retomaria.
+   */
+  private readonly aoMudarEstadoCtx = () => {
+    const ctx = this.ctx;
+    if (ctx && ctx.state === "running") {
+      desbloqueado = true;
+      if (this.gestoTimer) {
+        clearTimeout(this.gestoTimer);
+        this.gestoTimer = null;
+      }
+      // vingou tarde, com a aba já oculta ou o som desligado nesse meio-tempo: volta a suspender
+      if (this.oculto() || !this.ligado) {
+        this.sincronizar();
+        return;
+      }
+    }
+    this.publicarGesto();
+  };
 
   /** humor, energia e estilo da cena (pode vir antes do áudio existir: vale quando começar) */
   definirCena(humor: HumorMusical, energia: Energia, estilo: EstiloMusical = "fantasia") {
@@ -166,10 +284,21 @@ class Motor {
     this.sincronizar();
   }
 
-  /** chame dentro de um gesto (clique/tecla): só então o navegador deixa o áudio começar */
+  /** chame dentro de um gesto (clique/toque/tecla): só então o navegador deixa o áudio começar */
   desbloquear() {
-    this.desbloqueado = true;
+    desbloqueado = true;
     this.sincronizar();
+  }
+
+  /**
+   * ainda falta um gesto para o áudio soar? (ligado, mas sem ativação ou com o contexto parado). O componente chama
+   * desbloquear() a cada gesto enquanto isto for true: no celular o pointerdown do toque não concede ativação, só o
+   * pointerup/touchend/click, então o primeiro resume() pode nascer suspenso e precisa de outra tentativa.
+   */
+  precisaGesto(): boolean {
+    if (!this.ligado) return false;
+    if (!desbloqueado) return true;
+    return !this.ctx || (this.ctx.state !== "running" && this.ctx.state !== "closed");
   }
 
   private faixasDe(humor: HumorMusical): FaixaLocal[] | null {
@@ -177,11 +306,37 @@ class Motor {
     return lista?.length && !this.quebradas.has(chaveDasFaixas(lista)) ? lista : null;
   }
 
+  private oculto(): boolean {
+    return typeof document !== "undefined" && document.visibilityState === "hidden";
+  }
+
+  /** "esperando o primeiro toque" pelo estado real do contexto (ou pela flag, enquanto ele não existe) */
+  private publicarGesto() {
+    const ctx = this.ctx && this.ctx.state !== "closed" ? this.ctx : null;
+    const parado = ctx ? ctx.state !== "running" : !desbloqueado;
+    publicar({ aguardandoGesto: this.ligado && !this.oculto() && parado });
+  }
+
+  /**
+   * resume(); se não virar running em 1 s, o gesto não valeu (toque sem ativação): o próximo gesto tenta de novo.
+   * Se vingar depois disso, o statechange (aoMudarEstadoCtx) devolve a flag.
+   */
+  private retomar(ctx: AudioContext) {
+    void ctx.resume().catch(() => {});
+    if (this.gestoTimer) clearTimeout(this.gestoTimer);
+    this.gestoTimer = setTimeout(() => {
+      this.gestoTimer = null;
+      if (this.ctx !== ctx || ctx.state === "running" || ctx.state === "closed") return;
+      if (!this.ligado || this.oculto()) return;
+      desbloqueado = false;
+      this.publicarGesto();
+    }, PRAZO_GESTO_MS);
+  }
+
   /** liga, retoma ou suspende o áudio conforme preferência, gesto e visibilidade da aba */
   private sincronizar() {
-    const oculto = typeof document !== "undefined" && document.visibilityState === "hidden";
-    const querTocar = this.ligado && this.desbloqueado;
-    publicar({ aguardandoGesto: this.ligado && !this.desbloqueado });
+    const oculto = this.oculto();
+    const querTocar = this.ligado && desbloqueado;
     if (this.desligarTimer) {
       clearTimeout(this.desligarTimer);
       this.desligarTimer = null;
@@ -190,12 +345,15 @@ class Motor {
     if (querTocar && !oculto) {
       if (!this.ctx) this.criar();
       const ctx = this.ctx;
+      this.publicarGesto();
       if (!ctx || ctx.state === "closed") return;
-      if (ctx.state !== "running") void ctx.resume().catch(() => {});
+      if (ctx.state !== "running") this.retomar(ctx);
       for (const c of this.camadas) if (c.tipo === "arquivo" && c.fimEm === null && c.audio.paused && c.audio.src) void c.audio.play().catch(() => {});
       this.iniciarRelogio();
       return;
     }
+
+    this.publicarGesto();
 
     if (!this.ctx || this.ctx.state === "closed") return;
     this.pararRelogio();
@@ -265,6 +423,7 @@ class Motor {
     this.saidaFinal = [mestre, mestreArquivos, compressor, limitador, reverb, retorno];
     this.instrumentos = new Instrumentos(ctx);
     document.addEventListener("visibilitychange", this.aoMudarVisibilidade);
+    ctx.addEventListener("statechange", this.aoMudarEstadoCtx);
 
     this.camadas.push(this.criarCamada(this.pedido.humor, this.pedido.energia, this.pedido.estilo, ctx.currentTime + 0.05, 2));
   }
@@ -282,8 +441,7 @@ class Motor {
     const compositor = criarCompositor(humor, criarAleatorio((Math.random() * 2 ** 32) >>> 0), receita);
 
     const saida = ctx.createGain();
-    saida.gain.setValueAtTime(0.0001, inicio);
-    saida.gain.linearRampToValueAtTime(receita.volume * VOLUME_ENERGIA[energia], inicio + fade);
+    fadeEntrada(saida.gain, inicio, receita.volume * VOLUME_ENERGIA[energia], fade);
     const envio = ctx.createGain();
     envio.gain.value = receita.reverb;
     saida.connect(this.mestre!);
@@ -325,8 +483,7 @@ class Motor {
   private criarCamadaArquivo(humor: HumorMusical, energia: Energia, faixas: FaixaLocal[], inicio: number, fade: number): CamadaArquivo {
     const ctx = this.ctx!;
     const saida = ctx.createGain();
-    saida.gain.setValueAtTime(0.0001, inicio);
-    saida.gain.linearRampToValueAtTime(1, inicio + fade);
+    fadeEntrada(saida.gain, inicio, 1, fade);
     saida.connect(this.mestreArquivos!);
     const audio = new Audio();
     audio.preload = "auto";
@@ -403,9 +560,15 @@ class Motor {
       atual.energia = energia;
       if (atual.tipo === "gerada") {
         // mesma trilha, só muda a energia: andamento/densidade valem no próximo compasso, volume desliza
-        atual.saida.gain.cancelScheduledValues(agora);
-        atual.saida.gain.setValueAtTime(Math.max(0.0001, atual.saida.gain.value), agora);
-        atual.saida.gain.linearRampToValueAtTime(atual.compositor.receita.volume * VOLUME_ENERGIA[energia], agora + 2);
+        const g = atual.saida.gain;
+        const valor = Math.max(PISO, g.value);
+        cancelarAutomacao(g, agora);
+        try {
+          g.setValueAtTime(valor, agora);
+          g.linearRampToValueAtTime(atual.compositor.receita.volume * VOLUME_ENERGIA[energia], agora + 2);
+        } catch {
+          // fade-in em curso que o navegador não deixou cortar: a energia nova vale no volume só na próxima troca
+        }
       }
       return;
     }
@@ -421,10 +584,7 @@ class Motor {
 
   private encerrar(camada: Camada, t: number) {
     camada.fimEm = t + CROSSFADE;
-    const g = camada.saida.gain;
-    g.cancelScheduledValues(t);
-    g.setValueAtTime(Math.max(0.0001, g.value), t);
-    g.linearRampToValueAtTime(0.0001, camada.fimEm);
+    fadeSaida(camada.saida.gain, t, CROSSFADE);
     if (camada.tipo === "gerada") {
       for (const voz of camada.continuas) voz.parar(camada.fimEm);
       camada.cadeia.parar(camada.fimEm + 0.6);
@@ -432,21 +592,7 @@ class Motor {
   }
 
   private liberarCamada(camada: Camada) {
-    try {
-      camada.saida.disconnect();
-      if (camada.tipo === "gerada") {
-        camada.fila = [];
-        camada.envio.disconnect();
-        camada.cadeia.desligar();
-      } else {
-        camada.audio.pause();
-        camada.audio.removeAttribute("src");
-        camada.audio.load();
-        camada.fonte.disconnect();
-      }
-    } catch {
-      // já desconectada
-    }
+    desligarCamada(camada);
     this.camadas = this.camadas.filter((c) => c !== camada);
   }
 
@@ -509,30 +655,75 @@ class Motor {
     }
   }
 
-  /** desliga tudo e solta o AudioContext */
+  /** desliga tudo e solta o AudioContext: se estava tocando, fade curto no mestre e close() meio segundo depois */
   destruir() {
     this.pararRelogio();
     if (this.desligarTimer) clearTimeout(this.desligarTimer);
     this.desligarTimer = null;
+    if (this.gestoTimer) clearTimeout(this.gestoTimer);
+    this.gestoTimer = null;
     if (typeof document !== "undefined") document.removeEventListener("visibilitychange", this.aoMudarVisibilidade);
-    for (const camada of [...this.camadas]) this.liberarCamada(camada);
-    for (const no of this.saidaFinal) {
-      try {
-        no.disconnect();
-      } catch {
-        // já desconectado
-      }
-    }
-    this.saidaFinal = [];
-    this.instrumentos?.liberar();
-    this.instrumentos = null;
+
+    // solta tudo da instância já; o que ainda soa fica em variáveis locais até o fade acabar
     const ctx = this.ctx;
+    const camadas = this.camadas;
+    const nos = this.saidaFinal;
+    const instrumentos = this.instrumentos;
+    const mestres = [this.mestre, this.mestreArquivos];
+    this.camadas = [];
+    this.saidaFinal = [];
+    this.instrumentos = null;
     this.ctx = null;
     this.mestre = null;
     this.mestreArquivos = null;
     this.reverb = null;
-    if (ctx && ctx.state !== "closed") void ctx.close().catch(() => {});
     publicar({ tocando: null, faixa: null, estilo: null });
+
+    const fechar = () => {
+      for (const camada of camadas) desligarCamada(camada);
+      for (const no of nos) {
+        try {
+          no.disconnect();
+        } catch {
+          // já desconectado
+        }
+      }
+      instrumentos?.liberar();
+      if (!ctx) return;
+      ctx.removeEventListener("statechange", this.aoMudarEstadoCtx);
+      if (ctx.state !== "closed") void ctx.close().catch(() => {});
+    };
+    if (!ctx || ctx.state !== "running") {
+      fechar();
+      return;
+    }
+    for (const m of mestres) {
+      try {
+        m?.gain.setTargetAtTime(0, ctx.currentTime, FADE_FIM);
+      } catch {
+        // contexto fechado no meio
+      }
+    }
+    setTimeout(fechar, FECHAR_APOS_MS);
+  }
+}
+
+/** desconecta os nós de uma camada (sem mexer na lista do motor) */
+function desligarCamada(camada: Camada) {
+  try {
+    camada.saida.disconnect();
+    if (camada.tipo === "gerada") {
+      camada.fila = [];
+      camada.envio.disconnect();
+      camada.cadeia.desligar();
+    } else {
+      camada.audio.pause();
+      camada.audio.removeAttribute("src");
+      camada.audio.load();
+      camada.fonte.disconnect();
+    }
+  } catch {
+    // já desconectada
   }
 }
 
@@ -540,30 +731,58 @@ class Motor {
 let instancia: Motor | null = null;
 let usuarios = 0;
 let destruirTimer: ReturnType<typeof setTimeout> | null = null;
+let foraDaMesaTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** pega o motor e marca um usuário (componente montado); devolva com soltarMotor */
+function cancelarFechamento() {
+  if (destruirTimer) clearTimeout(destruirTimer);
+  if (foraDaMesaTimer) clearTimeout(foraDaMesaTimer);
+  destruirTimer = null;
+  foraDaMesaTimer = null;
+}
+
+/**
+ * pega o motor e marca um usuário (componente montado); devolva com soltarMotor.
+ * Dentro do prazo de soltarMotor devolve a mesma instância: o contexto e a camada que estava tocando continuam.
+ */
 export function reterMotor(): Motor {
-  if (destruirTimer) {
-    clearTimeout(destruirTimer);
-    destruirTimer = null;
-  }
+  cancelarFechamento();
   usuarios++;
   if (!instancia) instancia = new Motor();
   return instancia;
 }
 
-/** último usuário saiu: libera o áudio (com folga para o remontar do StrictMode não recriar tudo) */
+/** a página atual ainda é de uma mesa (/mesa/<id>, Ajustes, Livro, ficha)? Fora do navegador, sim (nada a fechar cedo) */
+function dentroDaMesa(): boolean {
+  if (typeof location === "undefined") return true;
+  return ROTA_MESA.test(location.pathname);
+}
+
+/**
+ * último usuário saiu: a trilha continua por PRAZO_SOLTAR_MS (Ajustes, Livro, ficha e a volta para a mesa); só então
+ * fecha o áudio, com fade. Também cobre o remontar do StrictMode sem recriar nada. Se logo depois a URL já não é de uma
+ * mesa (voltou à página inicial), não há volta a esperar: fecha em PRAZO_FORA_DA_MESA_MS, com o mesmo fade.
+ */
 export function soltarMotor() {
   usuarios = Math.max(0, usuarios - 1);
   if (usuarios > 0 || destruirTimer) return;
-  destruirTimer = setTimeout(() => {
-    destruirTimer = null;
+  const fechar = () => {
+    cancelarFechamento();
     if (usuarios === 0 && instancia) {
       instancia.destruir();
       instancia = null;
-      publicar({ aguardandoGesto: true });
+      publicar({ aguardandoGesto: !desbloqueado });
     }
-  }, 50);
+  };
+  destruirTimer = setTimeout(fechar, PRAZO_SOLTAR_MS);
+  foraDaMesaTimer = setTimeout(() => {
+    foraDaMesaTimer = null;
+    if (usuarios === 0 && !dentroDaMesa()) fechar();
+  }, PRAZO_FORA_DA_MESA_MS);
+}
+
+/** só para testes: o que o módulo guarda entre componentes */
+export function _depurarMotor(): { temInstancia: boolean; usuarios: number; desbloqueado: boolean; aguardandoFechar: boolean } {
+  return { temInstancia: instancia !== null, usuarios, desbloqueado, aguardandoFechar: destruirTimer !== null };
 }
 
 export type { Motor };

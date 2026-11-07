@@ -1,15 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { personagensParaTrazer } from "@/app/nova/copiar-personagem";
 import { FormularioPersonagem } from "@/components/ficha/formulario-personagem";
+import { CriacaoHistoria } from "@/components/historia/criacao/criacao-historia";
 import { listarPersonagens, obterCampanha } from "@/lib/db";
 import { acessoNaPagina } from "@/lib/rede/acesso";
 import { obterSistema, sistemasPublicos } from "@/lib/sistemas";
+import { publico } from "@/lib/sistemas/comum";
 import { temaDoSistema } from "@/lib/temas";
-import { criarPersonagemAcao } from "../acoes";
+import { criarPersonagemAcao, criarPersonagemHistoriaAcao } from "../acoes";
 
 // Mais uma cadeira na mesa: ficha nova no sistema da campanha. Serve para a mesa local (vários no mesmo teclado)
-// e para quem chega pela rede e ainda não tem personagem.
+// e para quem chega pela rede e ainda não tem personagem. Numa mesa do modo história a criação é a do modo história
+// (nome, rosto, ofício, passado), sem o passo da campanha: a mesa já existe.
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +32,22 @@ export default async function NovoPersonagem(props: PageProps<"/mesa/[id]/person
   const sistema = obterSistema(campanha.sistema);
   const grupo = listarPersonagens(campanha.id).map((p) => p.ficha.nome);
 
+  if (campanha.sistema === "historia") {
+    // a cada visita, outros nomes e rostos sugeridos (a página é dinâmica: a semente nasce no servidor e vai no HTML)
+    const semente = crypto.randomUUID().slice(0, 8);
+    return (
+      <CriacaoHistoria
+        modo="personagem"
+        sistema={publico(sistema)}
+        semente={semente}
+        acao={criarPersonagemHistoriaAcao.bind(null, campanha.id)}
+        // rascunho separado por mesa: não se mistura com o de uma campanha nova (/nova) nem com o de outra mesa
+        chaveRascunho={`taverna:rascunho-historia:mesa-${campanha.id}`}
+        mesa={{ id: campanha.id, nome: campanha.nome, grupo }}
+      />
+    );
+  }
+
   return (
     // data-tema já no HTML do servidor; o formulário põe o mesmo tema no <body> (fundo e cabeçalho)
     <main data-tema={temaDoSistema(campanha.sistema)} className="mx-auto max-w-6xl px-4 py-6 sm:py-8">
@@ -39,6 +59,8 @@ export default async function NovoPersonagem(props: PageProps<"/mesa/[id]/person
         modo="personagem"
         destino={`mesa-${campanha.id}`}
         textoBotao="Puxar o banco"
+        // personagens de outras mesas do mesmo sistema (só nesta máquina): o cartão "Trazer um personagem" copia a ficha descansada
+        copiaveis={sistema.pronto ? await personagensParaTrazer({ sistema: campanha.sistema, excetoCampanha: campanha.id }) : []}
         cabecalho={{
           titulo: "Mais uma cadeira na mesa",
           antes: (

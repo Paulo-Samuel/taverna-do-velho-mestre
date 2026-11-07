@@ -6,6 +6,8 @@ import { suportaRevelar } from "./use-revelar";
 
 // Botão do cabeçalho das mesas: escolhe como ler a história ("📖 Cena a cena" ou "📜 Rolagem") e liga/desliga o texto se
 // revelando aos poucos e o tamanho da letra (A− / A+). Preferência deste navegador (localStorage).
+// Com a tela baixa (palco com menos de ~180 px, ver altura.ts) a mesa lê em rolagem sozinha e avisa aqui, com a opção de
+// insistir nas páginas mesmo assim.
 // Embaixo, o "🌙 Encerrar a noite" (com confirmação): o mestre fecha a cena, distribui XP e, no Vampiro, faz o teste de Remorso
 // (POST /api/campanhas/[id]/encerrar; 409 quando ele está narrando ou há teste esperando o dado).
 
@@ -54,6 +56,7 @@ async function pedirEncerrar(campanhaId: number): Promise<string | null> {
 /**
  * acima: o menu abre para cima (botão no pé de um painel); esquerda: alinhado pela esquerda do botão (botão no canto esquerdo).
  * campanhaId: mostra o "Encerrar a noite"; aoEncerrar avisa a mesa que deu certo.
+ * telaBaixa: o palco está baixo demais para páginas (a mesa caiu para a rolagem, ou insiste nas páginas curtas): avisa.
  */
 export function MenuLeitura({
   className = "",
@@ -61,14 +64,16 @@ export function MenuLeitura({
   esquerda = false,
   campanhaId,
   aoEncerrar,
+  telaBaixa = false,
 }: {
   className?: string;
   acima?: boolean;
   esquerda?: boolean;
   campanhaId?: number;
   aoEncerrar?: () => void;
+  telaBaixa?: boolean;
 }) {
-  const { modo, animar, fonte } = usePreferenciasLeitor();
+  const { modo, animar, fonte, paginasEmTelaBaixa } = usePreferenciasLeitor();
   const menos = useMenosMovimento();
   const [aberto, setAberto] = useState(false);
   const [encerrar, setEncerrar] = useState<EstadoEncerrar>({ fase: "quieto", erro: null });
@@ -147,6 +152,25 @@ export function MenuLeitura({
               </button>
             ))}
           </div>
+          {telaBaixa && modo === "cenas" && (
+            <div className="mt-2 rounded-lg border border-ambar/40 bg-ambar/5 px-2.5 py-2 text-[11px] leading-snug text-foreground/90" role="status" data-tela-baixa={paginasEmTelaBaixa ? "paginas" : "rolagem"}>
+              {paginasEmTelaBaixa ? (
+                <>
+                  Tela baixa: as páginas ficam curtas.{" "}
+                  <button type="button" onClick={() => salvarPreferenciasLeitor({ paginasEmTelaBaixa: false })} className="text-ambar underline-offset-2 hover:underline">
+                    Ler em rolagem até a altura voltar
+                  </button>
+                </>
+              ) : (
+                <>
+                  Tela baixa: lendo em rolagem até o palco ter altura.{" "}
+                  <button type="button" onClick={() => salvarPreferenciasLeitor({ paginasEmTelaBaixa: true })} className="text-ambar underline-offset-2 hover:underline">
+                    Ler em páginas mesmo assim
+                  </button>
+                </>
+              )}
+            </div>
+          )}
           {/* tamanho da letra da narração: vale para os dois modos */}
           <div className="mt-3 flex items-center gap-2 border-t border-border pt-2.5 text-xs" data-tamanho-letra>
             <span className="min-w-0 flex-1">

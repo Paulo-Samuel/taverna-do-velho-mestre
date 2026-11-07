@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import type { SugestaoAcao } from "@/lib/sistemas/tipos";
 
 // Ações sugeridas pelo mestre no rodapé das duas mesas, sem engolir o palco.
-// Desktop: uma linha baixa por sugestão, com o número do atalho (1, 2, 3), o texto e a perícia; o texto inteiro fica no title.
-// Celular: uma linha só, "3 sugestões · Intimidação · Persuasão ▾", que abre a lista por cima do palco (o palco não encolhe).
+// Desktop (tela larga E alta, variante `largo:` de globals.css): uma linha baixa por sugestão, com o número do atalho (1, 2, 3), o
+// texto e a perícia; o texto inteiro fica no title.
+// Celular ou tela baixa: uma linha só, "3 sugestões · Intimidação · Persuasão ▾", que abre a lista por cima do palco (o palco não encolhe).
 // No leitor cena a cena elas ficam apagadinhas até a pessoa chegar ao fim da cena; aí entram uma a uma, com destaque.
 // Clicar numa sugestão envia a ação na hora.
 
@@ -67,13 +68,13 @@ export function SugestoesCompactas({
       <style href="taverna-sugestoes" precedence="default">
         {CSS}
       </style>
-      {/* celular: uma linha que abre a lista por cima */}
+      {/* celular ou tela baixa: uma linha que abre a lista por cima */}
       <button
         type="button"
         onClick={() => setAberta((v) => !v)}
         aria-expanded={aberta}
         aria-controls="lista-sugestoes"
-        className="sugestao-entrar flex min-h-10 w-full items-center gap-2 rounded-lg border border-border/70 bg-surface/60 px-3 text-left text-sm focus-visible:border-ambar focus-visible:outline-none sm:hidden"
+        className="sugestao-entrar flex min-h-10 w-full items-center gap-2 rounded-lg border border-border/70 bg-surface/60 px-3 text-left text-sm focus-visible:border-ambar focus-visible:outline-none largo:hidden"
       >
         <span className="shrink-0 text-ambar" aria-hidden>
           ➶
@@ -90,7 +91,7 @@ export function SugestoesCompactas({
         id="lista-sugestoes"
         className={`${
           aberta ? "cartao bg-surface! absolute inset-x-0 bottom-full z-30 mb-2 block space-y-1 p-1.5" : "hidden"
-        } sm:static sm:z-auto sm:mb-0 sm:block sm:space-y-[3px] sm:rounded-none sm:border-0 sm:bg-transparent! sm:p-0 sm:shadow-none`}
+        } largo:static largo:z-auto largo:mb-0 largo:block largo:space-y-[3px] largo:rounded-none largo:border-0 largo:bg-transparent! largo:p-0 largo:shadow-none`}
         aria-label="Ações sugeridas pelo mestre"
       >
         {sugestoes.map((s, i) => (
@@ -100,7 +101,7 @@ export function SugestoesCompactas({
               onClick={() => escolher(s.texto)}
               disabled={desabilitado}
               title={s.texto}
-              className="group flex min-h-11 w-full items-center gap-2.5 rounded-md border border-border/45 bg-surface/45 px-2.5 py-1.5 text-left text-[0.95rem] transition hover:border-ambar/60 hover:bg-surface-2/80 focus-visible:border-ambar focus-visible:outline-none disabled:opacity-50 sm:h-7 sm:min-h-0 sm:py-0 sm:text-[0.9rem]"
+              className="group flex min-h-11 w-full items-center gap-2.5 rounded-md border border-border/45 bg-surface/45 px-2.5 py-1.5 text-left text-[0.95rem] transition hover:border-ambar/60 hover:bg-surface-2/80 focus-visible:border-ambar focus-visible:outline-none disabled:opacity-50 largo:h-7 largo:min-h-0 largo:py-0 largo:text-[0.9rem]"
             >
               {/* número do atalho de teclado (1, 2, 3); no toque vira só a seta */}
               <kbd
@@ -112,7 +113,7 @@ export function SugestoesCompactas({
               <span className="shrink-0 text-ambar/80 [@media(pointer:fine)]:hidden" aria-hidden>
                 ➶
               </span>
-              <span className="min-w-0 flex-1 leading-snug text-foreground/85 group-hover:text-foreground sm:truncate">{s.texto}</span>
+              <span className="min-w-0 flex-1 leading-snug text-foreground/85 group-hover:text-foreground largo:truncate">{s.texto}</span>
               {s.pericia && <span className="shrink-0 text-[11px] italic text-muted group-hover:text-ambar/90">{s.pericia}</span>}
             </button>
           </li>

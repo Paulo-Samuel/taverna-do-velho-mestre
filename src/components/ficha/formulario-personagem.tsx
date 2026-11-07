@@ -8,6 +8,7 @@ import type { SistemaPublico } from "@/lib/sistemas/tipos";
 import { temaDoSistema } from "@/lib/temas";
 import { TemaPagina } from "@/components/tema-pagina";
 import {
+  BlocoTrazer,
   PassoAncestralidade,
   PassoAntecedente,
   PassoAtributos,
@@ -21,9 +22,10 @@ import {
   comAventura,
   semAventura,
   type Escolhas,
+  type PersonagemParaTrazer,
 } from "./passos";
 import { PreviaLateral, Resumo } from "./previa";
-import { opcoesValidas, personagemPronto, problemaOpcoes, sortearOpcoes as sortearExtras } from "./sugestoes";
+import { gruposDasOpcoes, NOMES_GRUPOS, opcoesDoGrupo, opcoesValidas, personagemPronto, problemaOpcoes, sortearOpcoes as sortearExtras, type GrupoOpcao } from "./sugestoes";
 
 // Assistente de criação de personagem, guiado só pelos dados públicos do sistema (SistemaPublico).
 // Um único <form> para a server action: os passos são controlados e os campos do contrato
@@ -51,11 +53,19 @@ export type PropsFormulario = {
   destino?: string;
   /** título da página: grande no primeiro passo, numa linha junto da barra de passos depois */
   cabecalho?: { titulo: string; subtitulo?: ReactNode; antes?: ReactNode };
+  /** personagens de outras mesas que dá para trazer em vez de montar (só nesta máquina; vazio = sem o cartão) */
+  copiaveis?: PersonagemParaTrazer[];
 };
 
-type Passo = "sistema" | "ancestralidade" | "classe" | "antecedente" | "atributos" | "pericias" | "opcoes" | "identidade" | "campanha" | "resumo";
+type PassoBase = "sistema" | "ancestralidade" | "classe" | "antecedente" | "atributos" | "pericias" | "opcoes" | "identidade" | "campanha" | "resumo";
+/** "opcoes:pericias" etc.: as Escolhas divididas em subpassos quando o sistema agrupa as opções (Vampiro) */
+type Passo = PassoBase | `opcoes:${GrupoOpcao}`;
 
-const NOMES_PASSOS: Record<Passo, string> = {
+/** O subpasso das Escolhas que um passo representa (null para "opcoes" inteiro e para os outros passos). */
+const grupoDoPasso = (p: Passo): GrupoOpcao | null => (p.startsWith("opcoes:") ? (p.slice("opcoes:".length) as GrupoOpcao) : null);
+const ehOpcoes = (p: Passo) => p === "opcoes" || p.startsWith("opcoes:");
+
+const NOMES_PASSOS: Record<PassoBase, string> = {
   sistema: "Sistema",
   ancestralidade: "Origem",
   classe: "Classe",
@@ -96,6 +106,8 @@ function escolhasIniciais(sistemaId: string, sistema: SistemaPublico | undefined
     instrucoes: "",
     dados: "jogador",
     sugestoes: true,
+    copiaDe: null,
+    zerarXp: false,
   };
 }
 
@@ -158,6 +170,7 @@ function temConteudo(e: Escolhas): boolean {
       e.campanha.trim() ||
       e.cenario.trim() ||
       e.pericias.length ||
+      e.copiaDe !== null ||
       Object.values(e.extras).some((v) => v.some((x) => x.trim())),
   );
 }
@@ -173,6 +186,7 @@ export function FormularioPersonagem({
   textoBotao,
   destino: destinoProp,
   cabecalho,
+  copiaveis = [],
 }: PropsFormulario) {
   const [estado, enviar, enviando] = useActionState(acao, { erro: null });
   const formRef = useRef<HTMLFormElement>(null);
@@ -207,33 +221,53 @@ export function FormularioPersonagem({
   // rascunho encontrado ao abrir; enquanto a pessoa não decide, nada é gravado por cima
   const [oferta, setOferta] = useState<Oferta | null>(null);
   const [veioPronto, setVeioPronto] = useState(false);
+  // prévia da ficha no celular: rodapé de uma linha que abre o painel por cima
+  const [previaAberta, setPreviaAberta] = useState(false);
+  // o que o jogador tinha antes de "Trazer" um personagem (nome digitado, até onde já tinha ido): volta se ele desistir da cópia
+  const antesDaCopia = useRef({ nome: "", alcance: 0 });
 
   const sistema = sistemas.find((s) => s.id === e.sistemaId);
   const opcoes = opcoesValidas(sistema, e.classe, e.ancestralidade, e.extras);
   const limitePericias = sistema?.periciasEscolhiveis ?? 0;
   const periciasDaClasse = new Set(sistema?.classes.find((c) => c.id === e.classe)?.pericias ?? []);
   const periciasEscolhidas = e.pericias.filter((p) => !periciasDaClasse.has(p)).slice(0, limitePericias);
+  // personagem trazido de outra mesa: a ficha vem copiada do servidor, e os passos de regra e identidade saem do caminho
+  const copia = e.copiaDe !== null ? copiaveis.find((p) => p.id === e.copiaDe && p.sistema === e.sistemaId) : undefined;
 
   const passos: Passo[] = [];
   if (!sistemaFixo) passos.push("sistema");
-  if (sistema?.pronto) {
+  if (sistema?.pronto && copia) {
+    if (modo === "campanha") passos.push("campanha");
+    passos.push("resumo");
+  } else if (sistema?.pronto) {
     if (sistema.ancestralidades.length) passos.push("ancestralidade");
     if (sistema.classes.length) passos.push("classe");
     if (sistema.antecedentes?.length) passos.push("antecedente");
     if (sistema.atributos.length) passos.push("atributos");
     if (limitePericias > 0 && sistema.pericias.length) passos.push("pericias");
-    if (opcoes.length) passos.push("opcoes");
+    // sistema que agrupa as opções (Vampiro: Perícias, Disciplinas, Quem você é) ganha um subpasso por grupo
+    const grupos = gruposDasOpcoes(sistema.id, opcoes);
+    if (grupos.length) passos.push(...grupos.map((g): Passo => `opcoes:${g}`));
+    else if (opcoes.length) passos.push("opcoes");
     passos.push("identidade");
     if (modo === "campanha") passos.push("campanha");
     passos.push("resumo");
   }
-  const indice = Math.max(0, passos.indexOf(passo));
+  // um rascunho antigo em "opcoes" (ou numa cópia sem passos de regra) cai no primeiro passo de Escolhas que existir
+  const indice = Math.max(0, passos.indexOf(passo) !== -1 ? passos.indexOf(passo) : ehOpcoes(passo) ? passos.findIndex(ehOpcoes) : -1);
   // os passos de regra usam o vocabulário do sistema (Espécie, Arquétipo, Ocupação...)
-  const nomePasso = (p: Passo) =>
-    (p === "ancestralidade" && sistema?.rotulos.ancestralidade) ||
-    (p === "classe" && sistema?.rotulos.classe) ||
-    (p === "antecedente" && sistema?.rotulos.antecedente) ||
-    NOMES_PASSOS[p];
+  const nomePasso = (p: Passo) => {
+    const grupo = grupoDoPasso(p);
+    if (grupo) return NOMES_GRUPOS[grupo];
+    return (
+      (p === "ancestralidade" && sistema?.rotulos.ancestralidade) ||
+      (p === "classe" && sistema?.rotulos.classe) ||
+      (p === "antecedente" && sistema?.rotulos.antecedente) ||
+      NOMES_PASSOS[p as PassoBase]
+    );
+  };
+  /** As opções que um passo de Escolhas mostra e valida (todas, ou só as do subpasso). */
+  const opcoesDoPasso = (p: Passo) => opcoesDoGrupo(sistema?.id ?? "", opcoes, grupoDoPasso(p));
   const atual = passos[indice] ?? "sistema";
   const ultimo = atual === "resumo";
 
@@ -419,12 +453,11 @@ export function FormularioPersonagem({
       }
       case "pericias":
         return periciasEscolhidas.length > limitePericias ? `No máximo ${limitePericias} perícias.` : null;
-      case "opcoes":
-        return problemaOpcoes(opcoes, e.extras);
       case "identidade":
         return e.nome.trim() ? null : "Seu personagem precisa de um nome.";
       default:
-        return null;
+        // "opcoes" ou um subpasso "opcoes:grupo": só as opções daquele passo (as exclusivas entre si moram no mesmo grupo)
+        return ehOpcoes(p) ? problemaOpcoes(opcoesDoPasso(p), e.extras) : null;
     }
   }
 
@@ -444,9 +477,9 @@ export function FormularioPersonagem({
       travaEnvio.current = true;
       setTimeout(() => (travaEnvio.current = false), 800);
       setPrevia(null);
-      // o FormData sai dos campos escondidos, que já refletem o estado atual
+      // o FormData sai dos campos escondidos, que já refletem o estado atual (a cópia não tem prévia: a ficha já existe)
       const form = formRef.current;
-      if (form) pedirPrevia(new FormData(form));
+      if (form && !copia) pedirPrevia(new FormData(form));
     }
     setPasso(p);
     setAlcance((a) => Math.max(a, passos.indexOf(p)));
@@ -495,6 +528,35 @@ export function FormularioPersonagem({
     setVeioPronto(true);
   }
 
+  /** Trazer um personagem de outra mesa: guarda o id, pula os passos de ficha e vai direto para a campanha (ou o resumo). */
+  function trazer(p: PersonagemParaTrazer) {
+    setTocouSistema(true);
+    setVeioPronto(false);
+    setAviso(null);
+    setE((v) => {
+      // guarda o nome digitado (não o de uma cópia anterior) para o "Montar do zero" devolver
+      if (v.copiaDe === null) antesDaCopia.current = { nome: v.nome, alcance };
+      return { ...v, copiaDe: p.id, nome: p.nome };
+    });
+    setPasso(modo === "campanha" ? "campanha" : "resumo");
+    setAlcance(99);
+    if (modo !== "campanha") {
+      travaEnvio.current = true;
+      setTimeout(() => (travaEnvio.current = false), 800);
+    }
+    topoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  /** Desistir da cópia: volta a montar a ficha do zero, no primeiro passo de regra, com o nome e os passos já visitados de antes do "Trazer". */
+  function montarDoZero() {
+    setE((v) => ({ ...v, copiaDe: null, zerarXp: false, nome: antesDaCopia.current.nome }));
+    setAlcance(antesDaCopia.current.alcance);
+    const primeiro = sistema?.ancestralidades.length ? "ancestralidade" : sistema?.classes.length ? "classe" : "identidade";
+    setPasso(primeiro);
+    setAviso(null);
+    topoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function aoEnviar(ev: FormEvent<HTMLFormElement>) {
     // Enter num campo ou envio fora do último passo não manda o formulário
     if (!ultimo) {
@@ -534,19 +596,22 @@ export function FormularioPersonagem({
   // a prévia só faz sentido entre o sistema e o resumo (o resumo já mostra a ficha inteira)
   const mostrarPrevia = Boolean(sistema) && atual !== "sistema" && atual !== "resumo";
   const proximo = passos[indice + 1];
+  // "Sem nome · Gato de Beco · —": o que falta aparece como travessão, para o rodapé do celular mostrar o que vem pela frente
   const resumoCurto = sistema
-    ? [
-        e.nome.trim() || "Sem nome",
-        sistema.ancestralidades.find((a) => a.id === e.ancestralidade)?.nome,
-        sistema.classes.find((c) => c.id === e.classe)?.nome,
-      ]
-        .filter(Boolean)
-        .join(" · ")
+    ? copia
+      ? `${copia.nome} · ${copia.linha || "de outra mesa"}`
+      : [
+          e.nome.trim() || "Sem nome",
+          sistema.ancestralidades.length ? (sistema.ancestralidades.find((a) => a.id === e.ancestralidade)?.nome ?? "—") : null,
+          sistema.classes.length ? (sistema.classes.find((c) => c.id === e.classe)?.nome ?? "—") : null,
+        ]
+          .filter((x): x is string => x !== null)
+          .join(" · ")
     : "";
   // depois do primeiro passo o título da página encolhe para uma linha junto da barra de passos
   const compacto = indice > 0;
   const primeiroDeRegra = passos.find((p) => p !== "sistema");
-  const mostrarPronto = Boolean(sistema?.pronto) && (atual === "sistema" || (atual === primeiroDeRegra && atual !== "identidade"));
+  const mostrarPronto = Boolean(sistema?.pronto) && !copia && (atual === "sistema" || (atual === primeiroDeRegra && atual !== "identidade"));
 
   return (
     <div ref={topoRef} className="scroll-mt-4">
@@ -622,7 +687,7 @@ export function FormularioPersonagem({
                         }`}
                       />
                       <span
-                        className={`hidden truncate text-[11px] leading-tight md:block ${
+                        className={`hidden truncate text-xs leading-tight md:block ${
                           i === indice ? "font-semibold text-ambar" : visitado ? "text-foreground/80 group-hover:text-ambar" : "text-muted"
                         }`}
                       >
@@ -648,6 +713,32 @@ export function FormularioPersonagem({
             </div>
           )}
 
+          {/* personagens de outras mesas deste sistema (só nesta máquina): copiar em vez de montar */}
+          {mostrarPronto && sistema && copiaveis.length > 0 && <BlocoTrazer sistema={sistema} lista={copiaveis} escolher={trazer} />}
+
+          {copia && (
+            <div role="status" className="cartao mb-4 flex flex-wrap items-center justify-between gap-3 border-musgo/50 bg-musgo/10 px-4 py-3">
+              <p className="min-w-0 flex-1 basis-64 text-sm">
+                <span className="font-semibold text-pergaminho">
+                  Trazendo {copia.nome} de {copia.campanha}.
+                </span>{" "}
+                <span className="text-muted">
+                  {copia.linha ? `${copia.linha}. ` : ""}A ficha chega descansada: vida e recursos cheios{sistema?.id === "vtm5" ? ", Fome 1" : ""}, sem condições; inventário e XP
+                  vêm junto.
+                </span>
+              </p>
+              <span className="flex shrink-0 flex-wrap items-center gap-3">
+                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input type="checkbox" checked={e.zerarXp} onChange={(ev) => atualizar({ zerarXp: ev.target.checked })} className="h-4 w-4 accent-[var(--ambar)]" />
+                  zerar XP
+                </label>
+                <button type="button" className="btn-borda" onClick={montarDoZero}>
+                  Montar do zero
+                </button>
+              </span>
+            </div>
+          )}
+
           {veioPronto && atual === "identidade" && (
             <p role="status" className="mb-4 rounded-lg border border-musgo/50 bg-musgo/10 px-3 py-2 text-sm">
               ⚡ Tudo sorteado. Revise o nome e a história; a barra de passos leva a qualquer escolha para trocar o que o dado errou.
@@ -668,26 +759,9 @@ export function FormularioPersonagem({
             </p>
           )}
 
-          {/* no celular a prévia mora numa gaveta acima do passo */}
-          {sistema && mostrarPrevia && (
-            <details className="cartao group/previa mb-4 lg:hidden">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 px-4 py-2 [&::-webkit-details-marker]:hidden">
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[11px] uppercase tracking-widest text-ambar-forte">Prévia da ficha</span>
-                  <span className="block truncate text-sm text-foreground/90">{resumoCurto}</span>
-                </span>
-                <span className="text-muted transition-transform group-open/previa:rotate-180" aria-hidden>
-                  ▾
-                </span>
-              </summary>
-              <div className="border-t border-border px-4 pb-4 pt-3">
-                <PreviaLateral sistema={sistema} e={e} opcoes={opcoes} />
-              </div>
-            </details>
-          )}
-
-          {/* pb: o fim do passo não fica escondido atrás da barra grudada no rodapé */}
-          <div className={`pb-10 ${mostrarPrevia ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]" : ""}`}>
+          {/* pb: o fim do passo não fica escondido atrás da barra grudada no rodapé; items-start: a prévia gruda no topo
+              da própria coluna em vez de esticar junto com a grade de opções */}
+          <div className={`pb-10 ${mostrarPrevia ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start" : ""}`}>
             <div key={atual} className="surgir min-w-0">
               {atual === "sistema" && <PassoSistema sistemas={sistemas} e={e} escolher={escolherSistema} />}
               {sistema && atual === "ancestralidade" && <PassoAncestralidade sistema={sistema} e={e} atualizar={atualizar} />}
@@ -707,13 +781,17 @@ export function FormularioPersonagem({
                 />
               )}
               {sistema && atual === "pericias" && <PassoPericias sistema={sistema} e={e} atualizar={atualizar} />}
-              {sistema && atual === "opcoes" && (
+              {sistema && ehOpcoes(atual) && (
                 <PassoOpcoes
                   sistema={sistema}
                   e={e}
                   atualizar={atualizar}
-                  opcoes={opcoes}
-                  sortearOpcoes={(modoSorteio) => atualizar({ extras: sortearExtras(sistema, e, modoSorteio) })}
+                  opcoes={opcoesDoPasso(atual)}
+                  grupo={grupoDoPasso(atual)}
+                  // num subpasso o sorteio mexe só nas opções dele; as dos outros ficam como estão
+                  sortearOpcoes={(modoSorteio) =>
+                    atualizar({ extras: sortearExtras(sistema, e, modoSorteio, grupoDoPasso(atual) ? new Set(opcoesDoPasso(atual).map((o) => o.id)) : undefined) })
+                  }
                 />
               )}
               {atual === "identidade" && <PassoIdentidade e={e} atualizar={atualizar} />}
@@ -729,21 +807,44 @@ export function FormularioPersonagem({
                   previa={previa}
                   carregando={carregandoPrevia}
                   aventura={aventuraEscolhida}
+                  copia={copia}
                 />
               )}
             </div>
 
+            {/* desktop: a prévia é uma coluna própria, grudada no topo da janela enquanto a lista rola */}
             {sistema && mostrarPrevia && (
-              <aside className="hidden lg:block" aria-label="Prévia da ficha">
-                <div className="cartao sticky top-6 max-h-[calc(100vh-9rem)] overflow-y-auto p-4">
-                  <PreviaLateral sistema={sistema} e={e} opcoes={opcoes} />
-                </div>
+              <aside className="cartao sticky top-20 hidden max-h-[calc(100vh-6rem)] overflow-y-auto p-4 lg:block" aria-label="Prévia da ficha">
+                <PreviaLateral sistema={sistema} e={e} opcoes={opcoes} copia={copia} />
               </aside>
             )}
           </div>
 
           {/* navegação grudada no rodapé (celular e desktop): listas longas não escondem o Avançar, nem o aviso de pendência */}
           <div className="sticky bottom-0 z-20 -mx-4 border-t border-border bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:mx-0 sm:rounded-t-xl sm:border-x sm:bg-surface/95">
+            {/* celular: a prévia é uma linha no rodapé ("Sem nome · Gato de Beco · —") que abre o painel por cima */}
+            {sistema && mostrarPrevia && (
+              <div className="lg:hidden">
+                {previaAberta && (
+                  <div id="previa-celular" className="mb-2 max-h-[55vh] overflow-y-auto rounded-lg border border-border bg-surface p-3">
+                    <PreviaLateral sistema={sistema} e={e} opcoes={opcoes} copia={copia} />
+                  </div>
+                )}
+                <button
+                  type="button"
+                  aria-expanded={previaAberta}
+                  aria-controls="previa-celular"
+                  onClick={() => setPreviaAberta((v) => !v)}
+                  className="-mt-1 mb-2 flex min-h-9 w-full items-center gap-2 rounded text-left text-xs"
+                >
+                  <span className="shrink-0 text-[10px] uppercase tracking-widest text-ambar-forte">Prévia</span>
+                  <span className="min-w-0 flex-1 truncate text-foreground/90">{resumoCurto}</span>
+                  <span className={`shrink-0 text-muted transition-transform ${previaAberta ? "rotate-180" : ""}`} aria-hidden>
+                    ▾
+                  </span>
+                </button>
+              </div>
+            )}
             {(aviso || (ultimo && estado.erro)) && (
               <p role="alert" className="mb-3 flex items-start gap-2 rounded-md border border-sangue/60 bg-sangue/15 px-3 py-2 text-sm">
                 <span className="text-sangue" aria-hidden>
@@ -775,6 +876,9 @@ export function FormularioPersonagem({
 
           {/* campos do contrato (src/lib/formulario-ficha.ts) */}
           <input type="hidden" name="sistema" value={e.sistemaId} />
+          {/* personagem trazido de outra mesa: a ação copia a ficha dele e ignora os campos do personagem */}
+          {copia && <input type="hidden" name="copia_de" value={String(copia.id)} />}
+          {copia && e.zerarXp && <input type="hidden" name="zerar_xp" value="1" />}
           <input type="hidden" name="nome" value={e.nome.trim()} />
           <input type="hidden" name="ancestralidade" value={e.ancestralidade} />
           <input type="hidden" name="classe" value={e.classe} />

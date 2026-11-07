@@ -288,6 +288,29 @@ export function excluirCampanha(id: number) {
   db.prepare("DELETE FROM campanhas WHERE id = ?").run(id);
 }
 
+/**
+ * Molde para outra noite: campanha nova com o mesmo sistema, cenário, tom e config (sem PIN e sem contador de sessão),
+ * os personagens copiados descansados (ver resetarFichaCopiada) e nenhuma mensagem, diário, fato ou cena.
+ * Devolve o id da cópia, ou null quando a original não existe.
+ */
+export function duplicarCampanha(id: number, opcoes: { zerarXp?: boolean } = {}): number | null {
+  const original = obterCampanha(id);
+  if (!original) return null;
+  const config: ConfigCampanha = { ...original.config };
+  delete config.pin;
+  delete config.sessao;
+  db.exec("BEGIN");
+  try {
+    const novoId = criarCampanha({ nome: `${original.nome} (cópia)`.slice(0, 80), sistema: original.sistema, cenario: original.cenario, tom: original.tom, config });
+    for (const p of listarPersonagens(id)) criarPersonagem(novoId, resetarFichaCopiada(p.ficha, opcoes), p.jogador);
+    db.exec("COMMIT");
+    return novoId;
+  } catch (erro) {
+    db.exec("ROLLBACK");
+    throw erro;
+  }
+}
+
 export function salvarCena(id: number, cena: Cena) {
   db.prepare("UPDATE campanhas SET cena = ? WHERE id = ?").run(JSON.stringify(cena), id);
 }
@@ -314,6 +337,80 @@ export function criarPersonagem(campanhaId: number, ficha: Ficha, jogador = ""):
     .run(campanhaId, JSON.stringify(ficha), jogador, ordem);
   tocar(campanhaId);
   return obterPersonagem(Number(r.lastInsertRowid))!;
+}
+
+/**
+ * A ficha como quem chega descansado a outra mesa: Saúde/PV cheios, todo recurso no máximo (no Vampiro a Fome volta a 1 e
+ * as Manchas a 0), sem condições nem efeitos de sangue pendentes. Inventário, XP e nível ficam; `zerarXp` zera só o XP.
+ */
+export function resetarFichaCopiada(original: Ficha, opcoes: { zerarXp?: boolean } = {}): Ficha {
+  const ficha: Ficha = JSON.parse(JSON.stringify(original));
+  ficha.pv = ficha.pvMax;
+  ficha.condicoes = [];
+  for (const r of Object.values(ficha.recursos)) r.atual = r.max;
+  if (ficha.sistema === "vtm5") {
+    // Humanidade não "descansa": é o traço moral do personagem, e as caixas de Manchas dependem dela
+    const humanidade = original.recursos.humanidade?.atual;
+    if (ficha.recursos.humanidade && typeof humanidade === "number") {
+      ficha.recursos.humanidade.atual = humanidade;
+      if (ficha.recursos.mancha) ficha.recursos.mancha.max = Math.max(0, 10 - humanidade);
+    }
+    if (ficha.recursos.fome) ficha.recursos.fome.atual = 1;
+    if (ficha.recursos.mancha) ficha.recursos.mancha.atual = 0;
+    if ("mancha" in ficha.extras) ficha.extras.mancha = 0;
+    delete ficha.extras.surtoPendente;
+    delete ficha.extras.ressonancia;
+  }
+  if (ficha.sistema === "d100") {
+    // a Sanidade perdida fica com o investigador; só o "começo do dia" reinicia
+    const san = original.recursos.san?.atual;
+    if (ficha.recursos.san && typeof san === "number") {
+      ficha.recursos.san.atual = san;
+      ficha.extras.sanInicioDia = san;
+    }
+  }
+  if (ficha.sistema === "fate") {
+    // Pontos de Destino voltam à recarga (o teto do recurso tem folga para forçar aspectos)
+    const recarga = Number(ficha.extras.recarga);
+    if (ficha.recursos.destino) ficha.recursos.destino.atual = Number.isFinite(recarga) && recarga > 0 ? recarga : 3;
+  }
+  if (opcoes.zerarXp) ficha.xp = 0;
+  return ficha;
+}
+
+/** Um personagem de outra mesa, para o cartão "Trazer um personagem" (os nomes de clã/classe quem resolve é a página, com o sistema público). */
+export type PersonagemCopiavel = {
+  id: number;
+  nome: string;
+  sistema: string;
+  ancestralidade: string;
+  classe: string;
+  nivel: number;
+  campanhaId: number;
+  campanha: string;
+};
+
+/** Personagens de todas as campanhas, da mesa jogada mais recentemente para a mais antiga (opcionalmente só de um sistema, ou sem os de uma campanha). */
+export function listarPersonagensCopiaveis(filtro: { sistema?: string; excetoCampanha?: number } = {}): PersonagemCopiavel[] {
+  const linhas = db
+    .prepare(
+      "SELECT p.id, p.ficha, p.campanha_id, c.nome AS campanha, c.sistema FROM personagens p JOIN campanhas c ON c.id = p.campanha_id ORDER BY c.atualizada_em DESC, p.ordem, p.id",
+    )
+    .all() as { id: number; ficha: string; campanha_id: number; campanha: string; sistema: string }[];
+  return linhas
+    .filter((l) => (!filtro.sistema || l.sistema === filtro.sistema) && l.campanha_id !== filtro.excetoCampanha)
+    .map((l) => {
+      const f = JSON.parse(l.ficha) as Ficha;
+      return { id: l.id, nome: f.nome, sistema: l.sistema, ancestralidade: f.ancestralidade, classe: f.classe, nivel: f.nivel, campanhaId: l.campanha_id, campanha: l.campanha };
+    });
+}
+
+/** Copia um personagem para outra campanha (mesmo sistema), descansado. Devolve null se a origem não existe ou o sistema não bate. */
+export function copiarPersonagem(origemId: number, campanhaId: number, opcoes: { zerarXp?: boolean } = {}): Personagem | null {
+  const origem = obterPersonagem(origemId);
+  const destino = obterCampanha(campanhaId);
+  if (!origem || !destino || origem.ficha.sistema !== destino.sistema) return null;
+  return criarPersonagem(campanhaId, resetarFichaCopiada(origem.ficha, opcoes), origem.jogador);
 }
 
 export function salvarFicha(personagemId: number, ficha: Ficha) {

@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { atualizarCampanha, excluirCampanha, listarFila, obterCampanha } from "@/lib/db";
+import { atualizarCampanha, duplicarCampanha, excluirCampanha, listarFila, obterCampanha } from "@/lib/db";
 import { cancelarTurno, forcarRodada } from "@/lib/mestre";
 import { dificuldadeDe, FOCOS, MAX_FOCO_LIVRE, MAX_INSTRUCOES, tamanhoDe } from "@/lib/mestre/estilo";
 import { daMaquinaNaPagina } from "@/lib/rede/acesso";
@@ -62,6 +62,20 @@ export async function desligarAventuraAcao(campanhaId: number): Promise<EstadoAj
   delete config.aventura;
   atualizarCampanha(campanha.id, { config });
   return { erro: null, ok: "Roteiro desligado. Daqui para frente o mestre improvisa sem colinha." };
+}
+
+/**
+ * Duplicar a mesa: campanha nova "<nome> (cópia)" com o mesmo sistema, cenário, tom e estilo do mestre (sem PIN), os personagens
+ * copiados descansados e nenhuma mensagem. Abre a cópia já com o mestre convidado a começar.
+ */
+export async function duplicarCampanhaAcao(campanhaId: number, _anterior: EstadoAjustes, form: FormData): Promise<EstadoAjustes> {
+  if (!(await daMaquinaNaPagina())) return { erro: NEGADO };
+  const campanha = obterCampanha(campanhaId);
+  if (!campanha) return { erro: "Essa mesa não existe mais." };
+  const novoId = duplicarCampanha(campanha.id, { zerarXp: form.get("zerar_xp") === "on" });
+  if (!novoId) return { erro: "Não deu para duplicar a mesa." };
+  revalidatePath("/");
+  redirect(`/mesa/${novoId}?inicio=1`);
 }
 
 export async function excluirCampanhaAcao(campanhaId: number, _anterior: EstadoAjustes, form: FormData): Promise<EstadoAjustes> {

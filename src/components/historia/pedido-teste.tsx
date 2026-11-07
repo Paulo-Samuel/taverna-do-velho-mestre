@@ -189,7 +189,11 @@ function Chips({ d, parada, d20, bonus, alvo }: { d: DadosPedido; parada: Parada
       </Chip>,
     );
   }
-  return <div className="mt-2.5 flex flex-wrap justify-center gap-1.5">{chips}</div>;
+  return (
+    <div className="mt-2.5 flex flex-wrap justify-center gap-1.5" data-pd-chips>
+      {chips}
+    </div>
+  );
 }
 
 /** Vampiro: o Despertar do poder rolado junto com a parada e as pílulas do que mudou (Fome, Surto gasto, Ressonância, frenesi). */
@@ -546,19 +550,30 @@ export function PedidoTeste({
       aria-live="polite"
       aria-label={`Teste de ${tituloDoTeste(teste)} de ${nome}`}
     >
+      {/* os data-pd-* são os pontos que a versão compacta do leitor cena a cena mexe (sem retrato, motivo numa linha, menos respiro) */}
       <div className="flex items-center justify-center gap-2 text-xs text-muted">
-        {personagem && <Retrato ficha={personagem.ficha} tamanho={28} />}
+        {personagem && (
+          <span className="contents" data-pd-retrato>
+            <Retrato ficha={personagem.ficha} tamanho={28} />
+          </span>
+        )}
         <span className="font-semibold" style={{ color: cor }}>
           {nome}
         </span>
         <span>precisa de um teste</span>
       </div>
-      <h3 className="titulo mx-auto mt-2 max-w-md text-balance text-[1.35rem] leading-tight text-pergaminho sm:text-2xl">{tituloDoTeste(teste)}</h3>
+      <h3 className="titulo mx-auto mt-2 max-w-md text-balance text-[1.35rem] leading-tight text-pergaminho sm:text-2xl" data-pd-titulo>
+        {tituloDoTeste(teste)}
+      </h3>
       <Chips d={d} parada={parada} d20={d20} bonus={bonus} alvo={alvo} />
-      {d.motivo && <p className="mx-auto mt-2.5 max-w-md text-[0.95rem] italic text-foreground/80">{d.motivo}</p>}
+      {d.motivo && (
+        <p className="mx-auto mt-2.5 max-w-md text-[0.95rem] italic text-foreground/80" data-pd-motivo>
+          {d.motivo}
+        </p>
+      )}
 
       {d20 ? (
-        <div className="mt-4 flex justify-center">
+        <div className="mt-4 flex justify-center" data-pd-dados>
           <Dado3D
             valor={natural}
             rolando={rolagem?.fase === "girando"}
@@ -568,7 +583,7 @@ export function PedidoTeste({
           />
         </div>
       ) : (
-        <div className="mt-5 flex min-h-14 justify-center">
+        <div className="mt-5 flex min-h-14 justify-center" data-pd-dados>
           <ParadaDados
             parada={parada}
             resultado={resultado}
@@ -604,7 +619,9 @@ export function PedidoTeste({
           </span>
         </p>
       ) : rolagem ? (
-        <p className="mt-4 text-sm italic text-muted">{d20 ? "O dado corre pela mesa…" : "Os dados correm pela mesa…"}</p>
+        <p className="mt-4 text-sm italic text-muted" data-pd-rodape>
+          {d20 ? "O dado corre pela mesa…" : "Os dados correm pela mesa…"}
+        </p>
       ) : podeRolar ? (
         <button
           type="button"
@@ -615,7 +632,7 @@ export function PedidoTeste({
           🎲 {d20 ? "Rolar o dado" : "Rolar os dados"}
         </button>
       ) : (
-        <p className="mt-4 text-sm italic text-muted">
+        <p className="mt-4 text-sm italic text-muted" data-pd-rodape>
           Esperando {personagem?.jogador || nome} rolar {d20 ? "o dado" : "os dados"}…
         </p>
       )}

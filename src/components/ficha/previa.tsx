@@ -6,7 +6,8 @@ import type { AventuraPublica } from "@/lib/aventuras/tipos";
 import { tomPadrao } from "@/lib/sistemas/sementes";
 import type { OpcaoCriacao, SistemaPublico } from "@/lib/sistemas/tipos";
 import { CartaoFicha } from "./painel-ficha";
-import { ajustesTexto, resumoEstilo, Titulo, type Escolhas } from "./passos";
+import { ajustesTexto, resumoEstilo, Titulo, type Escolhas, type PersonagemParaTrazer } from "./passos";
+import { grupoDaOpcao } from "./sugestoes";
 
 // Prévia ao lado do assistente (desktop) e o resumo final antes de enviar.
 // A prévia lateral é montada só com os dados públicos do sistema; o resumo pede ao servidor a ficha de verdade.
@@ -40,8 +41,19 @@ function Linha({ rotulo, children }: { rotulo: string; children: ReactNode }) {
   );
 }
 
-export function PreviaLateral({ sistema, e, opcoes }: { sistema: SistemaPublico; e: Escolhas; opcoes: OpcaoCriacao[] }) {
+export function PreviaLateral({ sistema, e, opcoes, copia }: { sistema: SistemaPublico; e: Escolhas; opcoes: OpcaoCriacao[]; copia?: PersonagemParaTrazer }) {
   const { anc, classe, antecedente, pericias } = nomes(sistema, e);
+  // personagem trazido de outra mesa: a ficha já existe lá; aqui só o lembrete do que vem
+  if (copia) {
+    return (
+      <div className="space-y-3 text-sm">
+        <p className="hidden text-[11px] uppercase tracking-widest text-ambar-forte lg:block">Prévia da ficha · {sistema.nomeCurto}</p>
+        <p className="titulo break-words text-2xl leading-tight text-pergaminho">{copia.nome}</p>
+        {copia.linha && <p className="text-[13px] text-foreground/90">{copia.linha}</p>}
+        <p className="text-xs text-muted">Trazido de {copia.campanha}: a ficha vem como está lá, descansada ({sistema.rotulos.pv.toLowerCase()} e recursos cheios, sem condições).</p>
+      </div>
+    );
+  }
   const pv = (classe?.pvBase ?? 0) + (anc?.pv ?? 0);
   const respostas = respostasOpcoes(opcoes, e);
   const temAtributos = sistema.atributos.some((a) => e.atributos[a.id]);
@@ -135,9 +147,11 @@ type PropsResumo = {
   carregando: boolean;
   /** aventura pronta marcada no passo da campanha */
   aventura?: AventuraPublica;
+  /** personagem trazido de outra mesa: a ficha vem copiada dele (não há prévia nem passos de regra) */
+  copia?: PersonagemParaTrazer;
 };
 
-export function Resumo({ sistema, e, opcoes, modo, passos, irPara, previa, carregando, aventura }: PropsResumo) {
+export function Resumo({ sistema, e, opcoes, modo, passos, irPara, previa, carregando, aventura, copia }: PropsResumo) {
   const { anc, classe, antecedente, pericias } = nomes(sistema, e);
   const metodo = sistema.metodosAtributos.find((m) => m.id === e.metodo);
   const respostas = respostasOpcoes(opcoes, e);
@@ -147,6 +161,16 @@ export function Resumo({ sistema, e, opcoes, modo, passos, irPara, previa, carre
         editar
       </button>
     ) : null;
+  // Escolhas divididas em subpassos (Vampiro): cada resposta leva ao subpasso dela; o link sai na última resposta de cada um
+  const passoDaResposta = (rotulo: string) => {
+    const o = opcoes.find((x) => x.rotulo === rotulo);
+    const grupo = o ? grupoDaOpcao(sistema.id, o) : null;
+    return grupo && passos.includes(`opcoes:${grupo}`) ? `opcoes:${grupo}` : "opcoes";
+  };
+  const ultimaDoPasso = (i: number) => {
+    const p = passoDaResposta(respostas[i][0]);
+    return !respostas.slice(i + 1).some(([r]) => passoDaResposta(r) === p);
+  };
 
   return (
     <>
@@ -158,30 +182,44 @@ export function Resumo({ sistema, e, opcoes, modo, passos, irPara, previa, carre
             {sistema.nomeCurto}
             {editar("sistema")}
           </Linha>
-          <Linha rotulo="Nome">
-            {e.nome.trim() || <span className="text-sangue">sem nome</span>}
-            {e.jogador.trim() && <span className="text-muted"> · {e.jogador.trim()}</span>}
-            {editar("identidade")}
-          </Linha>
-          {anc && (
+          {copia && (
+            <>
+              <Linha rotulo="Trazido de">
+                {copia.campanha}
+              </Linha>
+              <Linha rotulo="Nome">{copia.nome}</Linha>
+              {copia.linha && <Linha rotulo="Ficha">{copia.linha}</Linha>}
+              <Linha rotulo="Ao chegar">
+                vida e recursos cheios{sistema.id === "vtm5" ? ", Fome 1" : ""}, sem condições · inventário mantido · XP {e.zerarXp ? "zerado" : "mantido"}
+              </Linha>
+            </>
+          )}
+          {!copia && (
+            <Linha rotulo="Nome">
+              {e.nome.trim() || <span className="text-sangue">sem nome</span>}
+              {e.jogador.trim() && <span className="text-muted"> · {e.jogador.trim()}</span>}
+              {editar("identidade")}
+            </Linha>
+          )}
+          {!copia && anc && (
             <Linha rotulo={sistema.rotulos.ancestralidade}>
               {anc.nome}
               {editar("ancestralidade")}
             </Linha>
           )}
-          {classe && (
+          {!copia && classe && (
             <Linha rotulo={sistema.rotulos.classe}>
               {classe.nome}
               {editar("classe")}
             </Linha>
           )}
-          {antecedente && (
+          {!copia && antecedente && (
             <Linha rotulo={sistema.rotulos.antecedente ?? "Antecedente"}>
               {antecedente.nome}
               {editar("antecedente")}
             </Linha>
           )}
-          {sistema.atributos.length > 0 && (
+          {!copia && sistema.atributos.length > 0 && (
             <Linha rotulo="Atributos">
               {sistema.atributos.some((a) => e.atributos[a.id])
                 ? sistema.atributos.map((a) => `${a.abrev} ${e.atributos[a.id] || "—"}`).join(" · ")
@@ -189,16 +227,16 @@ export function Resumo({ sistema, e, opcoes, modo, passos, irPara, previa, carre
               {editar("atributos")}
             </Linha>
           )}
-          {pericias.length > 0 && (
+          {!copia && pericias.length > 0 && (
             <Linha rotulo="Perícias">
               {pericias.join(", ")}
               {editar("pericias")}
             </Linha>
           )}
-          {respostas.map(([r, v], i) => (
+          {(copia ? [] : respostas).map(([r, v], i) => (
             <Linha key={r} rotulo={r}>
               {v}
-              {i === respostas.length - 1 && editar("opcoes")}
+              {ultimaDoPasso(i) && editar(passoDaResposta(r))}
             </Linha>
           ))}
           {modo === "campanha" && (
@@ -232,7 +270,14 @@ export function Resumo({ sistema, e, opcoes, modo, passos, irPara, previa, carre
 
         <div className="cartao p-4">
           <p className="mb-3 text-[11px] uppercase tracking-widest text-ambar-forte">Como a ficha vai ficar</p>
-          {carregando && <p className="animate-pulse text-sm italic text-muted">O mestre rabisca a ficha…</p>}
+          {copia && (
+            <p className="text-sm text-foreground/90">
+              A ficha de <span className="font-semibold text-pergaminho">{copia.nome}</span> vem copiada de {copia.campanha}, do jeito que está lá: atributos, perícias,
+              inventário{e.zerarXp ? " e nível" : ", nível e XP"}. O que muda é o fôlego: {sistema.rotulos.pv.toLowerCase()} e recursos cheios
+              {sistema.id === "vtm5" ? ", Fome 1, sem Manchas" : ""}, nenhuma condição. A mesa de origem continua com o original.
+            </p>
+          )}
+          {!copia && carregando && <p className="animate-pulse text-sm italic text-muted">O mestre rabisca a ficha…</p>}
           {!carregando && previa?.ok && (
             <>
               <CartaoFicha ficha={previa.ficha} blocos={previa.blocos} sistema={sistema} jogador={e.jogador.trim() || undefined} />

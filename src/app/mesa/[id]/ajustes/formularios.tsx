@@ -388,6 +388,41 @@ export function FormularioAventura({ acao, bloqueado }: { acao: Acao; bloqueado:
   );
 }
 
+/** Duplicar a mesa: um molde para a próxima noite (mesmo cenário, tom, estilo do mestre e grupo; sem chat nem PIN). */
+export function FormularioDuplicar({ acao, nome, personagens, bloqueado }: { acao: Acao; nome: string; personagens: string[]; bloqueado: boolean }) {
+  const [estado, enviar, enviando] = useActionState(acao, { erro: null });
+  const [aberto, setAberto] = useState(false);
+  if (!aberto) {
+    return (
+      <button type="button" className="btn-borda" disabled={bloqueado} onClick={() => setAberto(true)}>
+        Duplicar campanha
+      </button>
+    );
+  }
+  return (
+    <form action={enviar} className="space-y-3">
+      <p className="text-sm">
+        Nasce <strong className="text-pergaminho">{nome} (cópia)</strong> com o mesmo sistema, cenário, tom e estilo do mestre
+        {personagens.length ? `, e ${personagens.join(", ")} sentad${personagens.length === 1 ? "o" : "os"} à mesa, descansad${personagens.length === 1 ? "o" : "os"}` : ""}.
+        Chat, diário e PIN ficam só aqui. Esta mesa não muda.
+      </p>
+      <label className="flex cursor-pointer items-center gap-2 text-sm">
+        <input type="checkbox" name="zerar_xp" className="h-4 w-4 accent-[var(--ambar)]" />
+        Zerar o XP dos personagens copiados
+      </label>
+      <Aviso estado={estado} />
+      <div className="flex flex-wrap gap-2">
+        <button className="btn-ambar" disabled={enviando || bloqueado}>
+          {enviando ? "Copiando a mesa…" : "Duplicar e abrir a cópia"}
+        </button>
+        <button type="button" className="btn-borda" onClick={() => setAberto(false)}>
+          Deixa como está
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export function FormularioExcluir({ acao, nome, bloqueado }: { acao: Acao; nome: string; bloqueado: boolean }) {
   const [estado, enviar, enviando] = useActionState(acao, { erro: null });
   const [aberto, setAberto] = useState(false);

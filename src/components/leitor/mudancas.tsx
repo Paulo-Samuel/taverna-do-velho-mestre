@@ -7,12 +7,24 @@ import type { Chip, GrupoChips } from "./cena";
 // "O que mudou na cena": as linhas de ficha, diário e XP do turno numa faixa de chips no fim da cena, por personagem
 // ("Samuel: Fome 1 → 2 · +1 Mancha"). Chips discretos na cor do tema; o detalhe (o motivo que o mestre deu) aparece ao passar o
 // mouse, focar ou tocar, num balão preso à tela (fora das colunas do leitor, que cortam o que vaza).
+// Duas formas: "bloco" (título com fios e grupos centrados, no fim da cena na rolagem) e "faixa" (grupos em linha, sem título,
+// para a faixa fina acima da barra de páginas do leitor cena a cena, que mantém os chips fora do fluxo paginado).
 
 type Aberto = { chave: string; texto: string; x: number; y: number; abaixo: boolean; fixo: boolean; alvo: HTMLElement };
 
 const LARGURA_BALAO = 288;
 
-export function Mudancas({ grupos, corDe, className = "" }: { grupos: GrupoChips[]; corDe?: (nome: string) => string | undefined; className?: string }) {
+export function Mudancas({
+  grupos,
+  corDe,
+  className = "",
+  variante = "bloco",
+}: {
+  grupos: GrupoChips[];
+  corDe?: (nome: string) => string | undefined;
+  className?: string;
+  variante?: "bloco" | "faixa";
+}) {
   const [aberto, setAberto] = useState<Aberto | null>(null);
   const id = useId();
 
@@ -49,8 +61,8 @@ export function Mudancas({ grupos, corDe, className = "" }: { grupos: GrupoChips
   }
 
   return (
-    <section className={`leitor-mudancas ${className}`} aria-label="O que mudou na cena" data-mudancas>
-      <p className="leitor-mudancas-titulo">O que mudou na cena</p>
+    <section className={`leitor-mudancas ${variante === "faixa" ? "leitor-mudancas-faixa" : ""} ${className}`} aria-label="O que mudou na cena" data-mudancas={variante}>
+      {variante === "bloco" && <p className="leitor-mudancas-titulo">O que mudou na cena</p>}
       <div className="leitor-mudancas-grupos">
         {grupos.map((g) => {
           const cor = g.tipo === "personagem" ? corDe?.(g.quem) : undefined;

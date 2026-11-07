@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { calcularLimites, centrarFecho, compactarCartoes, limparCompactos, listarUnidades, marcarParagrafos, paginaDoX, textosDasPaginas, unidadeEm, VAO, type Unidade } from "./paginacao";
+import { assinaturaDosCompactaveis, calcularLimites, centrarFecho, compactarCartoes, escalaMinima, limparCompactos, listarUnidades, marcarParagrafos, paginaDoX, textosDasPaginas, unidadeEm, VAO, type Unidade } from "./paginacao";
+import { CONSULTA_CELULAR } from "./preferencias";
 
 // Texto que se revela, como alguém contando, e as páginas do turno.
 // O texto inteiro já está no DOM desde o começo (a página não muda de tamanho enquanto revela); o que ainda não foi "dito" fica
@@ -36,7 +37,13 @@ export type Transicao = "deslizar" | "virar";
 /** Fração do espaço livre que vai para cima quando o texto cabe com folga (um pouco acima do meio: o centro ótico). */
 const FRACAO_FOLGA = 0.4;
 
-export type Layout = { chave: string; paginas: number; textos: string[] };
+export type Layout = {
+  chave: string;
+  paginas: number;
+  textos: string[];
+  /** página do cartão em destaque (o teste pendente do personagem ativo), medida junto com o resto; null sem ele */
+  paginaDestaque: number | null;
+};
 
 /** A página pedida dentro das que existem (-1 = a última). */
 function paginaReal(m: Medida | null, p: number) {
@@ -71,6 +78,7 @@ export function useRevelar({
   aoPaginaExterna,
   transicao = "deslizar",
   centralizar = true,
+  destaque = null,
 }: {
   /** turno à vista */
   chave: string;
@@ -85,23 +93,27 @@ export function useRevelar({
   transicao?: Transicao;
   /** texto que cabe numa página só fica no meio do palco */
   centralizar?: boolean;
+  /** id da mensagem em destaque (o teste pendente do personagem ativo): a página dela sai medida no layout */
+  destaque?: number | null;
 }) {
   /** o visor (overflow escondido, rola de página em página) e o fluxo de colunas dentro dele */
   const visor = useRef<HTMLDivElement>(null);
   const fluxo = useRef<HTMLDivElement>(null);
   const posicoes = useRef(new Map<string, number>());
   const medida = useRef<Medida | null>(null);
-  const params = useRef({ chave, pagina, animar, lidoAoAbrir, aoPaginaExterna, transicao, centralizar });
-  const [layout, setLayout] = useState<Layout>({ chave: "", paginas: 1, textos: [] });
+  const params = useRef({ chave, pagina, animar, lidoAoAbrir, aoPaginaExterna, transicao, centralizar, destaque });
+  const [layout, setLayout] = useState<Layout>({ chave: "", paginas: 1, textos: [], paginaDestaque: null });
   const [completa, setCompleta] = useState(true);
   const [terminou, setTerminou] = useState(true);
   const estadoVisivel = useRef({ completa: true, terminou: true });
   const aplicado = useRef<{ medida: Medida | null; pos: number }>({ medida: null, pos: -1 });
   const rolagem = useRef<{ alvo: number; ate: number } | null>(null);
   const seguir = useRef<{ el: HTMLElement; ate: number } | null>(null);
+  /** a página para onde o medir acabou de levar o visor atrás do cartão (uma troca de página que não é essa é da pessoa) */
+  const seguiuPara = useRef<number | null>(null);
   /** a transição de página em andamento (medir espera ela acabar: o transform mexe nas coordenadas) */
   const animando = useRef<Animation | null>(null);
-  /** tamanho do palco em que os cartões encolhidos foram decididos */
+  /** tamanho do palco e conteúdo (o que vem antes de cada cartão encolhível) em que os cartões encolhidos foram decididos */
   const compactadoEm = useRef("");
   /** o medir mais novo, para medir de novo no quadro seguinte (de dentro do próprio medir) */
   const remedir = useRef<() => void>(() => {});
@@ -137,11 +149,14 @@ export function useRevelar({
     }
     const u = unidadeEm(m.unidades, pos);
     if (!u) return;
+    // a medida pode estar um pouco atrás do DOM (texto chegando no meio da transição de página, quando medir espera): os
+    // deslocamentos ficam dentro do que o nó tem agora, em vez de estourar o Range
     const r = document.createRange();
-    if (u.tipo === "texto") r.setStart(u.no, pos - u.inicio);
+    if (u.tipo === "texto") r.setStart(u.no, Math.min(pos - u.inicio, u.no.data.length));
     else r.setStartBefore(u.el);
-    if (ultima.tipo === "texto") r.setEnd(ultima.no, ultima.tamanho);
+    if (ultima.tipo === "texto") r.setEnd(ultima.no, Math.min(ultima.tamanho, ultima.no.data.length));
     else r.setEndAfter(ultima.el);
+    if (r.collapsed) return;
     CSS.highlights.set(NOME_DESTAQUE, new Highlight(r));
   }, []);
 
@@ -181,13 +196,22 @@ export function useRevelar({
     const folgaAtual = parseFloat(f.style.getPropertyValue("--folga")) || 0;
     const alturaPagina = f.clientHeight - (parseFloat(cs.paddingTop) - folgaAtual) - parseFloat(cs.paddingBottom);
     marcarParagrafos(f, alturaPagina);
-    // cartão grande que pulou de página deixando buraco: encolhe um pouco para caber (a decisão vale até o palco mudar de tamanho)
-    const tamanho = `${v.clientWidth}x${f.clientHeight}`;
-    if (compactadoEm.current !== tamanho) {
-      limparCompactos(f);
-      compactadoEm.current = tamanho;
+    // o fio (só lê o DOM, não depende do layout): a posição de cada cartão encolhível nele entra na assinatura, para o cartão que
+    // acaba de chegar ser avaliado
+    const { unidades, total } = listarUnidades(f);
+    // cartão grande que pulou de página deixando buraco: encolhe um pouco para caber. A decisão vale até o palco mudar de tamanho ou
+    // até mudar o que vem antes de algum cartão encolhível (cartão novo, texto chegando antes dele); o que vem depois e o que muda
+    // dentro do cartão (o dado rolando) não refazem a conta, senão o cartão tocado trocava de página enquanto rolava e a página ia
+    // atrás dele (tudo no mesmo quadro, antes de pintar)
+    const assinatura = `${v.clientWidth}x${f.clientHeight}:${assinaturaDosCompactaveis(unidades)}`;
+    const seguido = seguir.current;
+    const emUso = seguido && seguido.ate > Date.now() && seguido.el.isConnected && f.contains(seguido.el) ? seguido : null;
+    if (compactadoEm.current !== assinatura) {
+      // o cartão em uso (a pessoa acabou de tocar nele) não é remedido no meio da rolagem: fica com o encolhimento que já tinha
+      limparCompactos(f, emUso?.el.closest("[data-compactavel]") ?? null);
+      compactadoEm.current = assinatura;
     }
-    if (v.scrollWidth > v.clientWidth + 1) compactarCartoes(f, alturaPagina);
+    if (v.scrollWidth > v.clientWidth + 1) compactarCartoes(f, alturaPagina, escalaMinima(window.matchMedia(CONSULTA_CELULAR).matches));
     const paginas = Math.max(1, Math.round((v.scrollWidth + VAO) / passo));
     // o fecho da cena (fim da noite, "o que mudou") sozinho na última página desce para o centro dela
     centrarFecho(f, alturaPagina, paginas, passo);
@@ -203,10 +227,12 @@ export function useRevelar({
     }
     if (Math.abs(folga - folgaAtual) > 1) {
       f.style.setProperty("--folga", `${folga}px`);
-      // a folga mudou a página: mede de novo antes de pintar (estável: com a folga nova o texto continua cabendo)
+      // a folga mudou a página: mede de novo antes de pintar (estável: com a folga nova o texto continua cabendo). Os cartões
+      // encolhidos foram decididos com a folga velha (o cartão que acaba de chegar foi medido com o texto ainda descido): a conta
+      // é refeita na medida seguinte
+      compactadoEm.current = "";
       if (paginas > 1 || folga < folgaAtual) requestAnimationFrame(() => remedir.current());
     }
-    const { unidades, total } = listarUnidades(f);
     const base = f.getBoundingClientRect().left;
     const limites = calcularLimites(unidades, total, paginas, base, passo);
     const capitulares = [...f.querySelectorAll<HTMLElement>("[data-capitular]")].flatMap((el) => {
@@ -217,21 +243,32 @@ export function useRevelar({
     const m: Medida = { chave: chaveAtual, unidades, total, limites, passo, base, capitulares };
     medida.current = m;
     const textos = textosDasPaginas(unidades, limites);
+    // o cartão em destaque (teste pendente de quem joga aqui): em que página caiu, já com os encolhimentos desta medida
+    const idDestaque = params.current.destaque;
+    const rDestaque = idDestaque === null ? undefined : f.querySelector(`[data-msg="${idDestaque}"]`)?.getClientRects()[0];
+    const paginaDestaque = rDestaque ? paginaDoX(rDestaque.left, base, passo) : null;
     setLayout((l) =>
-      l.chave === chaveAtual && l.paginas === paginas && l.textos.length === textos.length && l.textos.every((t, i) => t === textos[i])
+      l.chave === chaveAtual &&
+      l.paginas === paginas &&
+      l.paginaDestaque === paginaDestaque &&
+      l.textos.length === textos.length &&
+      l.textos.every((t, i) => t === textos[i])
         ? l
-        : { chave: chaveAtual, paginas, textos },
+        : { chave: chaveAtual, paginas, textos, paginaDestaque },
     );
     const pos = lerPos(m);
     aplicar(m, pos);
     atualizarVisivel(m, pos);
-    // cartão com que a pessoa mexeu (rolando o dado) cresceu e foi para outra página: a página vai atrás dele
-    const s = seguir.current;
-    if (s && s.ate > Date.now() && s.el.isConnected && f.contains(s.el)) {
-      const r = s.el.getClientRects()[0];
-      const k = r ? paginaDoX(r.left, f.getBoundingClientRect().left, passo) : paginaReal(m, params.current.pagina);
-      // só quando ele foi empurrado para a frente (cresceu); se encolheu, a página atual já mostra o que vem depois dele
-      if (k > paginaReal(m, params.current.pagina)) {
+    // cartão com que a pessoa mexeu (rolando o dado) mudou de página: a página vai atrás dele. Para a frente quando cresceu (o
+    // resultado chegou) e foi empurrado; para trás quando encolheu (recolhido) e voltou, levando junto o texto que vem depois
+    // dele (a narração que a pessoa lia). Se só mudou de tamanho na mesma página, nada muda. Quem vira a página por conta
+    // própria deixa de ser seguido (ver o efeito de parâmetros).
+    if (emUso) {
+      const r = emUso.el.getClientRects()[0];
+      const atual = paginaReal(m, params.current.pagina);
+      const k = r ? paginaDoX(r.left, f.getBoundingClientRect().left, passo) : atual;
+      if (k !== atual) {
+        seguiuPara.current = k;
         params.current.aoPaginaExterna(k);
         return;
       }
@@ -271,12 +308,15 @@ export function useRevelar({
   // parâmetros novos a cada render; mede depois de cada render (o conteúdo do turno pode ter mudado)
   const paginaAnterior = useRef({ chave, pagina: paginaReal(null, pagina) });
   useLayoutEffect(() => {
-    params.current = { chave, pagina, animar, lidoAoAbrir, aoPaginaExterna, transicao, centralizar };
+    params.current = { chave, pagina, animar, lidoAoAbrir, aoPaginaExterna, transicao, centralizar, destaque };
     const real = paginaReal(medida.current?.chave === chave ? medida.current : null, pagina);
     const antes = paginaAnterior.current;
     const mudouPagina = antes.chave === chave && antes.pagina !== real;
     const mudouCena = antes.chave !== chave;
     paginaAnterior.current = { chave, pagina: real };
+    // a pessoa virou a página por conta própria (não foi o medir atrás do cartão): o cartão tocado deixa de ser seguido
+    if (mudouPagina && seguiuPara.current !== real) seguir.current = null;
+    if (mudouPagina || mudouCena) seguiuPara.current = null;
     // troca de página no meio da transição anterior: corta a anterior para medir e encaixar já
     if (mudouPagina || mudouCena) animando.current?.cancel();
     medir();
@@ -308,7 +348,12 @@ export function useRevelar({
       agendar();
     });
     mutacoes.observe(f, { childList: true, subtree: true, characterData: true });
-    document.fonts?.addEventListener?.("loadingdone", agendar);
+    // fonte que chegou muda a altura de tudo: os cartões encolhidos são decididos de novo
+    const fontes = () => {
+      compactadoEm.current = "";
+      agendar();
+    };
+    document.fonts?.addEventListener?.("loadingdone", fontes);
     // tema/fonte trocados no documento
     const tema = new MutationObserver(agendar);
     tema.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style", "data-tema"] });
@@ -341,7 +386,7 @@ export function useRevelar({
       tamanho.disconnect();
       mutacoes.disconnect();
       tema.disconnect();
-      document.fonts?.removeEventListener?.("loadingdone", agendar);
+      document.fonts?.removeEventListener?.("loadingdone", fontes);
       f.removeEventListener("pointerdown", tocar);
       f.removeEventListener("keydown", tocar);
       v.removeEventListener("scroll", rolou);

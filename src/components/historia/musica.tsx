@@ -1,25 +1,52 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { estiloDoSistema, ROTULO_ESTILO } from "@/lib/cliente/musica/estilos";
 import { buscarFaixas } from "@/lib/cliente/musica/locais";
 import { assinarEstadoMusica, ESTADO_INICIAL, estadoMusica, reterMotor, soltarMotor, type Motor } from "@/lib/cliente/musica/motor";
 import {
+  assinarHumorManual,
   assinarPreferenciasMusica,
+  ENERGIAS_MUSICA,
+  HUMORES_MUSICA,
+  humorManual,
+  humorManualServidor,
   preferenciasMusica,
   preferenciasMusicaServidor,
+  salvarHumorManual,
   salvarPreferenciasMusica,
 } from "@/lib/cliente/musica/preferencias";
-import { ROTULO_HUMOR } from "@/lib/cliente/musica/teoria";
-import type { Cena } from "@/lib/sistemas/tipos";
+import { ROTULO_ENERGIA, ROTULO_HUMOR, type Energia } from "@/lib/cliente/musica/teoria";
+import type { Cena, HumorMusical } from "@/lib/sistemas/tipos";
 
 // Trilha sonora conforme o humor da cena: gerada no navegador (Web Audio) no estilo do sistema de regras, ou as
 // músicas da própria pessoa na pasta musica/<sistema>/<humor> (rota /api/musica), quando houver.
-// Renderiza o próprio botão de som (liga/desliga) e o volume num popover; a preferência fica no localStorage.
-// O áudio só começa depois do primeiro clique/tecla na página (regra de autoplay dos navegadores).
+// Renderiza o próprio botão de som (liga/desliga) e, num popover, o volume e os chips de humor manual (vencem a cena do
+// mestre até voltar para "automático"; guardados por campanha no localStorage). A preferência de som fica no localStorage.
+// O áudio só começa depois do primeiro clique/toque/tecla na página (regra de autoplay dos navegadores).
 
 /** releitura da pasta de músicas no máximo a cada 15 s (ao abrir o popover ou voltar para a aba) */
 const RELER_MS = 15_000;
+
+/** gestos que concedem ativação do usuário: no toque é o pointerup/touchend/click, não o pointerdown */
+const GESTOS = ["pointerdown", "pointerup", "touchend", "click", "keydown"] as const;
+
+/** plaquinha de escolha (humor/energia): alvo de toque de 36px no celular, menor no desktop */
+function Chip({ ativo, onClick, children, title }: { ativo: boolean; onClick: () => void; children: ReactNode; title?: string }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={ativo}
+      onClick={onClick}
+      title={title}
+      className={`inline-flex min-h-9 items-center rounded-full border px-2 text-[11px] leading-none transition sm:min-h-7 ${
+        ativo ? "border-ambar bg-ambar/15 text-ambar" : "border-border text-foreground/80 hover:border-ambar/60 hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
 
 function IconeSom({ ligado }: { ligado: boolean }) {
   return (
@@ -57,28 +84,34 @@ export function Musica({ musica, sistema = "historia", compacto = false }: { mus
   const motor = useRef<Motor | null>(null);
   const caixa = useRef<HTMLDivElement>(null);
   const lidoEm = useRef(0);
+  // id da campanha só depois de montar (a URL não existe no servidor): até lá a escolha manual é a padrão.
+  // null também fora de uma mesa (/nova): aí não há escolha manual (a trilha é a da criação) e os chips não aparecem
+  const [campanhaId, setCampanhaId] = useState<number | null>(null);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setCampanhaId(campanhaDaUrl()), []);
+  const manual = useSyncExternalStore(assinarHumorManual, () => humorManual(campanhaId), humorManualServidor);
 
-  // sem música definida: taverna baixinho
-  const humor = musica?.humor ?? "taverna";
-  const energia = musica?.energia ?? "baixa";
+  // sem música definida: taverna baixinho; a escolha manual do jogador vence a cena
+  const humorCena: HumorMusical = musica?.humor ?? "taverna";
+  const energiaCena: Energia = musica?.energia ?? "baixa";
+  const humor = manual.humor ?? humorCena;
+  const energia = manual.energia ?? energiaCena;
+  const ehManual = manual.humor !== null || manual.energia !== null;
   const estilo = estiloDoSistema(sistema);
 
-  // uma instância do motor por página; solta (e fecha o áudio) quando o último componente sai
+  // uma instância do motor por página; ao sair, solta: o motor continua tocando por um prazo (Ajustes, Livro e a volta)
   useEffect(() => {
     const m = reterMotor();
     motor.current = m;
     m.definirPreferencias(preferenciasMusica().ligado, preferenciasMusica().volume);
-    // o navegador só libera o áudio depois de um gesto: o primeiro clique/tecla em qualquer lugar
+    // o navegador só libera o áudio depois de um gesto. No toque, o pointerdown não concede ativação (só o
+    // pointerup/touchend/click), então cada gesto tenta de novo enquanto o contexto não reportar "running".
     const liberar = () => {
-      m.desbloquear();
-      window.removeEventListener("pointerdown", liberar, true);
-      window.removeEventListener("keydown", liberar, true);
+      if (m.precisaGesto()) m.desbloquear();
     };
-    window.addEventListener("pointerdown", liberar, true);
-    window.addEventListener("keydown", liberar, true);
+    for (const g of GESTOS) window.addEventListener(g, liberar, true);
     return () => {
-      window.removeEventListener("pointerdown", liberar, true);
-      window.removeEventListener("keydown", liberar, true);
+      for (const g of GESTOS) window.removeEventListener(g, liberar, true);
       motor.current = null;
       soltarMotor();
     };
@@ -150,12 +183,26 @@ export function Musica({ musica, sistema = "historia", compacto = false }: { mus
     motor.current?.desbloquear();
   }
 
-  const rotuloHumor = ROTULO_HUMOR[estado.tocando ?? humor];
+  /** chip de humor: null volta ao automático (e solta a energia também) */
+  function escolherHumor(h: HumorMusical | null) {
+    if (h === null) salvarHumorManual(campanhaId, { humor: null, energia: null });
+    else salvarHumorManual(campanhaId, { humor: h });
+    // dentro do gesto: se o áudio ainda não começou, começa agora
+    motor.current?.desbloquear();
+  }
+
+  function escolherEnergia(e: Energia) {
+    // repetir a energia já escolhida à mão volta a seguir a cena
+    salvarHumorManual(campanhaId, { energia: manual.energia === e ? null : e });
+    motor.current?.desbloquear();
+  }
+
+  const rotuloHumor = `${ROTULO_HUMOR[estado.tocando ?? humor]}${ehManual ? " (manual)" : ""}`;
   const rotulo = estado.faixa ? `♪ ${estado.faixa}` : `${ROTULO_ESTILO[estado.estilo ?? estilo]} · ${rotuloHumor}`;
   const dica = !prefs.ligado
     ? "Música desligada (clique para ligar)"
     : estado.aguardandoGesto
-      ? `Trilha: ${rotulo} (começa no primeiro clique na página)`
+      ? `Trilha: ${rotulo} (começa no primeiro clique ou toque na página)`
       : `Trilha: ${rotulo}`;
 
   return (
@@ -190,7 +237,7 @@ export function Musica({ musica, sistema = "historia", compacto = false }: { mus
       {aberto && (
         // no celular o popover fica preso às bordas da tela (o botão pode estar no meio do cabeçalho)
         <div
-          className="cartao surgir fixed inset-x-4 top-16 z-50 p-3 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-64"
+          className="cartao surgir fixed inset-x-4 top-16 z-50 p-3 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72"
           role="dialog"
           aria-label="Trilha sonora"
         >
@@ -215,9 +262,50 @@ export function Musica({ musica, sistema = "historia", compacto = false }: { mus
             <span className="w-8 text-right tabular-nums">{Math.round(prefs.volume * 100)}</span>
           </label>
           <p className="mt-2 break-words text-xs text-muted" aria-live="polite">
-            {prefs.ligado ? (estado.aguardandoGesto ? "Começa no primeiro clique na página." : `Trilha: ${rotulo}`) : "Desligada."}
+            {prefs.ligado ? (estado.aguardandoGesto ? "Começa no primeiro clique ou toque na página." : `Trilha: ${rotulo}`) : "Desligada."}
           </p>
           {estado.faixa && <p className="mt-1 text-[11px] text-muted">Música sua · {rotuloHumor}</p>}
+
+          {/* humor à mão: vence a cena do mestre até voltar para "automático"; por campanha, no localStorage.
+              Fora de uma mesa (criação de campanha) não há campanha para guardar a escolha: a seção não aparece */}
+          {campanhaId !== null && (
+          <div className="mt-2 border-t border-border pt-2" role="group" aria-label="Humor da trilha">
+            <p className="mb-1.5 text-[11px] text-muted">
+              Humor{" "}
+              {manual.humor ? (
+                <span className="text-ambar">(manual)</span>
+              ) : (
+                <>
+                  (automático: <span className="text-foreground">{ROTULO_HUMOR[humorCena]}</span>)
+                </>
+              )}
+            </p>
+            {/* no celular as plaquinhas quebram em duas linhas; no desktop o popover é mais largo */}
+            <div className="flex flex-wrap gap-1">
+              <Chip ativo={manual.humor === null} onClick={() => escolherHumor(null)} title="Seguir o humor que o mestre dá à cena">
+                automático
+              </Chip>
+              {HUMORES_MUSICA.map((h) => (
+                <Chip key={h} ativo={manual.humor === h} onClick={() => escolherHumor(h)}>
+                  {ROTULO_HUMOR[h]}
+                </Chip>
+              ))}
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1" role="group" aria-label="Energia da trilha">
+              <span className="mr-1 text-[11px] text-muted">Energia{manual.energia ? " (manual)" : ""}</span>
+              {ENERGIAS_MUSICA.map((e) => (
+                <Chip
+                  key={e}
+                  ativo={energia === e}
+                  onClick={() => escolherEnergia(e)}
+                  title={manual.energia === e ? "Voltar a seguir a energia da cena" : `Energia ${ROTULO_ENERGIA[e]}`}
+                >
+                  {ROTULO_ENERGIA[e]}
+                </Chip>
+              ))}
+            </div>
+          </div>
+          )}
           {totalLocal === 0 && (
             <p className="mt-2 border-t border-border pt-2 text-[11px] leading-snug text-muted">
               Quer suas próprias músicas? Coloque os arquivos em{" "}

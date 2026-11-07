@@ -5,6 +5,12 @@
 
 /** Rabo só de passagem de vez acima disto é mantido (pode ter narração de verdade). */
 export const MAX_RABO = 260;
+/**
+ * Rabo que passa a vez depois de `pedir_teste` (o cartão do dado já é o "role agora") ou que ABRE com a passagem de vez
+ * ("É a sua vez, Samuel. Vera espera...": o resto é recapitulação do que acabou de ser narrado) sai até este tamanho,
+ * mesmo com palavras novas: na campanha 43, metade dos rabos trazia "o que está em jogo", que o prompt manda pôr na narração.
+ */
+export const MAX_RABO_PASSAGEM = 320;
 /** Rabo com resumo mecânico fora da ficção pode ser um pouco maior. */
 export const MAX_RABO_MECANICO = 420;
 /** Só descarta quando o turno já narrou bastante antes (senão o rabo pode ser a resposta inteira). */
@@ -52,20 +58,32 @@ export function classificar(frase: string, conhecidas: Set<string>): Classe {
   return repetidas / ps.length >= 0.6 ? "eco" : "nova";
 }
 
+export type OpcoesArremate = {
+  /** a última ferramenta do turno (fora `sugerir_acoes`) foi `pedir_teste`: o cartão do dado na tela já é o "role agora" */
+  depoisDeTeste?: boolean;
+};
+
 /**
  * true quando `rabo` (o texto escrito depois da última ferramenta do turno) só repete a vez ou resume a mecânica:
- * curto, depois de uma narração substancial, sem fala entre aspas, sem frase com fato novo e com pelo menos uma frase
- * de passagem de vez ou de resumo mecânico. Fala fora do jogo ("((...))") nunca é descartada. Um rabo sem letras ("—", o "nada
- * a dizer" que o prompt oferece) sempre sai. `conhecidos`: nomes dos personagens e as ações do jogador (o recap costuma ecoá-las).
+ * curto, depois de uma narração substancial, sem fala entre aspas e
+ *  - depois de `pedir_teste`: com qualquer passagem de vez ("role o ataque", "o dado é seu"), mesmo trazendo o que está em jogo
+ *    ("se acertar... se errar..."), que o prompt manda pôr ANTES do teste;
+ *  - abrindo com a passagem de vez ("É a sua vez, Samuel. Vera espera com o recibo..."): o resto é recapitulação da cena;
+ *  - ou, como antes, sem frase com fato novo e com pelo menos uma frase de passagem de vez ou de resumo mecânico.
+ * Fala fora do jogo ("((...))") nunca é descartada. Um rabo sem letras ("—", o "nada a dizer" que o prompt oferece) sempre sai.
+ * `conhecidos`: nomes dos personagens e as ações do jogador (o recap costuma ecoá-las).
  */
-export function arremateRedundante(rabo: string, narradoAntes: string, conhecidos: string[] = []): boolean {
+export function arremateRedundante(rabo: string, narradoAntes: string, conhecidos: string[] = [], opcoes: OpcoesArremate = {}): boolean {
   const t = rabo.trim();
   if (!t || t.startsWith("((")) return false;
   if (!/[\p{L}\p{N}]/u.test(t) || CONFIRMACAO.test(semAcento(t))) return true;
   if (narradoAntes.trim().length < MIN_NARRACAO) return false;
   if (t.length > MAX_RABO_MECANICO || ASPAS.test(t)) return false;
+  if (opcoes.depoisDeTeste && t.length <= MAX_RABO_PASSAGEM && PASSA_VEZ.test(semAcento(t))) return true;
   const conhecidas = new Set([...palavras(narradoAntes), ...conhecidos.flatMap(palavras)]);
   const classes = frases(t).map((f) => classificar(f, conhecidas));
+  // abre passando a vez ou resumindo a mecânica: o que vem depois é recapitulação ("Vera espera com o recibo...")
+  if ((classes[0] === "vez" || classes[0] === "mecanica") && t.length <= MAX_RABO_PASSAGEM) return true;
   if (classes.includes("nova")) return false;
   if (classes.includes("mecanica")) return true;
   return classes.includes("vez") && t.length <= MAX_RABO;

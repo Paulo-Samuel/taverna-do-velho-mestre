@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   adicionarMensagem,
   listarDiario,
+  listarMensagens,
   obterCampanha,
   salvarCena,
   salvarEntradaDiario,
@@ -928,7 +929,13 @@ function atualizarCombate(ctx: ContextoFerramentas, combate: Combate, e: NonNull
 function executarCena(ctx: ContextoFerramentas, e: z.infer<typeof ENTRADAS.atualizar_cena>) {
   const cena = cenaAtual(ctx);
   const tituloAntes = `${cena.titulo ?? ""}|${cena.local ?? ""}`;
-  if (e.musica) cena.musica = e.musica;
+  if (e.musica) {
+    // marca desde quando este humor toca (o prompt diz ao mestre "há N turnos"); só a energia mudar não reinicia a contagem
+    if (e.musica.humor !== cena.musica?.humor || cena.musicaDesde === undefined) {
+      cena.musicaDesde = listarMensagens(ctx.campanha.id, 1)[0]?.id ?? 0;
+    }
+    cena.musica = e.musica;
+  }
   // string vazia apaga o campo; omitido mantém
   for (const campo of ["titulo", "local", "momento", "clima", "situacao"] as const) {
     const v = e[campo];

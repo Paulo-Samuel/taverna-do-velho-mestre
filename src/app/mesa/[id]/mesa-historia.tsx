@@ -26,6 +26,7 @@ import { AcaoTopo, ATALHOS_LEITOR, LeitorCenas, type BlocoCauda, type ControleLe
 import { Mudancas } from "@/components/leitor/mudancas";
 import { FimDaNoite, MestreEscrevendo, ProsaCena } from "@/components/leitor/pecas";
 import { agruparTurnos } from "@/components/leitor/turnos";
+import { useTelaBaixa } from "@/components/leitor/altura";
 import { MenuLeitura } from "@/components/leitor/menu-leitura";
 import { useEscalaLeitor, usePreferenciasLeitor } from "@/components/leitor/preferencias";
 import { EstiloProsa, Ornamento } from "@/components/leitor/prosa";
@@ -103,10 +104,14 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   /** ação devolvida ao campo depois de desfazer o turno */
   const [preencher, setPreencher] = useState<{ texto: string; n: number } | null>(null);
   const [ajuda, setAjuda] = useState(false);
-  // leitor cena a cena (padrão) ou rolagem contínua
-  const { modo } = usePreferenciasLeitor();
+  // leitor cena a cena (padrão) ou rolagem contínua; com a tela baixa demais para páginas (zoom 200 %, notebook a 175 %) a
+  // rolagem entra sozinha e volta às páginas quando a altura voltar, a não ser que a pessoa insista nas páginas
+  const { modo, paginasEmTelaBaixa } = usePreferenciasLeitor();
   const escala = useEscalaLeitor();
-  const cenas = modo === "cenas";
+  /** o espaço do leitor (palco + barra), igual nos dois modos: é a altura que decide a tela baixa */
+  const palco = useRef<HTMLDivElement>(null);
+  const telaBaixa = useTelaBaixa(palco);
+  const cenas = modo === "cenas" && !(telaBaixa && !paginasEmTelaBaixa);
   const leitor = useRef<ControleLeitor>(null);
   /** no leitor cena a cena: a pessoa está na última página da cena atual, toda à vista (as sugestões ganham destaque) */
   const [noFimDaCena, setNoFimDaCena] = useState(true);
@@ -563,9 +568,9 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
       <CeuEstrelado />
       <EstiloProsa />
 
-      {/* cabeçalho fino: campanha, presença, convite e ajustes (no celular os dois moram no códex), som e códex */}
+      {/* cabeçalho fino: campanha, presença, convite e ajustes (no celular os dois moram no códex), som e códex; tela baixa (baixo:): 44 px, só o nome */}
       <header className="relative z-20 border-b border-border/40 bg-background/85">
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-1 px-2 sm:gap-2 sm:px-4">
+        <div className="mx-auto flex h-14 max-w-5xl items-center gap-1 px-2 sm:gap-2 sm:px-4 baixo:h-11" data-cabecalho-mesa>
           <Link
             href="/"
             className="grid size-10 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2/60 hover:text-ambar"
@@ -576,10 +581,10 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
           </Link>
           {/* a campanha é o destaque; a taverna vira a assinatura miúda embaixo */}
           <div className="min-w-0 flex-1 leading-none">
-            <h1 className={`${fonteGotica.className} truncate text-lg text-ambar sm:text-2xl`} title={mesa.campanha.nome}>
+            <h1 className={`${fonteGotica.className} truncate text-lg text-ambar sm:text-2xl baixo:text-lg`} title={mesa.campanha.nome}>
               {mesa.campanha.nome}
             </h1>
-            <p className="mt-1 truncate text-[11px] text-muted">
+            <p className="mt-1 truncate text-[11px] text-muted baixo:hidden">
               <span className="hidden sm:inline">Taverna do Velho Mestre · </span>
               {mesa.sistema.nomeCurto}
             </p>
@@ -608,7 +613,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
             </svg>
           </Link>
           {/* no celular o modo de leitura mora no pé do códex */}
-          <MenuLeitura className="max-sm:hidden" campanhaId={mesa.campanha.id} aoEncerrar={aoEncerrar} />
+          <MenuLeitura className="max-sm:hidden" campanhaId={mesa.campanha.id} aoEncerrar={aoEncerrar} telaBaixa={telaBaixa && modo === "cenas"} />
           <BotaoVoz compacto />
           <Musica musica={mesa.cena.musica} sistema={mesa.sistema.id} />
           <button
@@ -647,8 +652,8 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
 
       <AjudaAtalhos aberta={ajuda} aoFechar={() => setAjuda(false)} extras={[["C", "abre e fecha o códex"], ...(cenas ? ATALHOS_LEITOR : [])]} />
 
-      {/* o livro: uma luz de vela suave atrás da coluna de texto e a vinheta nas bordas dão o ar de página */}
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+      {/* o livro: uma luz de vela suave atrás da coluna de texto e a vinheta nas bordas dão o ar de página; a altura deste espaço decide a tela baixa */}
+      <div ref={palco} className="relative z-10 flex min-h-0 flex-1 flex-col" data-espaco-leitor>
         <div
           className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_42%_62%_at_50%_44%,rgba(241,228,196,0.055),transparent_72%),radial-gradient(ellipse_80%_90%_at_50%_50%,transparent_55%,rgba(0,0,0,0.35))]"
           aria-hidden
@@ -693,6 +698,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
               ) : null
             }
             aoMudarFim={setNoFimDaCena}
+            destaque={meuPendente?.id ?? null}
           />
         ) : (
           <>
@@ -768,7 +774,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
             {aviso}
           </p>
         )}
-        <div className="leitor-medida mx-auto box-content px-4 pb-[max(env(safe-area-inset-bottom),0.4rem)] pt-2 sm:px-6 sm:pt-2.5">
+        <div className="leitor-medida mx-auto box-content px-4 pb-[max(env(safe-area-inset-bottom),0.4rem)] pt-2 sm:px-6 sm:pt-2.5 baixo:pt-1">
           <PainelAcao
             sugestoes={sugestoes}
             mostrarSugestoes={!mesa.ocupado && pendentes.length === 0 && Boolean(ativo) && !minhaNaFila}
@@ -864,7 +870,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
               )
             }
           />
-          <p className="mt-1.5 text-center text-[10.5px] leading-4 text-muted/60">
+          <p className="mt-1.5 text-center text-[10.5px] leading-4 text-muted/60 baixo:hidden">
             Os personagens são IA. As respostas são ficção.
             <button type="button" onClick={() => setAjuda(true)} className="ml-2 hidden underline-offset-2 hover:text-ambar hover:underline [@media(pointer:fine)]:inline">
               Atalhos: <kbd className="rounded border border-border/70 px-1">?</kbd>

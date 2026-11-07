@@ -109,15 +109,17 @@ export function sugerirPar(sistemaId: string, campo: string, e: Escolhas): [stri
 /**
  * Sorteia as opções de criação. "faltam": só as vazias; "tudo": refaz todas que têm sugestão; "pronto": do zero, para o personagem pronto.
  * Respeita cotas (maxPor), exclusividade entre opções e o que o sistema completa melhor sozinho (deixarParaOSistema).
+ * Com `soIds` (um subpasso das Escolhas), só essas opções entram no sorteio; as outras ficam como estão.
  */
-export function sortearOpcoes(sistema: SistemaPublico, e: Escolhas, modo: "faltam" | "tudo" | "pronto"): Record<string, string[]> {
+export function sortearOpcoes(sistema: SistemaPublico, e: Escolhas, modo: "faltam" | "tudo" | "pronto", soIds?: Set<string>): Record<string, string[]> {
   const s = sementesDe(sistema.id);
   const extras: Record<string, string[]> = modo === "faltam" ? { ...e.extras } : modo === "tudo" ? { ...e.extras } : {};
-  const pares = (s.pares ?? []).filter((p) => opcoesValidas(sistema, e.classe, e.ancestralidade, extras).some((o) => o.id === p.campo));
-  const dePar = new Set(pares.flatMap((p) => [p.campo, p.par]));
+  const paresValidos = (s.pares ?? []).filter((p) => opcoesValidas(sistema, e.classe, e.ancestralidade, extras).some((o) => o.id === p.campo));
+  const pares = paresValidos.filter((p) => !soIds || soIds.has(p.campo));
+  const dePar = new Set(paresValidos.flatMap((p) => [p.campo, p.par]));
   const ids = opcoesValidas(sistema, e.classe, e.ancestralidade, extras).map((o) => o.id);
   for (const id of ids) {
-    if (dePar.has(id)) continue;
+    if (dePar.has(id) || (soIds && !soIds.has(id))) continue;
     // recalcula a cada passo: o estilo sorteado muda as cotas das perícias, a principal bloqueia a secundária
     const opcoes = opcoesValidas(sistema, e.classe, e.ancestralidade, extras);
     const o = opcoes.find((x) => x.id === id);
@@ -195,3 +197,93 @@ export function personagemPronto(sistema: SistemaPublico, e: Escolhas): Partial<
 
 /** Nome ao acaso com a cara do sistema. */
 export const nomeAoAcaso = (sistemaId: string) => nomeSorteado(sementesDe(sistemaId), sortear);
+
+/* ---------- subpassos das Escolhas (Vampiro: Perícias, Disciplinas, Quem você é) ---------- */
+
+export type GrupoOpcao = "pericias" | "disciplinas" | "alma";
+
+export const NOMES_GRUPOS: Record<GrupoOpcao, string> = { pericias: "Perícias", disciplinas: "Disciplinas", alma: "Quem você é" };
+
+const ORDEM_GRUPOS: GrupoOpcao[] = ["pericias", "disciplinas", "alma"];
+
+/**
+ * Grupo de uma opção de criação quando o sistema divide as Escolhas em subpassos; null = o sistema tem um passo só.
+ * Um `grupo` declarado na própria opção vence (o contrato em lib/sistemas/tipos.ts ainda não o tem; até lá o Vampiro é
+ * reconhecido pelos ids: estilo/pericias_N/especialidades, disciplina*, e o resto é quem o personagem é).
+ */
+export function grupoDaOpcao(sistemaId: string, o: OpcaoCriacao): GrupoOpcao | null {
+  const declarado = (o as OpcaoCriacao & { grupo?: GrupoOpcao }).grupo;
+  if (declarado && ORDEM_GRUPOS.includes(declarado)) return declarado;
+  if (sistemaId !== "vtm5") return null;
+  if (/^(estilo|pericias_\d|especialidades)$/.test(o.id)) return "pericias";
+  if (/^disciplina/.test(o.id)) return "disciplinas";
+  return "alma";
+}
+
+/** Grupos presentes nas opções válidas, na ordem dos subpassos; vazio quando o sistema não divide (ou só um grupo aparece). */
+export function gruposDasOpcoes(sistemaId: string, opcoes: OpcaoCriacao[]): GrupoOpcao[] {
+  const presentes = new Set(opcoes.map((o) => grupoDaOpcao(sistemaId, o)).filter((g): g is GrupoOpcao => g !== null));
+  const lista = ORDEM_GRUPOS.filter((g) => presentes.has(g));
+  return lista.length > 1 ? lista : [];
+}
+
+/** As opções de um grupo (ou todas, sem grupo). */
+export function opcoesDoGrupo(sistemaId: string, opcoes: OpcaoCriacao[], grupo: GrupoOpcao | null): OpcaoCriacao[] {
+  return grupo ? opcoes.filter((o) => grupoDaOpcao(sistemaId, o) === grupo) : opcoes;
+}
+
+/* ---------- grade de perícias por nível (Vampiro: pericias_4..1) ---------- */
+
+/** As opções "pericias_N" (N = pontos) que valem agora, da mais alta para a mais baixa: [nível, opção]. */
+export function niveisDePericias(opcoes: OpcaoCriacao[]): [number, OpcaoCriacao][] {
+  return opcoes
+    .map((o): [number, OpcaoCriacao] | null => {
+      const m = /^pericias_(\d)$/.exec(o.id);
+      return m && o.maxPor && o.tipo === "multipla" ? [Number(m[1]), o] : null;
+    })
+    .filter((x): x is [number, OpcaoCriacao] => x !== null)
+    .sort((a, b) => b[0] - a[0]);
+}
+
+/** Em que nível cada perícia está (0 = em branco). A mesma perícia em dois níveis fica no mais alto. */
+export function nivelDasPericias(niveis: [number, OpcaoCriacao][], extras: Record<string, string[]>): Map<string, number> {
+  const mapa = new Map<string, number>();
+  for (const [n, o] of [...niveis].sort((a, b) => a[0] - b[0])) for (const id of valoresDe(o, extras)) mapa.set(id, n);
+  return mapa;
+}
+
+/** Quantas perícias há em cada nível e qual a cota (o máximo em vigor para o estilo). */
+export function contagemNiveis(niveis: [number, OpcaoCriacao][], extras: Record<string, string[]>): { nivel: number; usadas: number; cota: number }[] {
+  return niveis.map(([nivel, o]) => ({ nivel, usadas: valoresDe(o, extras).length, cota: o.max ?? 0 }));
+}
+
+/**
+ * Próximo nível ao clicar numa perícia: sobe para o nível seguinte que ainda tem vaga (○→●→●●→●●●→●●●●);
+ * sem vaga acima, volta para ○. Passar da cota é impossível por aqui (só trocando de estilo com perícias já marcadas).
+ */
+export function proximoNivel(atual: number, niveis: [number, OpcaoCriacao][], extras: Record<string, string[]>): number {
+  const acima = contagemNiveis(niveis, extras)
+    .filter((c) => c.nivel > atual && c.usadas < c.cota)
+    .sort((a, b) => a.nivel - b.nivel);
+  return acima[0]?.nivel ?? 0;
+}
+
+/** Move a perícia para `nivel` (0 tira de todos), mantendo as outras onde estão. */
+export function moverPericia(id: string, nivel: number, niveis: [number, OpcaoCriacao][], extras: Record<string, string[]>): Record<string, string[]> {
+  const novo = { ...extras };
+  for (const [n, o] of niveis) {
+    const sem = (extras[o.id] ?? []).filter((v) => v !== id);
+    novo[o.id] = n === nivel ? [...sem, id] : sem;
+  }
+  return novo;
+}
+
+/* ---------- cenário em branco ---------- */
+
+export const PREFIXO_SUGESTAO_CENARIO = "Sugestão da taverna:";
+
+/** Um começo de campanha das sementes do sistema, marcado como sugestão (o jogador vê e edita nos ajustes). */
+export function sugestaoDeCenario(sistemaId: string, sorteio: <T>(lista: readonly T[]) => T = sortear): string {
+  const cenarios = sementesDe(sistemaId).cenarios;
+  return cenarios.length ? `${PREFIXO_SUGESTAO_CENARIO} ${sorteio(cenarios)}` : "";
+}

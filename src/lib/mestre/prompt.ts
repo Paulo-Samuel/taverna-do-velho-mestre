@@ -1,13 +1,13 @@
 import "server-only";
-import { listarDiario, listarFatos, type Campanha, type Mensagem, type Personagem } from "../db";
+import { listarDiario, listarFatos, mensagensDepois, type Campanha, type Mensagem, type Personagem } from "../db";
 import { quantosEntram } from "../../components/fatos/limites";
 import type { Cena, EntradaDiario, Sistema, TipoDiario } from "../sistemas/tipos";
 import { DIFICULDADES, dificuldadeDe, FOCOS, MAX_FOCO_LIVRE, MAX_INSTRUCOES, TAMANHOS, tamanhoDe } from "./estilo";
 import { jogadorRolaOsDados } from "./ferramentas";
+import { JANELA_RECENTE } from "./memoria";
 import { aventuraDoSistema, roteiroParaMestre } from "../aventuras";
 
-/** Quantas mensagens recentes vão literais para o mestre; o resto vive no resumo. */
-export const JANELA_RECENTE = 40;
+export { JANELA_RECENTE };
 
 /** Regras gerais. `tamanho` vem do estilo da mesa e é o único lugar do prompt que fixa quantos parágrafos narrar. */
 const regrasDoMestre = (tamanho: string) => `Você é o Velho Mestre da Taverna: o narrador e juiz de uma aventura de RPG, em português do Brasil, para um ou mais jogadores.
@@ -37,7 +37,8 @@ const regrasDoMestre = (tamanho: string) => `Você é o Velho Mestre da Taverna:
 - PV 0 deixa a situação desesperadora: a morte é possível, mas tem de ser merecida e dramática.
 
 ## Cena e combate (painel que todos veem)
-- \`atualizar_cena\` com titulo (como capítulo: "Salão Comum"), local, momento e musica ao abrir e sempre que o lugar ou o clima mudar; com situacao quando o foco mudar. musica.humor: taverna, calmo, exploracao, misterio, tensao, combate, triste, vitoria, sombrio (energia baixa, media, alta); luta começou → combate, acabou bem → vitoria.
+- \`atualizar_cena\` com titulo (como capítulo: "Salão Comum"), local, momento e musica ao abrir e sempre que o lugar ou o clima mudar; com situacao quando o foco mudar. musica.humor: taverna, calmo, exploracao, misterio, tensao, combate, triste, vitoria, sombrio (energia baixa, media, alta).
+- A trilha acompanha a história, não fica horas no mesmo humor: taverna ou calmo em cena social e descanso; exploracao na estrada; misterio na investigação; tensao só com ameaça concreta e presente (e sai quando ela passa); combate ao iniciar a luta e vitoria ao encerrá-la bem; triste no luto e na perda; sombrio para o sobrenatural pesado. A cena atual diz o que está tocando e há quantos turnos: se o clima mudou, mude a música.
 - Todo combate passa pelo rastreador: combate.acao "iniciar" com os inimigos (nome único, PV, defesa; o servidor rola a iniciativa e devolve a ordem, narre nela). Dano e condições de INIMIGOS em "atualizar"; nos personagens, \`alterar_ficha\`. "proximo" quando o combatente da vez termina; "encerrar" quando o último inimigo cai, foge ou se rende.
 - Inimigos agem com inteligência própria: recuam, se rendem, pedem reforço; nem toda luta é até a morte. Encontros na medida do nível e do tamanho do grupo, e sempre há uma saída que não é só bater.
 
@@ -59,7 +60,7 @@ const regrasDoMestre = (tamanho: string) => `Você é o Velho Mestre da Taverna:
 ## Checklist antes de encerrar CADA turno
 1. Dano, cura, magia/recurso/munição gasto, dinheiro, item ou condição? → \`alterar_ficha\` para cada um.
 2. Inimigo ferido, caído, em fuga, ou a vez passou? → \`atualizar_cena\` (combate).
-3. Mudou o local, a hora ou a situação? → \`atualizar_cena\`.
+3. Mudou o local, a hora ou a situação? → \`atualizar_cena\`. O clima mudou (a ameaça passou, virou cena social, luto, revelação, luta começou ou acabou)? → \`atualizar_cena\` com musica.
 4. NPC, missão, lugar, item ou pista nova, ou mudança de status? → \`anotar_diario\`.
 5. Vitória ou marco? → \`conceder_xp\` (ou \`subir_nivel\`). Descanso seguro? → \`descansar\`.
 6. A narração (não uma frase extra no fim) já terminou dizendo de quem é a vez, sem decidir nada pelos personagens? Depois das ferramentas, nada mais.`;
@@ -145,13 +146,20 @@ export function diarioCompacto(entradas: EntradaDiario[]): string {
   return blocos.join("\n");
 }
 
-/** Cena em texto legível (o modelo lê melhor que JSON). O mestre de teste também lê este formato. */
-export function cenaEmTexto(cena: Cena | null | undefined, rotuloDefesa = "Defesa"): string {
+/**
+ * Cena em texto legível (o modelo lê melhor que JSON). O mestre de teste também lê este formato.
+ * `turnosDeTrilha`: há quantos turnos do mestre a música atual toca (a linha "Trilha" sai quando a cena não tem música).
+ */
+export function cenaEmTexto(cena: Cena | null | undefined, rotuloDefesa = "Defesa", turnosDeTrilha: number | null = null): string {
   if (!cena) return "";
   const linhas: string[] = [];
   const topo = [cena.local && `Local: ${cena.local}`, cena.momento && `Momento: ${cena.momento}`, cena.clima && `Clima: ${cena.clima}`].filter(Boolean);
   if (topo.length) linhas.push(`- ${topo.join(" · ")}`);
   if (cena.situacao) linhas.push(`- Situação: ${cena.situacao}`);
+  if (cena.musica?.humor) {
+    const ha = turnosDeTrilha === null ? "" : turnosDeTrilha === 0 ? ", desde este turno" : `, há ${turnosDeTrilha} turno${turnosDeTrilha === 1 ? "" : "s"}`;
+    linhas.push(`- Trilha: ${cena.musica.humor} (${cena.musica.energia ?? "media"})${ha}`);
+  }
   const c = cena.combate;
   if (c?.ativo && c.ordem.length) {
     linhas.push(`- COMBATE ATIVO — rodada ${c.rodada}, vez de ${c.ordem[c.vez]?.nome ?? "?"}. Ordem de iniciativa:`);
@@ -168,6 +176,28 @@ export function cenaEmTexto(cena: Cena | null | undefined, rotuloDefesa = "Defes
   return linhas.join("\n");
 }
 
+/**
+ * Há quantos turnos a música da cena toca: jogadas (grupos de mensagens de jogador seguidas, uma por turno, inclusive na
+ * rodada) depois de `musicaDesde`. null quando não há música ou a cena ainda não registrou desde quando.
+ */
+function turnosDeTrilha(c: Campanha): number | null {
+  const desde = c.cena?.musicaDesde;
+  if (!c.cena?.musica?.humor || typeof desde !== "number") return null;
+  try {
+    let turnos = 0;
+    let anteriorJogador = false;
+    for (const m of mensagensDepois(c.id, desde)) {
+      const jogador = m.tipo === "jogador";
+      if (jogador && !anteriorJogador) turnos++;
+      anteriorJogador = jogador;
+    }
+    return turnos;
+  } catch (e) {
+    console.warn("[taverna] turnos da trilha indisponíveis para o prompt:", e);
+    return null;
+  }
+}
+
 export function promptDoSistema(c: Campanha, sistema: Sistema, personagens: Personagem[]) {
   const fichas = personagens.length
     ? personagens.map((p) => `### ${p.ficha.nome}${p.jogador ? ` (jogador: ${p.jogador})` : ""}\n${sistema.descreverParaMestre(p.ficha)}`).join("\n\n")
@@ -176,7 +206,7 @@ export function promptDoSistema(c: Campanha, sistema: Sistema, personagens: Pers
   const grupo = personagens.length
     ? `${personagens.length} ${personagens.length > 1 ? "personagens" : "personagem"}, nível ${Math.min(...niveis) === Math.max(...niveis) ? niveis[0] : `${Math.min(...niveis)} a ${Math.max(...niveis)}`}`
     : "sem personagens";
-  const cena = cenaEmTexto(c.cena, sistema.rotulos.defesa);
+  const cena = cenaEmTexto(c.cena, sistema.rotulos.defesa, turnosDeTrilha(c));
   let diario = "";
   try {
     diario = diarioCompacto(listarDiario(c.id));
@@ -201,7 +231,7 @@ export function promptDoSistema(c: Campanha, sistema: Sistema, personagens: Pers
   // aventura pronta: o roteiro secreto vai em todo turno; a cena de abertura, só enquanto ainda não há resumo
   const pronta = aventuraDoSistema(c.config?.aventura, sistema.id);
   const aventura = pronta
-    ? `\n\n## AVENTURA EM ANDAMENTO (roteiro secreto: nunca revele ao jogador; improvise em cima, deixe o jogador mudar o rumo)\n${roteiroParaMestre(pronta, !c.resumo)}`
+    ? `\n\n## AVENTURA EM ANDAMENTO (roteiro secreto: nunca revele ao jogador; improvise em cima, deixe o jogador mudar o rumo)\n${roteiroParaMestre(pronta, !c.resumo, sistema.id)}`
     : "";
   return `${regrasDoMestre(tamanho)}\n\n${extras.join("\n\n")}
 
@@ -253,7 +283,22 @@ export type AcaoDoTurno = { personagem: string | null; autor: string; acao: stri
 
 // não pede "diga de quem é a vez": isso provocava uma frase extra depois das ferramentas
 const LEMBRETE =
-  "(Antes de encerrar: checklist de fim de turno — ficha, cena/combate, diário, XP. A vez do jogador vai dentro da narração; depois das ferramentas finais não escreva mais nada (no máximo —). Se for só uma pergunta fora do jogo, responda curto, fora do personagem, sem ferramentas.)";
+  "(Antes de encerrar: checklist de fim de turno — ficha, cena/combate e música, diário, XP. A vez do jogador vai dentro da narração; o \"se acertar / se errar\" vem ANTES do pedir_teste, nunca depois; depois das ferramentas finais não escreva mais nada (no máximo —). Se for só uma pergunta fora do jogo, responda curto, fora do personagem, sem ferramentas.)";
+
+/**
+ * Pedido da chamada de continuação: o turno terminou sem narração suficiente (o modelo narrou só no raciocínio).
+ * Vai junto com o pedido original, porque o mestre não guarda nada entre chamadas; só a ferramenta `narrar` fica disponível.
+ */
+export function promptDeContinuacao(promptOriginal: string, ferramentasUsadas: string[], narradoAteAqui: string): string {
+  const feitas = ferramentasUsadas.length ? `Ferramentas que JÁ rodaram nesta resposta (não repita nenhuma): ${[...new Set(ferramentasUsadas)].join(", ")}.` : "Nenhuma ferramenta rodou ainda.";
+  const lido = narradoAteAqui.trim() ? `O único texto que o jogador leu até agora foi:\n"""\n${narradoAteAqui.trim()}\n"""` : "O jogador não leu NADA deste turno.";
+  return `${promptOriginal}
+
+---
+
+(CONTINUAÇÃO DO MESMO TURNO. ${lido}
+${feitas} O que você escreveu no raciocínio interno não apareceu para ele. NÃO repita cena, diário, teste nem sugestões: chame AGORA a ferramenta narrar com a narração completa deste turno, no tamanho combinado, e termine. Nada de texto fora da ferramenta.)`;
+}
 
 /** Pedido do turno de fim de sessão: fechamento curto, XP pelas regras do sistema, Remorso no Vampiro, diário, sem sugestões. */
 export type FimDeSessao = { sessao: number; vampiro: boolean; marcos: boolean; comManchas: string[] };
@@ -285,6 +330,10 @@ export function promptDoTurno(
   acoes: AcaoDoTurno[] | "inicio" | FimDeSessao,
   opcoes: { recapitular?: boolean } = {},
 ) {
+  // a transcrição manda tudo depois de resumoAte; passar da janela significa que o resumo atrasou (nada se perde, mas avisa)
+  if (recentes.length > JANELA_RECENTE) {
+    console.warn(`[taverna] transcrição com ${recentes.length} mensagens, acima da janela de ${JANELA_RECENTE}: o resumo automático está atrasado.`);
+  }
   const historico = transcricao(recentes, personagens);
   const especial = acoes === "inicio" || !Array.isArray(acoes);
   const pedido =

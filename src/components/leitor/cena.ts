@@ -24,6 +24,11 @@ export type Chip = { chave: string; icone: string; rotulo: string; detalhe: stri
 
 export type GrupoChips = { quem: string; tipo: "personagem" | "mundo" | "mestre"; chips: Chip[] };
 
+/** Quantos chips há ao todo (o rótulo da faixa recolhida de "o que mudou" no leitor). */
+export function contarChips(grupos: GrupoChips[]): number {
+  return grupos.reduce((n, g) => n + g.chips.length, 0);
+}
+
 export type Cena = {
   pecas: Peca[];
   /** "o que mudou na cena", agrupado por personagem (depois o diário e as notas do mestre) */

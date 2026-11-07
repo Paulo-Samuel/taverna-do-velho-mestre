@@ -22,6 +22,12 @@
   --font-titulo: var(--font-titulo);
 }
 
+/* Variantes de tela da mesa: `baixo:` para a tela baixa (notebook 1366×768 a 150 %+, zoom 200 %: cabeçalho de 44 px, barra de
+   páginas de 28 px, menos respiro) e `largo:` para o desktop de verdade (largo E alto), onde as sugestões ganham três linhas e
+   espaço reservado; abaixo disso (celular ou tela baixa) elas viram a linha única que abre por cima do palco. */
+@custom-variant baixo (@media (max-height: 600px));
+@custom-variant largo (@media (min-width: 40rem) and (min-height: 601px));
+
 html {
   color-scheme: dark;
 }

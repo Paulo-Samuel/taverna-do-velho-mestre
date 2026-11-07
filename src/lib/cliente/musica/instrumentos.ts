@@ -64,8 +64,11 @@ export class Instrumentos {
   private readonly ruido: AudioBuffer;
   private murmurioBuffer: AudioBuffer | null = null;
   private readonly ambientes = new Map<TipoAmbiente, AudioBuffer>();
+  // campo explícito (e não "parameter property") para o motor poder ser importado nos testes do Node, só com type stripping
+  private readonly ctx: BaseAudioContext;
 
-  constructor(private readonly ctx: BaseAudioContext) {
+  constructor(ctx: BaseAudioContext) {
+    this.ctx = ctx;
     this.ruido = this.buffer(ruidoBranco(ctx.sampleRate, 1.5));
   }
 

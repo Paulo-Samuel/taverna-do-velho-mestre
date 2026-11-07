@@ -13,6 +13,7 @@ import { AcaoTopo, ATALHOS_LEITOR, LeitorCenas, type BlocoCauda, type ControleLe
 import { Mudancas } from "@/components/leitor/mudancas";
 import { Aparte, BotaoPerguntar, FimDaNoite, MestreEscrevendo, ProsaCena } from "@/components/leitor/pecas";
 import { agruparTurnos } from "@/components/leitor/turnos";
+import { useTelaBaixa } from "@/components/leitor/altura";
 import { MenuLeitura } from "@/components/leitor/menu-leitura";
 import { useEscalaLeitor, usePreferenciasLeitor } from "@/components/leitor/preferencias";
 import { AberturaCapitulo, EstiloProsa, Ornamento } from "@/components/leitor/prosa";
@@ -226,10 +227,14 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
   const campo = useRef<HTMLTextAreaElement>(null);
   const anterior = useRef<number | null>(null);
   const [ajuda, setAjuda] = useState(false);
-  // leitor cena a cena (padrão) ou rolagem contínua
-  const { modo } = usePreferenciasLeitor();
+  // leitor cena a cena (padrão) ou rolagem contínua; com a tela baixa demais para páginas (zoom 200 %, notebook a 175 %) a
+  // rolagem entra sozinha e volta às páginas quando a altura voltar, a não ser que a pessoa insista nas páginas
+  const { modo, paginasEmTelaBaixa } = usePreferenciasLeitor();
   const escala = useEscalaLeitor();
-  const cenas = modo === "cenas";
+  /** o espaço do leitor (palco + barra), igual nos dois modos: é a altura que decide a tela baixa */
+  const palco = useRef<HTMLDivElement>(null);
+  const telaBaixa = useTelaBaixa(palco);
+  const cenas = modo === "cenas" && !(telaBaixa && !paginasEmTelaBaixa);
   const leitor = useRef<ControleLeitor>(null);
   /** no leitor cena a cena: a pessoa está na última página da cena atual, toda à vista (as sugestões ganham destaque) */
   const [noFimDaCena, setNoFimDaCena] = useState(true);
@@ -644,8 +649,9 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
   return (
     <div data-tema={temaDoSistema(mesa.sistema.id)} className="fundo-tema fixed inset-0 z-30 flex flex-col overflow-hidden text-foreground" style={escala as CSSProperties}>
       <EstiloProsa />
+      {/* tela baixa (baixo:): cabeçalho de 44 px, só o nome da campanha */}
       <header className="relative z-20 shrink-0 border-b border-border/70 bg-background/90 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-1 px-2 sm:gap-2 sm:px-4">
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-1 px-2 sm:gap-2 sm:px-4 baixo:h-11" data-cabecalho-mesa>
           <Link
             href="/"
             className="grid size-10 shrink-0 place-items-center rounded-md text-lg text-muted hover:bg-surface-2/60 hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar"
@@ -655,8 +661,8 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
             ←
           </Link>
           <div className="min-w-0 flex-1 leading-tight">
-            <h1 className="titulo truncate text-base text-pergaminho sm:text-xl" title={mesa.campanha.nome}>{mesa.campanha.nome}</h1>
-            <p className="truncate text-[11px] text-muted">
+            <h1 className="titulo truncate text-base text-pergaminho sm:text-xl baixo:text-base" title={mesa.campanha.nome}>{mesa.campanha.nome}</h1>
+            <p className="truncate text-[11px] text-muted baixo:hidden">
               <span aria-hidden>{dadosDoTema(mesa.sistema.id).ornamento}</span> {mesa.sistema.nomeCurto}
               {rodada && <span className="uppercase tracking-wider text-ambar-forte"> · modo rodada</span>}
             </p>
@@ -676,7 +682,7 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
           </Link>
           {/* no celular o cabeçalho já está cheio: a leitura em voz alta mora no painel */}
           {/* no celular o modo de leitura mora no painel (☰), com a voz e os ajustes */}
-          <MenuLeitura className="max-sm:hidden" campanhaId={mesa.campanha.id} aoEncerrar={aoEncerrar} />
+          <MenuLeitura className="max-sm:hidden" campanhaId={mesa.campanha.id} aoEncerrar={aoEncerrar} telaBaixa={telaBaixa && modo === "cenas"} />
           <BotaoVoz compacto className="max-sm:hidden" />
           <Musica musica={mesa.cena.musica} sistema={mesa.sistema.id} compacto />
           <Link
@@ -741,73 +747,77 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
             diario={mesa.diario}
             aoContinuar={() => !cenas && irParaOFim(true)}
           />
-          {cenas ? (
-            <LeitorCenas
-              ref={leitor}
-              mensagens={mesa.mensagens}
-              aoVivo={mesa.aoVivo}
-              ocupado={mesa.ocupado}
-              esperandoNovoTurno={mesa.fila.some((a) => a.acao !== INICIO) && pendentes.length === 0}
-              prosa={PROSA}
-              acao={acaoTopo}
-              item={desenharItem}
-              cauda={cauda}
-              vazio={telaVazia}
-              largura="leitor-medida"
-              linkReler={`/mesa/${mesa.campanha.id}/livro`}
-              ferramentas={(t) =>
-                podeDesfazer && ultimoMestre !== null && t.itens.some((m) => m.id === ultimoMestre) ? (
-                  <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={setAviso} compacto />
-                ) : null
-              }
-              aoMudarFim={setNoFimDaCena}
-            />
-          ) : (
-            <div ref={rolador} onScroll={aoRolar} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-              <div ref={conteudo} className={`${COLUNA} px-4 pb-8 pt-6 sm:px-6`}>
-                {telaVazia}
+          {/* o espaço do leitor, nos dois modos: a altura dele decide a tela baixa (useTelaBaixa) */}
+          <div ref={palco} className="relative flex min-h-0 flex-1 flex-col" data-espaco-leitor>
+            {cenas ? (
+              <LeitorCenas
+                ref={leitor}
+                mensagens={mesa.mensagens}
+                aoVivo={mesa.aoVivo}
+                ocupado={mesa.ocupado}
+                esperandoNovoTurno={mesa.fila.some((a) => a.acao !== INICIO) && pendentes.length === 0}
+                prosa={PROSA}
+                acao={acaoTopo}
+                item={desenharItem}
+                cauda={cauda}
+                vazio={telaVazia}
+                largura="leitor-medida"
+                linkReler={`/mesa/${mesa.campanha.id}/livro`}
+                ferramentas={(t) =>
+                  podeDesfazer && ultimoMestre !== null && t.itens.some((m) => m.id === ultimoMestre) ? (
+                    <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={setAviso} compacto />
+                  ) : null
+                }
+                aoMudarFim={setNoFimDaCena}
+                destaque={meuPendente?.id ?? null}
+              />
+            ) : (
+              <div ref={rolador} onScroll={aoRolar} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                <div ref={conteudo} className={`${COLUNA} px-4 pb-8 pt-6 sm:px-6`}>
+                  {telaVazia}
 
-                {/* turno a turno, montado como no leitor: prosa contínua, cartões no lugar e "o que mudou" no fim */}
-                {cenasRolagem.map(({ turno, cena }, t) => {
-                  const ultimo = t === cenasRolagem.length - 1;
-                  const { corpo, fecho } = separarFecho(cena.pecas);
-                  const ultimaProsa = corpo.findLast((p) => p.tipo === "prosa");
-                  const comFerramentas = ultimo && podeDesfazer && ultimoMestre !== null && turno.itens.some((m) => m.id === ultimoMestre);
-                  return (
-                    <Fragment key={turno.chave}>
-                      {turno.acoes.map(desenharAcao)}
-                      {corpo.map((p) =>
-                        p.tipo === "prosa" ? (
-                          <div key={p.chave} className="surgir group my-6">
-                            <ProsaCena paragrafos={p.paragrafos} inline={PROSA.inline} separador={SEPARADOR_NARRACAO} classe={CLASSE_NARRACAO} />
-                            <div className="mt-1 flex min-h-8 flex-wrap items-center justify-end gap-1">
-                              {comFerramentas && p === ultimaProsa && (
-                                <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={setAviso} className="mr-auto -ml-2.5" />
-                              )}
-                              {textoParaOuvir(p.paragrafos) && <Ouvir id={`msg-${p.ids[0]}`} texto={textoParaOuvir(p.paragrafos)} />}
+                  {/* turno a turno, montado como no leitor: prosa contínua, cartões no lugar e "o que mudou" no fim */}
+                  {cenasRolagem.map(({ turno, cena }, t) => {
+                    const ultimo = t === cenasRolagem.length - 1;
+                    const { corpo, fecho } = separarFecho(cena.pecas);
+                    const ultimaProsa = corpo.findLast((p) => p.tipo === "prosa");
+                    const comFerramentas = ultimo && podeDesfazer && ultimoMestre !== null && turno.itens.some((m) => m.id === ultimoMestre);
+                    return (
+                      <Fragment key={turno.chave}>
+                        {turno.acoes.map(desenharAcao)}
+                        {corpo.map((p) =>
+                          p.tipo === "prosa" ? (
+                            <div key={p.chave} className="surgir group my-6">
+                              <ProsaCena paragrafos={p.paragrafos} inline={PROSA.inline} separador={SEPARADOR_NARRACAO} classe={CLASSE_NARRACAO} />
+                              <div className="mt-1 flex min-h-8 flex-wrap items-center justify-end gap-1">
+                                {comFerramentas && p === ultimaProsa && (
+                                  <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={setAviso} className="mr-auto -ml-2.5" />
+                                )}
+                                {textoParaOuvir(p.paragrafos) && <Ouvir id={`msg-${p.ids[0]}`} texto={textoParaOuvir(p.paragrafos)} />}
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          desenharItem(p.m)
-                        ),
-                      )}
-                      {cena.mudancas.length > 0 && <Mudancas grupos={cena.mudancas} className="mb-8" />}
-                      {fecho.map((p) => (p.tipo === "item" ? desenharItem(p.m) : null))}
-                    </Fragment>
-                  );
-                })}
+                          ) : (
+                            desenharItem(p.m)
+                          ),
+                        )}
+                        {cena.mudancas.length > 0 && <Mudancas grupos={cena.mudancas} className="mb-8" />}
+                        {fecho.map((p) => (p.tipo === "item" ? desenharItem(p.m) : null))}
+                      </Fragment>
+                    );
+                  })}
 
-                {mesa.aoVivo && (
-                  <div className="my-6" aria-live="off">
-                    <Narracao texto={mesa.aoVivo} escrevendo />
-                  </div>
-                )}
-                {cauda.map((c) => (
-                  <Fragment key={c.chave}>{c.no}</Fragment>
-                ))}
+                  {mesa.aoVivo && (
+                    <div className="my-6" aria-live="off">
+                      <Narracao texto={mesa.aoVivo} escrevendo />
+                    </div>
+                  )}
+                  {cauda.map((c) => (
+                    <Fragment key={c.chave}>{c.no}</Fragment>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           <form
             className="relative shrink-0 border-t border-border/50 bg-background/85 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur"
@@ -835,13 +845,13 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
               </p>
             )}
             <div className={`${COLUNA} px-4 sm:px-6`}>
-              {/* espaço das sugestões reservado (três linhas baixas no desktop, uma no celular): o palco não muda de altura a cada turno */}
+              {/* espaço das sugestões reservado (três linhas baixas no desktop; uma no celular e na tela baixa, sem reserva): o palco não muda de altura a cada turno */}
               {ativo && (
-                <div className="mb-1 flex min-h-10 flex-col justify-end sm:min-h-[90px]" data-vaga-sugestoes>
+                <div className="mb-1 flex min-h-10 flex-col justify-end largo:min-h-[90px]" data-vaga-sugestoes>
                   {mostrarSugestoes ? (
                     <SugestoesCompactas sugestoes={sugestoes} desabilitado={mesa.semSinal} discretas={cenas && !noFimDaCena} aoEscolher={(t) => void enviar(t)} />
                   ) : (
-                    <div className="flex min-h-10 items-center justify-center gap-3 text-center text-[13px] italic text-muted sm:min-h-7">
+                    <div className="flex min-h-10 items-center justify-center gap-3 text-center text-[13px] italic text-muted largo:min-h-7">
                       {lendoResultado ? (
                         "O mestre lê o resultado…"
                       ) : mesa.ocupado ? (
@@ -879,12 +889,19 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
                 )}
               </div>
               {meuPendente ? (
-                <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-ambar/50 bg-ambar/10 px-3 py-1 text-sm" role="status">
-                  <span className="text-ambar">🎲 Role o dado primeiro: o mestre não aceita fiado.</span>
-                  <button type="button" onClick={irParaDado} className="min-h-10 shrink-0 rounded-md px-2 text-xs text-muted hover:text-ambar hover:underline">
-                    ir para o dado ↑
-                  </button>
-                </div>
+                // a barra inteira leva ao dado (alvo grande no celular), igual à do modo história
+                <button
+                  type="button"
+                  onClick={irParaDado}
+                  className="surgir group flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-ambar/60 bg-ambar/10 px-3 py-1.5 text-left text-sm shadow-[0_0_24px_-12px_var(--ambar)] transition hover:border-ambar hover:bg-ambar/15 focus-visible:border-ambar focus-visible:outline-none"
+                  data-ir-para-dado
+                >
+                  <span className="min-w-0 text-ambar">
+                    <span aria-hidden>🎲 </span>
+                    Role o dado primeiro: o mestre não aceita fiado.
+                  </span>
+                  <span className="shrink-0 rounded-md bg-ambar px-3 py-1.5 text-xs font-semibold text-[#1a120c] transition group-hover:bg-[#f0b762]">Ir para o dado ↑</span>
+                </button>
               ) : (
                 <div className="flex items-end gap-2">
                   <textarea
@@ -940,7 +957,7 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
       </div>
 
       {lateralAberta && (
-        <div id="painel-celular" className="surgir fixed inset-x-0 bottom-0 top-14 z-40 flex flex-col bg-background lg:hidden" role="dialog" aria-label="Painel da mesa">
+        <div id="painel-celular" className="surgir fixed inset-x-0 bottom-0 top-14 z-40 flex flex-col bg-background lg:hidden baixo:top-11" role="dialog" aria-label="Painel da mesa">
           <Lateral mesa={mesa} acoes={acoes} fatos={fatos} aoAtalhos={() => setAjuda(true)} aoEncerrar={aoEncerrar} />
         </div>
       )}

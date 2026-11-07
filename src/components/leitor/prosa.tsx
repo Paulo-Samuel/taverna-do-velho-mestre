@@ -43,6 +43,12 @@ const CSS = `
 .leitor-mudancas-grupo{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:.4rem}
 .leitor-mudancas-quem{margin-right:.15rem;font-size:13px;font-weight:600;letter-spacing:.06em;font-variant-caps:all-small-caps;color:var(--ambar)}
 .leitor-mudancas-quem-outro{color:var(--muted)}
+.leitor-mudancas-faixa{margin:0;min-width:0;flex:1}
+.leitor-mudancas-faixa .leitor-mudancas-grupos{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:.3rem .9rem;transition:opacity .45s ease}
+.leitor-mudancas-faixa .leitor-mudancas-grupo{justify-content:flex-start;gap:.3rem}
+.leitor-mudancas-faixa .leitor-chip{min-height:1.6rem;font-size:12px}
+.leitor-mudancas-oculta .leitor-mudancas-grupos{visibility:hidden;opacity:0}
+@media (prefers-reduced-motion:reduce){.leitor-mudancas-faixa .leitor-mudancas-grupos{transition:none}}
 .leitor-chip{display:inline-flex;align-items:center;gap:.38em;min-height:1.75rem;max-width:100%;padding:.15rem .62rem;border-radius:999px;font-size:12.5px;line-height:1.2;
   border:1px solid color-mix(in srgb,var(--ambar) 24%,transparent);background:color-mix(in srgb,var(--ambar) 6%,transparent);
   color:color-mix(in srgb,var(--foreground) 86%,transparent);transition:border-color .2s,background-color .2s,color .2s;cursor:help}

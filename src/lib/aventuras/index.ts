@@ -1,5 +1,5 @@
 import "server-only";
-import type { Aventura, AventuraPublica } from "./tipos";
+import type { Aventura, AventuraPublica, Recompensas } from "./tipos";
 import { FANTASIA } from "./fantasia";
 import { HISTORIA } from "./historia";
 import { OUTROS } from "./outros";
@@ -36,10 +36,20 @@ export function aventurasPublicas(sistemaId?: string): AventuraPublica[] {
 }
 
 /**
- * Roteiro compacto para o prompt do mestre (entra em todo turno: cada caractere conta). A cena de abertura só vai junto
- * enquanto a campanha está começando (`comAbertura`); depois ela já virou narração e só ocuparia espaço.
+ * A recompensa que vale para um sistema: o texto único, ou a entrada do sistema; sem entrada própria, a "padrao" (ou a
+ * primeira que houver). Uma aventura aberta a vários sistemas fala em ouro = XP só para o OSR e em runas só para o PF2e.
  */
-export function roteiroParaMestre(a: Aventura, comAbertura = true): string {
+export function recompensaDoSistema(recompensas: Recompensas, sistemaId?: string): string {
+  if (typeof recompensas === "string") return recompensas;
+  return (sistemaId && recompensas[sistemaId]) || recompensas.padrao || Object.values(recompensas)[0] || "";
+}
+
+/**
+ * Roteiro compacto para o prompt do mestre (entra em todo turno: cada caractere conta). A cena de abertura só vai junto
+ * enquanto a campanha está começando (`comAbertura`); depois ela já virou narração e só ocuparia espaço. `sistemaId` é o
+ * sistema da campanha: escolhe a recompensa certa quando a aventura roda em mais de um.
+ */
+export function roteiroParaMestre(a: Aventura, comAbertura = true, sistemaId?: string): string {
   const r = a.roteiro;
   const ficha = [a.duracao, a.recomendado].filter(Boolean).join("; ");
   return [
@@ -52,7 +62,13 @@ export function roteiroParaMestre(a: Aventura, comAbertura = true): string {
     `- Reviravoltas: ${r.reviravoltas.map((t, i) => `${i + 1}) ${t}`).join(" ")}`,
     `- Relógio (avança quando o grupo enrola ou falha feio): ${r.relogio.map((t, i) => `${i + 1}. ${t}`).join(" ")}`,
     `- Finais: ${r.finais.join(" | ")}`,
-    `- Recompensas: ${r.recompensas}`,
+    `- Recompensas: ${recompensaDoSistema(r.recompensas, sistemaId)}`,
+    r.sessoes?.length ? `- Sessões (ritmo sugerido; a noite acaba num gancho):\n${r.sessoes.map((s, i) => `  ${i + 1}. ${s}`).join("\n")}` : "",
+    r.encontros?.length
+      ? `- Encontros preparados (números na escala do sistema; ajuste ao nível real do grupo):\n${r.encontros
+          .map((e) => `  - ${e.nome} (${e.onde}): ${e.inimigos}. Tática: ${e.tatica}. Saída: ${e.saida}`)
+          .join("\n")}`
+      : "",
   ]
     .filter(Boolean)
     .join("\n");

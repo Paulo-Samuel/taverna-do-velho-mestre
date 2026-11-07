@@ -19,6 +19,8 @@ import { sortearNomes } from "./nomes";
 // Criação do modo história em cinco passos, no estilo "senta aí e conta quem você é": nome, aparência, ofício, passado e
 // onde a história começa (com tom e estilo do mestre). Sem número nenhum na tela; as regras ficam escondidas no sistema
 // "historia". O rascunho vive no localStorage e, ao voltar, a taverna pergunta se é para continuar.
+// Com modo="personagem" (mais um herói numa mesa que já existe) são só os quatro primeiros passos: o quinto é da campanha,
+// e ela já tem nome, começo e tom. O rascunho fica numa chave própria da mesa, para não se misturar com o de /nova.
 
 type Sexo = "homem" | "mulher" | "outro";
 
@@ -65,6 +67,7 @@ const INICIAL: Rascunho = {
   narracao: "media",
 };
 
+/** chave do rascunho de uma campanha nova (/nova); uma mesa que ganha mais um herói usa a sua própria (prop chaveRascunho) */
 const CHAVE = "taverna:rascunho-historia";
 const ROSTOS_POR_RODADA = 8;
 
@@ -76,6 +79,8 @@ const SEXOS: { id: Sexo; nome: string }[] = [
 
 const PASSOS = ["Nome", "Rosto", "Ofício", "Passado", "Começo"];
 const ULTIMO = PASSOS.length - 1;
+/** no modo "personagem" (mesa que já existe) a criação para no Passado: o Começo é da campanha */
+const ULTIMO_PERSONAGEM = 3;
 const TITULOS = ["Como você se chama?", "Como você é?", "Qual é o seu ofício?", "De onde você vem?", "Onde tudo começa?"];
 const SUBTITULOS = [
   "O nome que os bardos vão errar nas canções.",
@@ -91,30 +96,30 @@ function assinarNada() {
   return () => {};
 }
 
-function lerRascunhoBruto(): string | null {
+function lerRascunhoBruto(chave: string): string | null {
   try {
-    return localStorage.getItem(CHAVE);
+    return localStorage.getItem(chave);
   } catch {
     return null;
   }
 }
 
-function gravarRascunho(r: Rascunho | null) {
+function gravarRascunho(chave: string, r: Rascunho | null) {
   try {
-    if (r) localStorage.setItem(CHAVE, JSON.stringify(r));
-    else localStorage.removeItem(CHAVE);
+    if (r) localStorage.setItem(chave, JSON.stringify(r));
+    else localStorage.removeItem(chave);
   } catch {
     // modo privado: o rascunho fica só na memória, como as promessas de taverneiro
   }
 }
 
-function lerRascunho(bruto: string | null): Rascunho | null {
+function lerRascunho(bruto: string | null, ultimo = ULTIMO): Rascunho | null {
   if (!bruto) return null;
   try {
     const o = JSON.parse(bruto) as Partial<Rascunho>;
     if (!o || typeof o !== "object") return null;
     const r = { ...INICIAL, ...o };
-    r.passo = Math.max(0, Math.min(ULTIMO, Number(r.passo) || 0));
+    r.passo = Math.max(0, Math.min(ultimo, Number(r.passo) || 0));
     // rascunhos de antes do passo "Começo" (ou mexidos à mão) caem nos padrões
     r.comeco = comecoDe(r.comeco).id;
     r.aventura = typeof r.aventura === "string" ? r.aventura : "";
@@ -181,12 +186,14 @@ function CartaoHeroi({ retrato, nome, linhas }: { retrato: DadosRetrato | null; 
 /** Quem volta com um herói pela metade: continuar ou começar do zero (o rascunho só some com o segundo botão). */
 function Oferta({
   rascunho,
+  passos,
   origem,
   classe,
   onContinuar,
   onZerar,
 }: {
   rascunho: Rascunho;
+  passos: string[];
   origem?: string;
   classe?: string;
   onContinuar: () => void;
@@ -203,7 +210,7 @@ function Oferta({
           nome={rascunho.nome.trim()}
           linhas={[
             [origem, classe].filter(Boolean).join(" · ") || "Ainda sem origem nem ofício",
-            `Parou no passo ${rascunho.passo + 1} de ${PASSOS.length}: ${PASSOS[rascunho.passo]}`,
+            `Parou no passo ${rascunho.passo + 1} de ${passos.length}: ${passos[rascunho.passo]}`,
           ]}
         />
       </div>
@@ -225,17 +232,28 @@ export type PropsCriacao = {
   sistema: SistemaPublico;
   /** semente vinda do servidor: nomes e rostos sugeridos mudam a cada visita sem quebrar a hidratação */
   semente: string;
-  /** server action que cria campanha + personagem (src/app/nova/historia-acoes.ts) */
+  /** server action que cria campanha + personagem (src/app/nova/historia-acoes.ts), ou só o personagem no modo "personagem" */
   acao: (estado: EstadoHistoria, form: FormData) => Promise<EstadoHistoria>;
   /** aventuras prontas do modo história (só a parte pública; o roteiro fica no servidor) */
   aventuras?: AventuraPublica[];
   /** aventura já marcada ao abrir (link do início: /nova?aventura=<id>) */
   aventuraInicial?: string;
+  /** "campanha" (padrão): mesa nova, cinco passos; "personagem": mais um herói numa mesa que já existe, quatro passos */
+  modo?: "campanha" | "personagem";
+  /** chave do rascunho no localStorage (uma por mesa no modo "personagem"; padrão: a da campanha nova) */
+  chaveRascunho?: string;
+  /** a mesa que ganha o herói (modo "personagem"): para o link de volta e a lista de quem já está sentado */
+  mesa?: { id: number; nome: string; grupo: string[] };
 };
 
-export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventuraInicial }: PropsCriacao) {
-  const salvo = useSyncExternalStore(assinarNada, lerRascunhoBruto, () => null);
-  const doSalvo = useMemo(() => lerRascunho(salvo), [salvo]);
+export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventuraInicial, modo = "campanha", chaveRascunho, mesa }: PropsCriacao) {
+  const soPersonagem = modo === "personagem";
+  const passos = soPersonagem ? PASSOS.slice(0, ULTIMO_PERSONAGEM + 1) : PASSOS;
+  const ultimo = passos.length - 1;
+  const chave = chaveRascunho ?? CHAVE;
+  const lerBruto = useMemo(() => () => lerRascunhoBruto(chave), [chave]);
+  const salvo = useSyncExternalStore(assinarNada, lerBruto, () => null);
+  const doSalvo = useMemo(() => lerRascunho(salvo, ultimo), [salvo, ultimo]);
   const [editado, setEditado] = useState<Rascunho | null>(null);
   // rascunho com algum progresso: antes de tudo, a taverna pergunta se é para continuar (nada é carregado sem pedir)
   const pendente = !editado && doSalvo && temProgresso(doSalvo) ? doSalvo : null;
@@ -247,13 +265,13 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
 
   // a ação falhou: o rascunho (tirado do armazenamento no envio) volta, para sobreviver a um recarregar da página
   useEffect(() => {
-    if (estado.erro && editado) gravarRascunho(editado);
-  }, [estado, editado]);
+    if (estado.erro && editado) gravarRascunho(chave, editado);
+  }, [estado, editado, chave]);
 
   function mudar(p: Partial<Rascunho>) {
     const novo = { ...r, ...p };
     setEditado(novo);
-    gravarRascunho(novo);
+    gravarRascunho(chave, novo);
     setAviso(null);
   }
 
@@ -297,10 +315,10 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
   }
 
   /** o passo mais adiantado que dá para abrir: o primeiro com pendência (ou o último, se está tudo certo) */
-  const alcancavel = [0, 1, 2].find((p) => problemaDoPasso(p)) ?? ULTIMO;
+  const alcancavel = [0, 1, 2].find((p) => problemaDoPasso(p)) ?? ultimo;
 
   function irPara(passo: number) {
-    mudar({ passo: Math.max(0, Math.min(ULTIMO, passo)) });
+    mudar({ passo: Math.max(0, Math.min(ultimo, passo)) });
     const reduzido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     window.scrollTo({ top: 0, behavior: reduzido ? "auto" : "smooth" });
   }
@@ -348,7 +366,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
     }
     form.set("jogador", apelidoSalvo());
     // o rascunho sai do armazenamento quando a mesa vai ser criada; se a ação devolver erro, o efeito lá em cima o regrava
-    gravarRascunho(null);
+    gravarRascunho(chave, null);
     enviar(form);
   }
 
@@ -357,7 +375,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
   }
 
   function comecarDoZero() {
-    gravarRascunho(null);
+    gravarRascunho(chave, null);
     setEditado({ ...base });
   }
 
@@ -373,7 +391,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
     mudar({ comeco: id, aventura: "", tom: r.tom === "aventura" ? "sombrio" : r.tom, campanha: r.campanha === aventura.titulo ? "" : r.campanha });
   }
 
-  const progresso = ((r.passo + 1) / PASSOS.length) * 100;
+  const progresso = ((r.passo + 1) / passos.length) * 100;
   const historiaFinal = r.historia.trim() || ganchos[0] || "";
 
   return (
@@ -387,6 +405,19 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
       </div>
 
       <main className="relative z-10 mx-auto w-full max-w-lg px-4 pb-16 pt-6 sm:pt-10">
+        {/* mais um herói numa mesa que já existe: de onde se veio e quem já está sentado */}
+        {soPersonagem && mesa && (
+          <div className="mb-3 text-sm">
+            <Link href={`/mesa/${mesa.id}`} className="-my-2 inline-block py-2 text-xs text-muted hover:text-ambar">
+              ← voltar para {mesa.nome}
+            </Link>
+            <p className="mt-1 text-muted">
+              <span className="text-pergaminho">Mais uma cadeira na mesa.</span>{" "}
+              {mesa.grupo.length ? `Já sentados: ${mesa.grupo.join(", ")}.` : "A mesa ainda está vazia."} Cada personagem pode ser de um jogador diferente
+              no mesmo computador: é só trocar quem age antes de digitar.
+            </p>
+          </div>
+        )}
         <div className="mb-4 flex items-center justify-between gap-3">
           {/* os cinco passos: os já liberados dão para clicar (voltar ao nome sem apertar Voltar quatro vezes); no celular só o
               atual mostra o nome, os outros ficam no número */}
@@ -395,10 +426,10 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
           ) : (
           <nav aria-label="Passos da criação" className="min-w-0 flex-1">
             <p className="sr-only">
-              Passo {r.passo + 1} de {PASSOS.length}: {PASSOS[r.passo]}
+              Passo {r.passo + 1} de {passos.length}: {passos[r.passo]}
             </p>
             <ol className="flex items-center gap-0.5 sm:gap-1">
-              {PASSOS.map((nome, i) => {
+              {passos.map((nome, i) => {
                 const atual = i === r.passo;
                 const feito = !atual && (i < 3 ? !problemaDoPasso(i) : i < r.passo);
                 return (
@@ -434,6 +465,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
         {pendente ? (
           <Oferta
             rascunho={pendente}
+            passos={passos}
             origem={sistema.ancestralidades.find((a) => a.id === pendente.origem)?.nome}
             classe={sistema.classes.find((c) => c.id === pendente.classe)?.nome}
             onContinuar={continuarRascunho}
@@ -450,7 +482,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
               {TITULOS[r.passo]}
             </h1>
             <p className="mt-2 text-center text-sm italic text-muted">{SUBTITULOS[r.passo]}</p>
-            {aventura && r.passo < ULTIMO && (
+            {aventura && r.passo < ultimo && (
               <p className="mx-auto mt-3 w-fit rounded-full border border-ambar/40 bg-ambar/10 px-3 py-1 text-center text-xs text-pergaminho">
                 📜 Aventura escolhida: {aventura.titulo}
               </p>
@@ -839,13 +871,13 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                     ← Voltar
                   </button>
                 )}
-                {r.passo < ULTIMO ? (
+                {r.passo < ultimo ? (
                   <button type="button" onClick={avancar} className="btn-ambar min-h-12 flex-1 py-3 text-base">
                     Continuar →
                   </button>
                 ) : (
                   <button type="submit" className="btn-ambar min-h-12 flex-1 py-3 text-base" disabled={enviando}>
-                    {enviando ? "Acendendo as velas…" : "Começar a aventura"}
+                    {soPersonagem ? (enviando ? "Puxando o banco…" : "Sentar à mesa") : enviando ? "Acendendo as velas…" : "Começar a aventura"}
                   </button>
                 )}
               </div>
@@ -858,22 +890,38 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
           <input type="hidden" name="classe" value={r.classe} />
           <input type="hidden" name="aparencia" value={r.aparencia.trim()} />
           <input type="hidden" name="historia" value={historiaFinal} />
-          <input type="hidden" name="campanha" value={r.campanha.trim()} />
           <input type="hidden" name="retrato" value={retrato ? JSON.stringify(retrato) : ""} />
-          <input type="hidden" name="comeco" value={r.comeco} />
-          <input type="hidden" name="tom" value={tomDaAventura ? "aventura" : tomDe(r.tom).id} />
-          {aventura && <input type="hidden" name="aventura" value={aventura.id} />}
-          <input type="hidden" name="dificuldade" value={r.dificuldade} />
-          <input type="hidden" name="narracao" value={r.narracao} />
+          {/* a campanha (nome, começo, tom, estilo do mestre) só existe quando a mesa é nova */}
+          {!soPersonagem && (
+            <>
+              <input type="hidden" name="campanha" value={r.campanha.trim()} />
+              <input type="hidden" name="comeco" value={r.comeco} />
+              <input type="hidden" name="tom" value={tomDaAventura ? "aventura" : tomDe(r.tom).id} />
+              {aventura && <input type="hidden" name="aventura" value={aventura.id} />}
+              <input type="hidden" name="dificuldade" value={r.dificuldade} />
+              <input type="hidden" name="narracao" value={r.narracao} />
+            </>
+          )}
         </form>
         )}
 
-        <p className="mt-6 text-center text-sm text-muted">
-          Prefere escolher as regras?{" "}
-          <Link href="/nova/avancada" className="text-ambar/90 underline-offset-4 hover:underline">
-            Modo avançado
-          </Link>
-        </p>
+        {soPersonagem ? (
+          mesa && (
+            <p className="mt-6 text-center text-sm text-muted">
+              Mudou de ideia?{" "}
+              <Link href={`/mesa/${mesa.id}`} className="text-ambar/90 underline-offset-4 hover:underline">
+                Voltar para a mesa
+              </Link>
+            </p>
+          )
+        ) : (
+          <p className="mt-6 text-center text-sm text-muted">
+            Prefere escolher as regras?{" "}
+            <Link href="/nova/avancada" className="text-ambar/90 underline-offset-4 hover:underline">
+              Modo avançado
+            </Link>
+          </p>
+        )}
       </main>
     </div>
   );

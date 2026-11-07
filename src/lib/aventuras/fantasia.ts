@@ -1,12 +1,18 @@
 import type { Aventura } from "./tipos";
 
-// Fantasia d20 e afins: D&D 5e, Pathfinder 1e, OSR e Dungeon World. Mundos da casa, nomes da casa.
+// Fantasia d20 e afins: mundos da casa, nomes da casa. Cada aventura nasceu num sistema (o primeiro da lista, que dá o
+// tema do cartão no início), mas todas rodam em qualquer fantasia da taverna: o bloco de regras do sistema traduz as
+// pistas (escritas sem nome de perícia) e `recompensas` traz uma entrada por sistema quando a moeda ou o item muda.
+
+/** Todas as fantasias da casa; a aventura entra com o sistema de origem na frente. */
+export const FANTASIAS = ["dnd5e", "pf2e", "pf1e", "osr", "pbta"] as const;
+export const abertaA = (origem: (typeof FANTASIAS)[number]) => [origem, ...FANTASIAS.filter((s) => s !== origem)];
 
 export const FANTASIA: Aventura[] = [
-  // ---------- D&D 5e ----------
+  // ---------- nascidas no D&D 5e ----------
   {
     id: "mina-que-canta",
-    sistemas: ["dnd5e"],
+    sistemas: abertaA("dnd5e"),
     titulo: "A Mina que Canta",
     chamada: "Os mineiros de Pedravelha ouvem uma canção vindo do fundo da mina. Quem desce para ouvir de perto não volta. Ou volta cantando.",
     duracao: "3 sessões",
@@ -45,12 +51,17 @@ export const FANTASIA: Aventura[] = [
         "selo mantido e Brom punido: vila em paz, prata comum e uma canção triste para sempre",
         "acordo com Brom: muita prata e uma dívida terrível com uma dragoa que um dia se solta",
       ],
-      recompensas: "300 po em prata, uma escama de prata que resiste ao frio, o favor de uma dragoa e a gratidão da vila.",
+      recompensas: {
+        padrao: "300 po em prata, uma escama de prata que resiste ao frio, o favor de uma dragoa e a gratidão da vila.",
+        pf2e: "300 po em prata, uma escama de prata que resiste ao frio (resistência a frio 5 enquanto carregada), o favor de uma dragoa e a gratidão da vila; missão maior: 80 XP para cada um.",
+        osr: "3.000 po em prata (ouro conta XP), uma escama de prata que resiste ao frio, o favor de uma dragoa e a gratidão da vila.",
+        pbta: "Prata para encher as botas, uma escama de prata que resiste ao frio, o favor de uma dragoa e a gratidão da vila: no fim da sessão, marque XP por resolver um vínculo com Lirena ou com Pedravelha.",
+      },
     },
   },
   {
     id: "casamento-do-rei-goblin",
-    sistemas: ["dnd5e"],
+    sistemas: abertaA("dnd5e"),
     titulo: "O Casamento do Rei Goblin",
     chamada: "Vocês foram convidados para um casamento goblin como embaixadores da cidade. A noiva não quer casar, o noivo quer guerra e o bolo está vivo.",
     duracao: "one-shot",
@@ -89,14 +100,19 @@ export const FANTASIA: Aventura[] = [
         "fuga caótica com a noiva: guerra adiada, Gnarlo humilhado",
         "acordo com Morgrub: a embaixada sobrevive, mas a guerra vem",
       ],
-      recompensas: "Um tratado de paz, 150 po em presentes goblins (a maioria roubada de Altamuro), a coroa de lata reserva e um goblin bardo que compõe canções sobre o grupo.",
+      recompensas: {
+        padrao: "Um tratado de paz, 150 po em presentes goblins (a maioria roubada de Altamuro), a coroa de lata reserva e um goblin bardo que compõe canções sobre o grupo.",
+        pf2e: "Um tratado de paz, 150 po em presentes goblins (a maioria roubada de Altamuro), a coroa de lata reserva (item curioso: +1 de item em Diplomacia com goblins) e um goblin bardo que compõe canções sobre o grupo; missão menor: 40 XP para cada um.",
+        osr: "Um tratado de paz, 1.500 po em presentes goblins (ouro conta XP; a maioria roubada de Altamuro), a coroa de lata reserva e um goblin bardo que compõe canções sobre o grupo.",
+        pbta: "Um tratado de paz, um saco de presentes goblins (a maioria roubada de Altamuro), a coroa de lata reserva e um goblin bardo que compõe canções sobre o grupo: no fim da sessão, marque XP por ter evitado (ou causado) uma guerra.",
+      },
     },
   },
 
-  // ---------- Pathfinder 1e ----------
+  // ---------- nascidas no Pathfinder 1e ----------
   {
     id: "torre-do-mago-endividado",
-    sistemas: ["pf1e"],
+    sistemas: abertaA("pf1e"),
     titulo: "A Torre do Mago Endividado",
     chamada: "O mago morreu devendo para um banco anão, uma guilda de ladrões e um diabo. Os três querem que vocês esvaziem a torre. Os três querem coisas diferentes.",
     duracao: "3 sessões",
@@ -135,12 +151,17 @@ export const FANTASIA: Aventura[] = [
         "Orsino entregue ao diabo: favor infernal e consciência pesada",
         "o grupo fica com a torre e as dívidas dela: casa nova, problemas novos",
       ],
-      recompensas: "400 po do tesouro, um grimório menor, o cristal de divinação (se não for entregue) e um credor que lhes deve.",
+      recompensas: {
+        padrao: "400 po do tesouro, um grimório menor, o cristal de divinação (se não for entregue) e um credor que lhes deve.",
+        pf2e: "400 po do tesouro, um grimório com duas magias de 1º círculo, o cristal de divinação (se não for entregue; uma vez por dia, um vislumbre de um lugar conhecido) e um credor que lhes deve; missão maior: 80 XP para cada um.",
+        osr: "4.000 po do tesouro (ouro conta XP), um grimório menor, o cristal de divinação (se não for entregue) e um credor que lhes deve.",
+        pbta: "O tesouro da torre, um grimório menor, o cristal de divinação (se não for entregue) e um credor que lhes deve: no fim da sessão, marque XP por ter escolhido a quem servir.",
+      },
     },
   },
   {
     id: "lobo-de-tres-invernos",
-    sistemas: ["pf1e"],
+    sistemas: abertaA("pf1e"),
     titulo: "O Lobo de Três Invernos",
     chamada: "Nevasca, uma aldeia isolada e um lobo que mata a cada três noites. A aldeia já escolheu o culpado. Vocês têm até a próxima lua para provar que não é ele.",
     duracao: "2 sessões",
@@ -178,14 +199,19 @@ export const FANTASIA: Aventura[] = [
         "Hilda morta para salvar a aldeia: paz amarga, Ansgar some na neve",
         "Hilda foge com Ansgar para a mata: o lobo some, a lenda fica",
       ],
-      recompensas: "250 po da aldeia, peles de lobo, uma adaga de prata e um eremita curandeiro como aliado.",
+      recompensas: {
+        padrao: "250 po da aldeia, peles de lobo, uma adaga de prata e um eremita curandeiro como aliado.",
+        pf2e: "250 po da aldeia, peles de lobo, uma adaga de prata (com runa de ataque +1, se Ansgar a abençoar) e um eremita curandeiro como aliado; missão maior: 80 XP para cada um.",
+        osr: "2.500 po da aldeia (ouro conta XP), peles de lobo, uma adaga de prata e um eremita curandeiro como aliado.",
+        pbta: "O que a aldeia tem para dar, peles de lobo, uma adaga de prata e um eremita curandeiro como aliado: no fim da sessão, marque XP por ter encarado a verdade sobre Hilda.",
+      },
     },
   },
 
-  // ---------- OSR ----------
+  // ---------- nascidas no OSR ----------
   {
     id: "cripta-do-abade-guloso",
-    sistemas: ["osr"],
+    sistemas: abertaA("osr"),
     titulo: "A Cripta do Abade Guloso",
     chamada: "Um mosteiro abandonado, um abade que se enterrou com o tesouro e uma regra simples: tudo que vocês acharem lá embaixo é de vocês. Se voltarem.",
     duracao: "3 sessões",
@@ -223,12 +249,17 @@ export const FANTASIA: Aventura[] = [
         "fuga com parte da prata: a cripta continua faminta",
         "alguém aceita o lugar do Abade na mesa: riqueza infinita e fome eterna",
       ],
-      recompensas: "2.000 pp em prata dos dízimos (ouro conta XP), um cálice abençoado e o mapa verdadeiro do resto do mosteiro.",
+      recompensas: {
+        padrao: "200 po em prata dos dízimos, um cálice abençoado e o mapa verdadeiro do resto do mosteiro.",
+        pf2e: "200 po em prata dos dízimos, um cálice abençoado (água benta à vontade, uma dose por dia) e o mapa verdadeiro do resto do mosteiro; missão maior: 80 XP para cada um.",
+        osr: "2.000 pp em prata dos dízimos (ouro conta XP), um cálice abençoado e o mapa verdadeiro do resto do mosteiro.",
+        pbta: "A prata dos dízimos, um cálice abençoado e o mapa verdadeiro do resto do mosteiro: no fim da sessão, marque XP por ter resistido à mesa posta.",
+      },
     },
   },
   {
     id: "ilha-do-farol-apagado",
-    sistemas: ["osr"],
+    sistemas: abertaA("osr"),
     titulo: "A Ilha do Farol Apagado",
     chamada: "O farol da Ilha Corcunda apagou há três noites. Os navios estão naufragando nos rochedos e ninguém que remou até lá para ver voltou.",
     duracao: "2 sessões",
@@ -266,14 +297,19 @@ export const FANTASIA: Aventura[] = [
         "farol explodido com a pólvora: o ovo morre, a ilha também",
         "fuga com o saque antes da eclosão: rico, mas algo vai seguir o barco",
       ],
-      recompensas: "100 po da guilda, o saque da praia (até 600 po em carga), uma lanterna que nunca apaga e o baú (se ninguém reclamar).",
+      recompensas: {
+        padrao: "100 po da guilda, o saque da praia (até 600 po em carga), uma lanterna que nunca apaga e o baú (se ninguém reclamar).",
+        pf2e: "100 po da guilda, o saque da praia (até 600 po em carga), uma lanterna que nunca apaga (luz como a magia Luz, sem concentração) e o baú (se ninguém reclamar); missão maior: 80 XP para cada um.",
+        osr: "1.000 po da guilda, o saque da praia (até 6.000 po em carga; ouro conta XP), uma lanterna que nunca apaga e o baú (se ninguém reclamar).",
+        pbta: "O pagamento da guilda, o saque da praia, uma lanterna que nunca apaga e o baú (se ninguém reclamar): no fim da sessão, marque XP por ter saído da ilha com alguém que não era do grupo.",
+      },
     },
   },
 
-  // ---------- Dungeon World ----------
+  // ---------- nascidas no Dungeon World ----------
   {
     id: "porta-no-fundo-do-poco",
-    sistemas: ["pbta"],
+    sistemas: abertaA("pbta"),
     titulo: "A Porta no Fundo do Poço",
     chamada: "O poço da última vila antes dos Ermos secou. No fundo, alguém achou uma porta. Ela estava trancada por fora.",
     duracao: "3 sessões",
@@ -311,12 +347,17 @@ export const FANTASIA: Aventura[] = [
         "porta lacrada de novo com sacrifício: a vila se muda, a praga dorme",
         "um acordo com o Jardineiro: água infinita em troca de silêncio eterno",
       ],
-      recompensas: "O martelo do avô de Selma, tesouros anões, a vila em dívida e uma cidade inteira para explorar depois.",
+      recompensas: {
+        padrao: "O martelo do avô de Selma, tesouros anões (uns 350 po), a vila em dívida e uma cidade inteira para explorar depois.",
+        pf2e: "O martelo do avô de Selma (martelo de guerra com runa de ataque +1), tesouros anões (uns 350 po), a vila em dívida e uma cidade inteira para explorar depois; missão maior: 80 XP para cada um.",
+        osr: "O martelo do avô de Selma, tesouros anões (uns 3.500 po; ouro conta XP), a vila em dívida e uma cidade inteira para explorar depois.",
+        pbta: "O martelo do avô de Selma, tesouros anões, a vila em dívida e uma cidade inteira para explorar depois: no fim da sessão, marque XP por ter aprendido algo sobre o mundo lá embaixo.",
+      },
     },
   },
   {
     id: "cacada-ao-cervo-de-prata",
-    sistemas: ["pbta"],
+    sistemas: abertaA("pbta"),
     titulo: "A Caçada ao Cervo de Prata",
     chamada: "O duque promete um título a quem trouxer a cabeça do Cervo de Prata. A floresta promete outra coisa a quem tentar.",
     duracao: "2 sessões",
@@ -354,7 +395,12 @@ export const FANTASIA: Aventura[] = [
         "o cervo é morto: o duque não se cura e o ducado é amaldiçoado",
         "Aurelia escolhe ficar cervo e virar a nova guardiã: a floresta tem uma aliada",
       ],
-      recompensas: "Título e terras (se o duque cumprir), a bênção da floresta (passagem livre), uma flecha de espinho mágica e amigos poderosos de lados diferentes.",
+      recompensas: {
+        padrao: "Título e terras (se o duque cumprir), a bênção da floresta (passagem livre), uma flecha de espinho mágica e amigos poderosos de lados diferentes.",
+        pf2e: "Título e terras (se o duque cumprir), a bênção da floresta (passagem livre pela mata, sem testes para achar o caminho), uma flecha de espinho mágica (munição que enraíza o alvo em caso de acerto crítico) e amigos poderosos de lados diferentes; missão maior: 80 XP para cada um.",
+        osr: "Título e terras (se o duque cumprir; a renda delas conta XP como ouro), a bênção da floresta (passagem livre), uma flecha de espinho mágica e amigos poderosos de lados diferentes.",
+        pbta: "Título e terras (se o duque cumprir), a bênção da floresta (passagem livre), uma flecha de espinho mágica e amigos poderosos de lados diferentes: no fim da sessão, marque XP por ter escolhido entre o duque e a floresta.",
+      },
     },
   },
 ];

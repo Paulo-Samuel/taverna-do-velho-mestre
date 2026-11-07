@@ -83,40 +83,48 @@ export function PainelAcao({
   return (
     <div>
       {(ver || reservar) && (
-        // três linhas de sugestão no desktop (3 × 28 + 2 × 3), uma no celular; encostadas no campo
-        <div className="mb-2 flex min-h-10 flex-col justify-end sm:min-h-[90px]" data-vaga-sugestoes>
+        // três linhas de sugestão no desktop (3 × 28 + 2 × 3), uma no celular e na tela baixa (sem altura reservada); encostadas no campo
+        <div className="mb-2 flex min-h-10 flex-col justify-end largo:min-h-[90px] baixo:mb-1" data-vaga-sugestoes>
           {ver ? (
             <SugestoesCompactas sugestoes={sugestoes} desabilitado={enviando || desabilitado} discretas={sugestoesDiscretas} aoEscolher={(t) => void mandar(t, false)} />
           ) : (
-            <div className="flex min-h-10 items-center justify-center gap-3 text-center text-[13px] italic text-muted sm:min-h-7">{recado}</div>
+            <div className="flex min-h-10 items-center justify-center gap-3 text-center text-[13px] italic text-muted largo:min-h-7">{recado}</div>
           )}
         </div>
       )}
 
-      {bloqueio ? (
-        // a barra inteira leva ao dado (alvo grande no celular); sem destino, é só o aviso
-        aoIrParaBloqueio ? (
-          <button
-            type="button"
-            onClick={aoIrParaBloqueio}
-            className="surgir group flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-ambar/60 bg-ambar/10 px-3 py-1.5 text-left text-sm shadow-[0_0_24px_-12px_var(--ambar)] transition hover:border-ambar hover:bg-ambar/15 focus-visible:border-ambar focus-visible:outline-none"
-          >
-            <span className="min-w-0 text-ambar">
-              <span aria-hidden>🎲 </span>
-              {bloqueio}
-            </span>
-            <span className="shrink-0 rounded-md bg-ambar px-3 py-1.5 text-xs font-semibold text-[#1a120c] transition group-hover:bg-[#f0b762]">
-              Ir para o dado ↑
-            </span>
-          </button>
-        ) : (
-          <div className="flex min-h-11 items-center gap-3 rounded-lg border border-ambar/50 bg-ambar/10 px-3 py-1.5 text-sm text-ambar" role="status">
-            <span aria-hidden>🎲</span> {bloqueio}
+      {/* a barra de "role o dado" fica por cima do campo, que continua no lugar (invisível e inerte): a altura do painel não muda
+          quando o dado chega nem quando é rolado; senão o palco do leitor encolhia uns pixels e o cartão, encolhido na medida da
+          página, pulava para a página seguinte no meio da rolagem */}
+      <div className="relative">
+        {bloqueio && (
+          <div className="absolute inset-0 flex" data-bloqueio>
+            {/* a barra inteira leva ao dado (alvo grande no celular); sem destino, é só o aviso */}
+            {aoIrParaBloqueio ? (
+              <button
+                type="button"
+                onClick={aoIrParaBloqueio}
+                className="surgir group flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-ambar/60 bg-ambar/10 px-3 py-1.5 text-left text-sm shadow-[0_0_24px_-12px_var(--ambar)] transition hover:border-ambar hover:bg-ambar/15 focus-visible:border-ambar focus-visible:outline-none"
+              >
+                <span className="min-w-0 text-ambar">
+                  <span aria-hidden>🎲 </span>
+                  {bloqueio}
+                </span>
+                <span className="shrink-0 rounded-md bg-ambar px-3 py-1.5 text-xs font-semibold text-[#1a120c] transition group-hover:bg-[#f0b762]">
+                  Ir para o dado ↑
+                </span>
+              </button>
+            ) : (
+              <div className="flex min-h-11 w-full items-center gap-3 rounded-lg border border-ambar/50 bg-ambar/10 px-3 py-1.5 text-sm text-ambar" role="status">
+                <span aria-hidden>🎲</span> {bloqueio}
+              </div>
+            )}
           </div>
-        )
-      ) : (
+        )}
         <form
-          className="flex items-end gap-2"
+          className={`flex items-end gap-2 ${bloqueio ? "invisible" : ""}`}
+          inert={bloqueio ? true : undefined}
+          aria-hidden={bloqueio ? true : undefined}
           onSubmit={(e) => {
             e.preventDefault();
             void mandar(texto, true);
@@ -164,7 +172,7 @@ export function PainelAcao({
             )}
           </button>
         </form>
-      )}
+      </div>
     </div>
   );
 }

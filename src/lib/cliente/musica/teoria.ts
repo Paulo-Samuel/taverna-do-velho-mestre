@@ -82,6 +82,8 @@ export const ROTULO_HUMOR: Record<HumorMusical, string> = {
   sombrio: "sombrio",
 };
 
+export const ROTULO_ENERGIA: Record<Energia, string> = { baixa: "baixa", media: "média", alta: "alta" };
+
 /** energia da cena: densidade de notas (0..1) e multiplicador de volume */
 export const DENSIDADE: Record<Energia, number> = { baixa: 0.45, media: 0.72, alta: 1 };
 export const VOLUME_ENERGIA: Record<Energia, number> = { baixa: 0.8, media: 1, alta: 1.15 };

@@ -271,6 +271,8 @@ export type Cena = {
   combate?: { ativo: boolean; rodada: number; vez: number; ordem: Combatente[] } | null;
   /** trilha sonora: humor e energia da cena */
   musica?: { humor: HumorMusical; energia: "baixa" | "media" | "alta" } | null;
+  /** id da última mensagem da mesa quando o humor atual começou a tocar (o prompt conta os turnos do mestre desde então) */
+  musicaDesde?: number;
   /** ações sugeridas pelo mestre para o próximo passo; somem quando alguém age */
   sugestoes?: SugestaoAcao[];
 };

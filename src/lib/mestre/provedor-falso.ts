@@ -92,6 +92,24 @@ export const provedorFalso: Provedor = {
     const combate = combateDoSistema(sistema);
     const escala = escalaDe(ferramentas);
 
+    // Continuação pedida por index.ts (o turno acabou sem narração): só a ferramenta narrar está disponível.
+    // "[mudo total]" na ação ignora até a continuação, para ver o erro "O mestre não narrou nada" na tela.
+    if (ferramentas.length === 1 && tem("narrar")) {
+      // (o pedido original vem antes do "---" da continuação: a ação está no prompt inteiro, não em `acao`)
+      if (/\[mudo total\]/i.test(prompt)) return;
+      await usar("narrar", {
+        texto:
+          "Bruno Três-Dedos larga o pano no balcão e olha para você como quem acaba de lembrar que tinha uma história para contar.\n\n\"Ia me esquecendo\", ele diz, baixo. \"O sujeito da carta deixou outra coisa: disse que volta antes do sino da capela.\" Lá fora, o sino ainda não tocou.",
+      });
+      return;
+    }
+    // Ensaio da rede de segurança: "[mudo]" na ação faz o mestre de teste registrar a cena e terminar SEM narrar
+    // (como o modelo que narra só no raciocínio); index.ts então pede a continuação acima. Nada de texto, nem de erro de ferramenta.
+    if (/\[mudo/.test(acao)) {
+      if (tem("atualizar_cena")) await executar("atualizar_cena", { situacao: "O mestre de teste ficou mudo de propósito." }).catch(() => undefined);
+      return;
+    }
+
     // modo história: cena com título e música, NPC com personalidade, teste rolado pelo jogador e ações sugeridas
     if (tem("pedir_teste") || tem("sugerir_acoes")) {
       const sugerir = () =>
@@ -157,6 +175,7 @@ export const provedorFalso: Provedor = {
         momento: "Noite, primeiro dia",
         clima: "Garoa fria e insistente",
         situacao: "Um bardo desafina, a taverneira conta moedas e alguém lá fora não para de olhar pela janela.",
+        musica: { humor: "taverna", energia: "baixa" },
       });
       await diga("A taverna range com o vento. Um bardo desafina no canto, alguém derruba uma caneca, e todos os olhos se viram para vocês. ");
       await usar("anotar_diario", { tipo: "npc", titulo: "Berta, a taverneira", texto: "Braços de ferreira, paciência de mosquito. Sabe tudo da estrada.", status: "neutro" });
@@ -200,7 +219,8 @@ export const provedorFalso: Provedor = {
           return;
         }
       }
-      await usar("atualizar_cena", { combate: { acao: "encerrar" }, situacao: "Silêncio, gemidos e o cheiro de vitória mal lavada." });
+      // luta acabou bem: a trilha troca para vitória (o mestre de verdade segue a mesma regra do prompt)
+      await usar("atualizar_cena", { combate: { acao: "encerrar" }, situacao: "Silêncio, gemidos e o cheiro de vitória mal lavada.", musica: { humor: "vitoria", energia: "media" } });
       await diga("O último bandido cai. O silêncio que sobra parece até educado. ");
       await usar("conceder_xp", { personagens: "todos", quantidade: 150, motivo: "Venceram os salteadores da estrada" });
       await usar("anotar_diario", { tipo: "missao", titulo: "O bandido da estrada velha", status: "concluida", texto: "Os salteadores foram despachados. Falta cobrar a Berta." });
@@ -218,9 +238,11 @@ export const provedorFalso: Provedor = {
     }
 
     if (/atac|lut|brig|golpe|espad|machad|combat|soco|chut|emboscad/.test(acao) || sorte(0.3)) {
+      // luta começou: a trilha troca para combate
       await usar("atualizar_cena", {
         local: "Estrada velha, saída da vila",
         situacao: "Dois salteadores saem do mato com facas enferrujadas e muita autoestima.",
+        musica: { humor: "combate", energia: "alta" },
         combate: {
           acao: "iniciar",
           inimigos: [

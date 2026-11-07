@@ -1,12 +1,14 @@
+import { abertaA } from "./fantasia";
 import type { Aventura } from "./tipos";
 
 // Pathfinder 2e: aventuras de nível baixo com combate tático (três ações, terreno, inimigos que usam o cenário) e
-// perícias que importam. Mundo da casa: nada de cenário oficial.
+// perícias que importam. Mundo da casa: nada de cenário oficial. As três primeiras rodam em qualquer fantasia da
+// taverna (pistas sem nome de perícia; recompensa por sistema); "A Forja Afundada" é masmorra feita para o PF2e.
 
 export const PATHFINDER: Aventura[] = [
   {
     id: "feira-dos-automatos",
-    sistemas: ["pf2e"],
+    sistemas: abertaA("pf2e"),
     titulo: "A Feira dos Autômatos",
     chamada: "O campeão mecânico do torneio da guilda acordou com vontade própria. A guilda quer alguém descartável para desligá-lo: vocês.",
     duracao: "3 sessões",
@@ -33,10 +35,10 @@ export const PATHFINDER: Aventura[] = [
         { nome: "Torre do relógio da guilda", texto: "pêndulos enormes, sótão trancado" },
       ],
       pistas: [
-        "Nos destroços da arena há uma engrenagem com a marca dos Fundidores (Manufatura ou Sociedade identificam).",
+        "Nos destroços da arena há uma engrenagem com a marca dos Fundidores: um artesão ou quem conhece as guildas da cidade reconhece o selo.",
         "O Brasão deixa riscos nas paredes das Subforjas: o desenho de uma torre de relógio e de uma mulher de óculos.",
-        "Pipa, se tratada com respeito (Diplomacia) ou paga em sucata, leva ao Brasão e conta que ele chora óleo.",
-        "Os registros da guilda (Ladroagem ou um aprendiz fofoqueiro) mostram que Odile não foi vista desde a demissão.",
+        "Pipa, se tratada com respeito ou paga em sucata, leva ao Brasão e conta que ele chora óleo.",
+        "Os registros da guilda (quem souber abrir uma gaveta trancada, ou um aprendiz fofoqueiro) mostram que Odile não foi vista desde a demissão.",
       ],
       reviravoltas: ["O Brasão é inocente e consciente: quem precisa ser parado é quem pagou vocês.", "Arrancar o cristal, como Varenne exige, explode metade da torre."],
       relogio: ["Gaspard solta mais ratos-mecânicos", "caçadores de recompensa da guilda entram nas Subforjas", "Varenne tenta arrancar o cristal à força", "o cristal entra em colapso e a torre treme"],
@@ -45,12 +47,17 @@ export const PATHFINDER: Aventura[] = [
         "o autômato desligado e o cristal entregue: muito ouro e uma consciência pesada",
         "fuga com Brasão e Odile pelos canais: aliados fiéis e uma guilda inimiga",
       ],
-      recompensas: "150 po ou equivalente, uma ferramenta de inventor +1, o Brasão como aliado em emergências e a gratidão de Odile (itens sob encomenda).",
+      recompensas: {
+        padrao: "150 po ou equivalente, um jogo de ferramentas de inventor de qualidade superior, o Brasão como aliado em emergências e a gratidão de Odile (itens sob encomenda).",
+        pf2e: "150 po ou equivalente, ferramentas de artesão com bônus de item +1, o Brasão como aliado em emergências e a gratidão de Odile (itens sob encomenda); missão maior: 80 XP para cada um.",
+        osr: "1.500 po ou equivalente (ouro conta XP), um jogo de ferramentas de inventor de qualidade superior, o Brasão como aliado em emergências e a gratidão de Odile (itens sob encomenda).",
+        pbta: "Uma bolsa pesada da guilda, um jogo de ferramentas de inventor de qualidade superior, o Brasão como aliado em emergências e a gratidão de Odile (itens sob encomenda): no fim da sessão, marque XP por ter decidido o que é uma pessoa.",
+      },
     },
   },
   {
     id: "kobolds-pedem-socorro",
-    sistemas: ["pf2e"],
+    sistemas: abertaA("pf2e"),
     titulo: "Os Kobolds Pedem Socorro",
     chamada: "Uma delegação de kobolds chega com bandeira branca, um bolo queimado e um problema de mortos-vivos que, juram, não foi culpa deles.",
     duracao: "2 sessões",
@@ -76,8 +83,8 @@ export const PATHFINDER: Aventura[] = [
         { nome: "Capela da vila", texto: "o sótão de Absalino, cheio de livros proibidos" },
       ],
       pistas: [
-        "O mapa que levou os kobolds à cripta tem tinta de igreja e caligrafia de escriba (Sociedade ou Religião).",
-        "Os mortos evitam a capela, mas não por santidade: foram mandados (Religião ou Ocultismo percebem).",
+        "O mapa que levou os kobolds à cripta tem tinta de igreja e caligrafia de escriba: quem entende de igreja ou de escrita percebe.",
+        "Os mortos evitam a capela, mas não por santidade: foram mandados (quem conhece ritos ou o jeito dos mortos-vivos nota que é ordem, não medo).",
         "Dona Fausta viu Absalino no pântano na noite em que o selo quebrou.",
         "O Barão, se ouvido antes de atacado, diz que alguém \"de batina\" levou o cetro da cripta.",
       ],
@@ -88,12 +95,17 @@ export const PATHFINDER: Aventura[] = [
         "o Barão destruído na força: vitória, mas os kobolds levam a culpa",
         "o cetro fica com os heróis: poder perigoso e um Barão rancoroso",
       ],
-      recompensas: "120 po em joias da cripta, uma varinha de cura menor, o Clã Rabo-Torto como aliado (batedores e armadilhas) e a vila em dívida.",
+      recompensas: {
+        padrao: "120 po em joias da cripta, uma varinha de cura menor, o Clã Rabo-Torto como aliado (batedores e armadilhas) e a vila em dívida.",
+        pf2e: "120 po em joias da cripta, uma varinha de Curar de 1º círculo, o Clã Rabo-Torto como aliado (batedores e armadilhas) e a vila em dívida; missão menor: 40 XP para cada um.",
+        osr: "1.200 po em joias da cripta (ouro conta XP), uma varinha de cura menor, o Clã Rabo-Torto como aliado (batedores e armadilhas) e a vila em dívida.",
+        pbta: "Joias da cripta, uma varinha de cura menor, o Clã Rabo-Torto como aliado (batedores e armadilhas) e a vila em dívida: no fim da sessão, marque XP por ter feito vila e kobolds se olharem nos olhos.",
+      },
     },
   },
   {
     id: "barco-das-doze-lanternas",
-    sistemas: ["pf2e"],
+    sistemas: abertaA("pf2e"),
     titulo: "O Barco das Doze Lanternas",
     chamada: "Uma barca-cassino desce o rio por três noites. Na primeira, o dono aparece morto. Na segunda, aparece vivo de novo.",
     duracao: "3 sessões",
@@ -120,9 +132,9 @@ export const PATHFINDER: Aventura[] = [
         { nome: "Roda de pás e casa de máquinas", texto: "lugar perfeito para cair no rio" },
       ],
       pistas: [
-        "Cheiro de amêndoa no copo de Fenn: veneno (Medicina ou Manufatura). Só Seraphine e o garçom tocaram na garrafa.",
+        "Cheiro de amêndoa no copo de Fenn: veneno, para quem entende de remédios ou de alquimia. Só Seraphine e o garçom tocaram na garrafa.",
         "Tobias viu \"dois Fenns\" na cabine; ele mente sobre o motivo de estar lá, mas não sobre isso.",
-        "O \"Fenn\" vivo não lembra de uma cicatriz, erra o nome do papagaio e cantarola a mesma modinha de outro passageiro (Percepção ou Sociedade).",
+        "O \"Fenn\" vivo não lembra de uma cicatriz, erra o nome do papagaio e cantarola a mesma modinha de outro passageiro: quem presta atenção nas pessoas, ou conhece a alta roda, estranha.",
         "Irmã Calêndula tem um dossiê sobre o cofre e as notas; revela se confiar no grupo.",
       ],
       reviravoltas: ["O morto que volta não é milagre nem necromancia: é um doppelganger, e ele já está fingindo ser outro.", "Seraphine é a assassina, mas Ninguém é a ameaça maior."],
@@ -132,7 +144,108 @@ export const PATHFINDER: Aventura[] = [
         "acordo com Seraphine pelo cofre: ouro e uma assassina como sócia",
         "notas promissórias queimadas no rio: metade da barca em dívida com o grupo",
       ],
-      recompensas: "200 po da coroa ou do cofre, um anel de disfarce, uma nota promissória perdoada e contatos no submundo da capital.",
+      recompensas: {
+        padrao: "200 po da coroa ou do cofre, um anel de disfarce, uma nota promissória perdoada e contatos no submundo da capital.",
+        pf2e: "200 po da coroa ou do cofre, um anel de disfarce (Impersonar com bônus de item +1 e um rosto guardado), uma nota promissória perdoada e contatos no submundo da capital; missão maior: 80 XP para cada um.",
+        osr: "2.000 po da coroa ou do cofre (ouro conta XP), um anel de disfarce, uma nota promissória perdoada e contatos no submundo da capital.",
+        pbta: "A recompensa da coroa ou o cofre, um anel de disfarce, uma nota promissória perdoada e contatos no submundo da capital: no fim da sessão, marque XP por ter descoberto quem era quem.",
+      },
+    },
+  },
+
+  // ---------- masmorra para o PF2e: três facções, armadilhas pela tabela de CD e um chefe de duas fases ----------
+  {
+    id: "forja-afundada",
+    sistemas: ["pf2e"],
+    titulo: "A Forja Afundada",
+    chamada: "O lago de Vau-Fundo começou a ferver. Lá embaixo, uma forja anã que ninguém apagou, kobolds que a chamam de dragão e um culto que quer temperar o mundo nela.",
+    duracao: "3 sessões",
+    recomendado: "nível 3 a 5 (masmorra: facções, armadilhas e um chefe de duas fases)",
+    tom: "exploração de masmorra tática com facções e calor crescente",
+    cenario:
+      "Vau-Fundo, vila de pescadores à beira do Lago Caldeira, nas montanhas. Há três semanas a água esquenta: os peixes boiam cozidos, vapor sobe das margens e à noite o lago brilha laranja no meio. Os velhos lembram que, debaixo da água, há a Forja de Brannoc, cidadela anã que afundou quando o clã fugiu há duzentos anos. A anã Ingrith Brannoc chegou com um mapa de família e uma proposta: descer pela galeria seca do penhasco, descobrir o que acendeu a forja e trazer de volta o martelo do clã. Ela paga em barras de ferro anão e não diz tudo o que sabe.",
+    abertura:
+      "A galeria do penhasco cospe vapor morno e cheiro de ferro quente. Ingrith Brannoc ergue a lanterna diante de um portão anão entreaberto, as dobradiças fundidas de calor: \"Ninguém abre isso há duzentos anos. Alguém abriu.\" No chão, pegadas pequenas com garras, dezenas, todas indo para dentro, e uma faixa de pano vermelho amarrada numa estaca, com um dizer costurado: AQUI SE TEMPERA. Do fundo, muito longe, vem o som de um martelo batendo em ritmo de coração. Então uma voz de brasa, baixa, dentro das paredes: \"Mais visitas. Que bom. Está ficando quente aqui.\"",
+    roteiro: {
+      verdade:
+        "Os anões de Brannoc acorrentaram Cinzal, um elemental de fogo, à bigorna-mãe para alimentar a forja e o abandonaram quando o lago invadiu os salões baixos. Há um mês o Culto da Última Têmpera, da ferreira Ysolde Grã-Lume, achou a entrada seca, reacendeu Cinzal à força (por isso o lago ferve) e forja nele uma arma para quebrar as correntes e \"temperar o mundo\" no incêndio. Os kobolds do Clã Escama-de-Fuligem, donos dos salões altos há gerações, adoram Cinzal como o dragão que respira na pedra, vendem passagem e armam corredores. Ingrith sabe a palavra anã que solta Cinzal sem fúria (\"Brannoc paga a dívida\"), mas quer o martelo antes de contar.",
+      npcs: [
+        { nome: "Ingrith Brannoc", quem: "anã, última do clã, contratante", voz: "seca, dívida e honra na mesma frase", quer: "o Martelo da Têmpera e consertar o que o clã fez", segredo: "sabe a palavra que liberta Cinzal em paz, mas teme que a usem antes de ela pegar o martelo" },
+        { nome: "Vaskra Três-Cinzas", quem: "chefe kobold do Clã Escama-de-Fuligem", voz: "sussurra e depois grita, negocia tudo nos dedos", quer: "o dragão fica, os humanos de pano vermelho saem", segredo: "conhece o caminho seco até a Fundição Baixa e tem um kobold infiltrado no culto" },
+        { nome: "Ysolde Grã-Lume", quem: "ferreira e sumo-sacerdotisa do culto", voz: "calma de quem já decidiu, metáforas de metal, nunca sua", quer: "terminar a arma e soltar Cinzal em fúria", segredo: "está morrendo dos pulmões e quer que o fim do mundo seja obra dela" },
+        { nome: "Cinzal", quem: "elemental de fogo acorrentado à bigorna-mãe", voz: "brasa dentro das paredes, curioso, irônico, faminto de ar", quer: "sair; em paz se puder, em fúria se precisar", segredo: "promete poupar a vila, mas solto sem a palavra anã queima tudo por uma hora" },
+        { nome: "Irmão Tadeu", quem: "cultista arrependido, aprendiz de 17 anos", voz: "gagueja, pede desculpa antes de falar", quer: "voltar para casa", segredo: "a arma precisa do sangue de quem a forjou, e Ysolde pretende usar o dele" },
+      ],
+      locais: [
+        { nome: "Galeria do penhasco e Portão Fundido", texto: "entrada seca, pegadas de kobold, estaca do culto" },
+        { nome: "Salões Altos", texto: "pontes de corda sobre o salão alagado, ninhos kobolds, corredores armados" },
+        { nome: "Salão das Correntes", texto: "sete correntes descem da cúpula ao fundo, vibrando de calor, runas em cada elo" },
+        { nome: "Corredor de Têmpera", texto: "armadilhas anãs rearmadas pelo culto" },
+        { nome: "Salões Afundados", texto: "água até a cintura que vai esquentando; um acólito afogado com um mapa" },
+        { nome: "Fundição Baixa", texto: "bigorna-mãe, Cinzal acorrentado, a arma meio pronta, grades sobre metal derretido" },
+      ],
+      pistas: [
+        "Pegadas de kobold entram, só pegadas humanas saem: dois grupos usam a galeria, e não são amigos.",
+        "As correntes vibram mais perto do fundo; quem toca um elo sente o calor pulsar como batimento e ouve Cinzal.",
+        "Marcas de fuligem em forma de garra dizem onde pisar nos corredores armados; as falsas, feitas pelo culto, são mais frescas.",
+        "O acólito afogado carrega o mapa da Fundição Baixa e um diário com a receita da arma: sangue de quem forja.",
+        "Tadeu, se achado antes do chefe, conta o plano e o ponto fraco: a arma inacabada se parte com frio ou água.",
+        "Ingrith, pressionada ou diante do martelo, revela a palavra que solta Cinzal em paz.",
+      ],
+      reviravoltas: [
+        "O \"dragão\" dos kobolds é um prisioneiro, e o incêndio que ferve o lago é obra de quem diz salvar o mundo.",
+        "Ysolde não quer vencer: quer morrer na forja e voltar fundida ao fogo de Cinzal. Derrubá-la é o que ela espera.",
+      ],
+      relogio: [
+        "o culto termina a lâmina: o lago ferve mais",
+        "os kobolds fecham acordo com o culto e armam os Salões Altos contra o grupo",
+        "Cinzal rompe a primeira corrente: tremores, uma ponte cai",
+        "a arma recebe o sangue de Tadeu: Ysolde marcha para o Salão das Correntes",
+        "Cinzal solto em fúria: gêiser no lago, Vau-Fundo em chamas",
+      ],
+      finais: [
+        "Cinzal solto com a palavra anã: a forja esfria, o elemental sobe ao céu e Ingrith chora com o martelo nas mãos",
+        "culto desfeito e Cinzal mantido preso: a forja vira tesouro de Vau-Fundo e os kobolds cobram pedágio para sempre",
+        "acordo com Ysolde: a arma fica com o grupo, o culto some, o lago continua morno; alguém volta para terminar o serviço",
+        "Cinzal solto em fúria: fuga pela galeria enquanto o lago explode; a vila lembra de quem a queimou",
+      ],
+      recompensas:
+        "O Martelo da Têmpera (martelo de guerra com runa de ataque +1 e runa de golpe), 600 po em barras de ferro anão, uma runa de resistência a fogo gravada na bigorna (para quem Cinzal perdoar), o Clã Escama-de-Fuligem como batedores e Vau-Fundo em dívida. XP: encontro severo no chefe (120) e missão maior (80 a 120) para cada um.",
+      sessoes: [
+        "Vau-Fundo e a descida: lago fervendo, Ingrith e o mapa, Portão Fundido, Salões Altos (negociar com Vaskra ou abrir caminho), primeira armadilha. Gancho: Cinzal diz o nome de alguém do grupo.",
+        "Salão das Correntes e Corredor de Têmpera (armadilhas em sequência), Salões Afundados esquentando, o acólito afogado, Tadeu. Gancho: uma corrente se parte e o salão treme.",
+        "Fundição Baixa: acólitos nas grades, Ysolde em duas fases, as correntes de Cinzal e a escolha (palavra, correntes, acordo ou fuga). Epílogo em Vau-Fundo.",
+      ],
+      encontros: [
+        {
+          nome: "Sentinelas de Escama-de-Fuligem",
+          onde: "Salões Altos, pontes de corda",
+          inimigos: "6 kobolds capangas (nív. 1: CA 16, PV 18, lança/funda +8 1d6+2); Vaskra se a conversa azedar (nív. 3: CA 19, PV 42, lança +11 1d8+4)",
+          tatica: "atiram das pontes e cortam uma corda com alguém no meio (Reflexos CD 18 ou cai na água morna: 1d6 de fogo por turno); nunca aceitam corpo a corpo aberto",
+          saida: "fogem ao primeiro morto ou a uma oferta decente (comida, arma brilhante, expulsar o pano vermelho); Diplomacia CD 18 ou Intimidação CD 20 param a luta",
+        },
+        {
+          nome: "Corredor de Têmpera",
+          onde: "entre o Salão das Correntes e os Salões Afundados",
+          inimigos: "3 armadilhas em sequência: placa com jato de vapor (Percepção CD 20 nota, Ladroagem CD 19 desarma, Reflexos CD 19: 2d10 de fogo), portão de peso que desce atrás (Percepção CD 18, Atletismo CD 22 segura, Ladroagem CD 21 trava) e grade sobre canal de metal (Acrobacia CD 18 para cruzar depressa; parar nela: 2d6 de fogo por turno)",
+          tatica: "a placa empurra para o portão, o portão prende sobre a grade",
+          saida: "quem lê as marcas de fuligem verdadeiras ou vem guiado por um kobold passa sem rolar: a masmorra premia quem fez amigos",
+        },
+        {
+          nome: "Acólitos nas passarelas",
+          onde: "Fundição Baixa, grades sobre metal derretido",
+          inimigos: "4 cultistas (nív. 2: CA 17, PV 30, martelo +10 1d8+3; 1×/luta carvão aceso: Reflexos CD 18, 1d6 de fogo e desprevenido) e 1 acólita (nív. 3: CA 18, PV 36, toque ardente +11 2d6+2 de fogo, Raio Ígneo, Escudo)",
+          tatica: "grades estreitas para negar flanco; empurram para os canais (Atletismo +10 vs Fortitude; no canal: 4d6 de fogo, sair pede Atletismo CD 20)",
+          saida: "rendem-se quando Ysolde cai ou se Tadeu os chama pelo nome",
+        },
+        {
+          nome: "Ysolde Grã-Lume, duas fases (chefe, severo)",
+          onde: "plataforma sobre a bigorna-mãe",
+          inimigos: "Fase 1, a Ferreira (nív. 6: CA 23, PV 95, martelo +16 2d8+7 e 1d6 de fogo; Golpe Temperado, 2 ações: empurra 3 m e deixa desprevenido; Fort +15, Ref +11, Von +13). Fase 2, a Temperada: a 35 PV se joga na forja e volta fundida ao fogo de Cinzal (CA 21, 70 PV novos, resistência a fogo 10, fraqueza a frio e água 10, Golpear +16 2d10+5 de fogo; Chama Partilhada, 1 ação: todos a 3 m, Reflexos CD 24, 3d6 de fogo); as grades esquentam: 2d6 de fogo a quem começa o turno nelas, as plataformas de pedra são seguras",
+          tatica: "fase 1: prende um alvo e manda os acólitos empurrarem o resto para as grades; fase 2: avança devagar falando pela boca de Cinzal, entre o grupo e as correntes",
+          saida: "3 correntes de Cinzal (Atletismo CD 22 ou 20 de dano cada; a palavra anã solta todas): soltas, Cinzal puxa Ysolde para a forja e a fase 2 acaba, mas ele fica livre; água (canal rompido, magia, o lago) tira a resistência dela por um turno",
+        },
+      ],
     },
   },
 ];

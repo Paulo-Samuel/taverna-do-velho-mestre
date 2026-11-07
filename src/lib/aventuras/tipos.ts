@@ -13,6 +13,24 @@ export type NpcRoteiro = {
 
 export type LocalRoteiro = { nome: string; texto: string };
 
+/** Um encontro preparado: a linha de stats na linguagem do sistema da aventura (CA/PV/ataque, CD por nível...). */
+export type EncontroRoteiro = {
+  nome: string;
+  onde: string;
+  /** quem e com que números */
+  inimigos: string;
+  /** como lutam e usam o cenário */
+  tatica: string;
+  /** como o encontro acaba sem ser na última gota de PV (fuga, rendição, negociação) */
+  saida: string;
+};
+
+/**
+ * Recompensas: um texto para todos os sistemas, ou um por sistema (chave = id do sistema; "padrao" vale para os demais).
+ * É assim que "ouro conta XP" fica só no OSR e a runa +1 só no Pathfinder 2e.
+ */
+export type Recompensas = string | Record<string, string>;
+
 /** O que só o mestre vê. Enxuto: entra inteiro no prompt de todo turno. */
 export type Roteiro = {
   /** premissa e a verdade por trás */
@@ -25,7 +43,11 @@ export type Roteiro = {
   /** passos da ameaça, do primeiro ao pior, avançando quando o grupo demora ou falha feio */
   relogio: string[];
   finais: string[];
-  recompensas: string;
+  recompensas: Recompensas;
+  /** uma linha por sessão (objetivo, cena forte, gancho de fim de noite); opcional */
+  sessoes?: string[];
+  /** encontros preparados com números do sistema; opcional (masmorras e aventuras de combate) */
+  encontros?: EncontroRoteiro[];
 };
 
 export type Aventura = {
