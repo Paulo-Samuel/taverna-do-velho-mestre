@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { z } from "zod";
 import { salvarAjuste } from "@/lib/db";
 import { criarProvedor, lerAjustesMestre, type AjustesMestre, type IdProvedor } from "@/lib/mestre";
+import { pastaClaudeCodeDe } from "@/lib/mestre/claude-bin";
 import { ehDestaMaquina } from "@/lib/rede/local";
 import { statusClaude, type StatusClaude } from "./claude-local";
 
@@ -45,7 +46,7 @@ async function exigirMaquina() {
   if (!ehDestaMaquina(h.get("host"), h.get("x-forwarded-for"))) throw new Error("As configurações só mudam na máquina da taverna.");
 }
 
-export type EstadoSalvar = { ok: boolean; mensagem: string } | null;
+export type EstadoSalvar = { ok: boolean; mensagem: string; caminho?: string } | null;
 
 export async function salvarAjustesAcao(_anterior: EstadoSalvar, form: FormData): Promise<EstadoSalvar> {
   await exigirMaquina();
@@ -88,12 +89,23 @@ export async function statusLoginAcao(binCli: string): Promise<StatusClaude> {
 /**
  * Botão "Usar este" do cartão de login: grava só o executável (binCli) nos ajustes, mantendo o resto como está.
  * Serve para quando o caminho configurado sumiu (o app Claude atualizou) e a página achou outro.
+ * Um claude.exe embutido no app (…\claude-code\<versão>\<hash>\claude.exe) é gravado pela pasta `claude-code`: o caminho
+ * versionado morre na atualização seguinte do app, a pasta não (o provedor pega a maior versão que houver nela).
+ * Devolve em `caminho` o que foi gravado, para o campo "Executável" mostrar a mesma coisa.
  */
 export async function usarExecutavelAcao(caminho: string): Promise<EstadoSalvar> {
   await exigirMaquina();
   const r = esquema.shape.binCli.safeParse(String(caminho ?? ""));
   if (!r.success || !r.data) return { ok: false, mensagem: "Caminho de executável inválido." };
-  salvarAjuste("mestre", { ...lerAjustesMestre(), binCli: r.data } satisfies AjustesMestre);
+  const pastaApp = pastaClaudeCodeDe(r.data);
+  const gravar = pastaApp ?? r.data;
+  salvarAjuste("mestre", { ...lerAjustesMestre(), binCli: gravar } satisfies AjustesMestre);
   revalidatePath("/", "layout");
-  return { ok: true, mensagem: "Executável anotado. O próximo turno já usa este Claude Code." };
+  return {
+    ok: true,
+    caminho: gravar,
+    mensagem: pastaApp
+      ? "Anotada a pasta do Claude Code embutido no app (ela acompanha as atualizações do app). O próximo turno já usa este Claude Code."
+      : "Executável anotado. O próximo turno já usa este Claude Code.",
+  };
 }

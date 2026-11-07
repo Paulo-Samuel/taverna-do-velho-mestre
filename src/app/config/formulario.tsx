@@ -250,7 +250,8 @@ function StatusLogin({ binRef, ativo }: { binRef: React.RefObject<HTMLFormElemen
         setGravado(r);
         if (r?.ok) {
           const campo = binRef.current?.elements.namedItem("binCli");
-          if (campo instanceof HTMLInputElement) campo.value = caminho;
+          // o servidor pode ter gravado a pasta do app em vez do caminho versionado: o campo mostra o que foi gravado
+          if (campo instanceof HTMLInputElement) campo.value = r.caminho ?? caminho;
           verificar();
         }
       });
