@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { salvarAjuste } from "@/lib/db";
-import { criarProvedor, type AjustesMestre, type IdProvedor } from "@/lib/mestre";
+import { criarProvedor, lerAjustesMestre, type AjustesMestre, type IdProvedor } from "@/lib/mestre";
 import { ehDestaMaquina } from "@/lib/rede/local";
 import { statusClaude, type StatusClaude } from "./claude-local";
 
@@ -83,4 +83,17 @@ export async function testarConexaoAcao(form: FormData): Promise<ResultadoTeste>
 export async function statusLoginAcao(binCli: string): Promise<StatusClaude> {
   await exigirMaquina();
   return statusClaude(String(binCli ?? "").trim().slice(0, 400) || undefined);
+}
+
+/**
+ * Botão "Usar este" do cartão de login: grava só o executável (binCli) nos ajustes, mantendo o resto como está.
+ * Serve para quando o caminho configurado sumiu (o app Claude atualizou) e a página achou outro.
+ */
+export async function usarExecutavelAcao(caminho: string): Promise<EstadoSalvar> {
+  await exigirMaquina();
+  const r = esquema.shape.binCli.safeParse(String(caminho ?? ""));
+  if (!r.success || !r.data) return { ok: false, mensagem: "Caminho de executável inválido." };
+  salvarAjuste("mestre", { ...lerAjustesMestre(), binCli: r.data } satisfies AjustesMestre);
+  revalidatePath("/", "layout");
+  return { ok: true, mensagem: "Executável anotado. O próximo turno já usa este Claude Code." };
 }

@@ -15,7 +15,7 @@ export const ATRIBUTOS: AtributoDef[] = [
 export const PERICIAS: (PericiaDef & { atributo: string; aliases: string[] })[] = [
   { id: "acrobatismo", nome: "Acrobatismo", atributo: "des", aliases: ["acrobacia", "acrobatics", "equilibrar", "atravessar", "rolar"], descricao: "Equilibrar, Atravessar Oponente, Escapar com estilo." },
   { id: "arcanismo", nome: "Arcanismo", atributo: "int", aliases: ["arcana", "arcano"], descricao: "Magia arcana, construtos e Recordar Conhecimento." },
-  { id: "atletismo", nome: "Atletismo", atributo: "for", aliases: ["athletics", "escalar", "nadar", "saltar", "forcar", "arrombar"], descricao: "Escalar, Nadar, Agarrar, Empurrar, Derrubar, Desarmar." },
+  { id: "atletismo", nome: "Atletismo", atributo: "for", aliases: ["athletics", "escalar", "nadar", "natacao", "saltar", "pular", "pulo", "salto", "correr", "corrida", "levantar peso", "erguer", "forcar", "arrombar"], descricao: "Escalar, Nadar, Agarrar, Empurrar, Derrubar, Desarmar." },
   { id: "manufatura", nome: "Manufatura", atributo: "int", aliases: ["crafting", "oficio", "artesanato", "reparar", "consertar"], descricao: "Criar, Reparar e Identificar itens alquímicos." },
   { id: "dissimulacao", nome: "Dissimulação", atributo: "car", aliases: ["deception", "enganacao", "enganar", "mentir", "fintar", "blefar", "disfarce"], descricao: "Mentir, Fintar, Criar Distração, Disfarçar-se." },
   { id: "diplomacia", nome: "Diplomacia", atributo: "car", aliases: ["diplomacy", "persuasao", "persuadir", "convencer", "pedir", "impressionar"], descricao: "Causar Impressão, Pedir, Obter Informação." },

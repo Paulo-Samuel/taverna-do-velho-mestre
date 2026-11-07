@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { obterCampanha } from "@/lib/db";
 import { estadoMesa } from "@/lib/mesa";
-import { acessoNaPagina } from "@/lib/rede/acesso";
+import { acessoNaPagina, daMaquinaNaPagina } from "@/lib/rede/acesso";
 import { Mesa } from "./mesa";
 import { MesaHistoria } from "./mesa-historia";
 
@@ -14,7 +14,8 @@ export default async function PaginaMesa(props: PageProps<"/mesa/[id]">) {
   if (!campanha) notFound();
   // o HTML inicial já traz mensagens e fichas: sem o PIN, nada disso sai do servidor
   if (!(await acessoNaPagina(campanha))) redirect(`/mesa/${campanha.id}/entrar`);
-  const estado = estadoMesa(campanha.id);
+  // na máquina da taverna o primeiro personagem já fica ativo (hot-seat); pela rede, quem não reivindicou só assiste
+  const estado = estadoMesa(campanha.id, { local: await daMaquinaNaPagina() });
   if (!estado) notFound();
   // ?inicio=1 (criação sem "vou adicionar mais personagens"): o mestre abre a cena assim que a mesa monta
   const comecarSozinho = inicio === "1" && estado.mensagens.length === 0;

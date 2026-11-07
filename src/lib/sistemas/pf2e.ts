@@ -285,12 +285,66 @@ function acharPericia(n: string, exato: boolean) {
   });
 }
 
-const MANOBRAS = /agarr|empurr|derrub|reposicion|desarm(?!.*armadilh)|grapple|shove|trip/;
-const CONHECIMENTO = ["arcanismo", "natureza", "ocultismo", "religiao", "sociedade"];
+// Atalhos por palavra: todos exigem começo de palavra ("natação" tem "atac" dentro e não é ataque; "pulo" não é "impulso").
+const INICIO = "(^|[^a-z])";
+const MANOBRAS = new RegExp(`${INICIO}(agarr|empurr|derrub|reposicion|desarm(?!.*armadilh)|grapple|shove|trip)`);
+const ATAQUE = new RegExp(`${INICIO}(ataq|atac|golpe|strike)`);
+const MAGIA = new RegExp(`${INICIO}(magi|feiti|conjur|truque|spell)`);
+const IMPULSO = new RegExp(`${INICIO}(impulso|impulse|explosao elemental)`);
+const PERCEPCAO = /percep|buscar|procurar|senso de motivo|notar|perceb|vigiar|observar|perception/;
+const CONHECIMENTO =["arcanismo", "natureza", "ocultismo", "religiao", "sociedade"];
+/** Tradição de magia citada no pedido → perícia de conhecimento que a identifica. */
+const TRADICAO_NO_TEXTO: [RegExp, string][] = [
+  [/arcan/, "arcanismo"],
+  [/divin|sagrad|religi/, "religiao"],
+  [/ocult/, "ocultismo"],
+  [/primal|natur/, "natureza"],
+];
 
 const NAO_RECONHECIDO = "teste não reconhecido: d20 sem bônus";
 
-function calcular(ficha: Ficha, teste: string, profundidade = 0): Calculo {
+/** A melhor perícia de conhecimento da ficha (quando o pedido não diz qual). */
+function melhorConhecimento(ficha: Ficha): Calculo {
+  return CONHECIMENTO.map((id) => calcPericia(ficha, id)).sort((x, y) => y.bonus - x.bonus)[0];
+}
+
+/** Perícia de conhecimento citada no pedido ("Recordar Conhecimento sobre religião"), se alguma. */
+function conhecimentoCitado(n: string): string | null {
+  const pericia = acharPericia(n, false);
+  return pericia && CONHECIMENTO.includes(pericia.id) ? pericia.id : null;
+}
+
+/** Perícia cujo nome ou apelido ABRE o texto ("escalar o muro" → Atletismo; "esquivar da armadilha" não é Ladroagem). */
+function periciaNoInicio(n: string) {
+  return PERICIAS.find((p) => [p.id, normalizar(p.nome), ...p.aliases].some((x) => n === x || n.startsWith(`${x} `)));
+}
+
+/**
+ * "Ação (Perícia)": o que está entre parênteses manda quando é o NOME de uma perícia ou salvamento ("Recordar Conhecimento (Religião)"
+ * usa Religião, não a melhor das cinco; "Resistir ao veneno (Fortitude)" é o salvamento), ou uma ação que começa pelo nome dela
+ * ("Subir a torre (escalar a parede)" → Atletismo). O que está FORA do parêntese vem primeiro quando já é salvamento ou perícia:
+ * "Reflexos (esquivar da armadilha)" é Reflexos, não a Ladroagem do apelido "armadilha" solto, e "Medicina (Tratar Ferimentos)" é só
+ * "Medicina", sem repetir o nome. Parênteses com outra coisa ("Ataque (espada)") ficam para os atalhos.
+ */
+function periciaEntreParenteses(ficha: Ficha, teste: string, profundidade: number): Calculo | null {
+  const dentro = teste.match(/\(([^)]+)\)/)?.[1]?.trim();
+  if (!dentro || profundidade >= 1) return null;
+  const fora = normalizar(teste.replace(/\s*\([^)]*\)/, ""));
+  if (SALVAMENTOS.some((s) => s.re.test(fora))) return null;
+  const nd = normalizar(dentro);
+  const periciaFora = acharPericia(fora, true) ?? acharPericia(fora, false);
+  const nomeDentro = acharPericia(nd, true) ?? SALVAMENTOS.find((s) => s.re.test(nd));
+  if (periciaFora) {
+    // "Escalar (Acrobatismo)": o parêntese só troca a perícia quando é o nome dela; explicação solta fica com a perícia de fora
+    if (!nomeDentro || nomeDentro.id === periciaFora.id) return calcPericia(ficha, periciaFora.id);
+  } else if (!nomeDentro && !periciaNoInicio(nd)) return null;
+  const interno = calcular(ficha, dentro, profundidade + 1);
+  if (interno.detalhes.includes(NAO_RECONHECIDO)) return null;
+  return { ...interno, rotulo: `${teste.replace(/\s*\(.*$/, "").trim()} (${interno.rotulo})` };
+}
+
+/** Interpreta o nome do teste pedido pelo mestre e devolve rótulo, bônus e tipo. Exportado para os testes unitários. */
+export function calcular(ficha: Ficha, teste: string, profundidade = 0): Calculo {
   const n = normalizar(teste).replace(/explorar vulnerabilidade/, "saber esoterico");
   const classe = classeDe(ficha);
 
@@ -327,13 +381,34 @@ function calcular(ficha: Ficha, teste: string, profundidade = 0): Calculo {
     return { rotulo: "Iniciativa (Percepção)", bonus: bonusPercepcao(ficha), atributo: "sab", tipo: "percepcao", detalhes: [] };
   }
 
+  // o parêntese vem ANTES dos atalhos: "Recordar Conhecimento (Religião)" é Religião, e não a melhor perícia de conhecimento
+  const entreParenteses = periciaEntreParenteses(ficha, teste, profundidade);
+  if (entreParenteses) return entreParenteses;
+
+  // "Identificar magia/feitiço/aura/runa" é Recordar Conhecimento pela tradição citada (arcana → Arcanismo, divina → Religião,
+  // oculta → Ocultismo, primal → Natureza; sem tradição, a melhor), nunca um ataque de magia; "Identificar item/poção" é Manufatura;
+  // o resto ("Identificar armadilha", "Identificar a criatura") segue a perícia citada ou a melhor de conhecimento, sem rótulo de magia.
+  // Salvamento ou Percepção citados mandam ("Fortitude contra o veneno não identificado", "Percepção para identificar a armadilha"),
+  // e a perícia citada vale em todos os ramos ("Medicina para identificar o veneno" é Medicina, não Manufatura)
+  if (/identific/.test(n) && !SALVAMENTOS.some((s) => s.re.test(n)) && !PERCEPCAO.test(n)) {
+    const citada = acharPericia(n.replace(/identific\w*/, "").trim(), false);
+    if (!citada && /alquim|item|pocao|artefato|veneno|elixir/.test(n)) return calcPericia(ficha, "manufatura", "Identificar · ");
+    if (/magi|feiti|encant|aura|runa|conjur/.test(n)) {
+      const tradicao = TRADICAO_NO_TEXTO.find(([re]) => re.test(n))?.[1];
+      const base = tradicao ? calcPericia(ficha, tradicao) : citada ? calcPericia(ficha, citada.id) : melhorConhecimento(ficha);
+      return { ...base, rotulo: `Identificar magia (${base.rotulo})` };
+    }
+    const base = citada ? calcPericia(ficha, citada.id) : melhorConhecimento(ficha);
+    return { ...base, rotulo: `Identificar (${base.rotulo})` };
+  }
+
   const salvamento = SALVAMENTOS.find((s) => s.re.test(n));
   if (salvamento) {
     const grau = grauEm(classe.prog[salvamento.id], ficha.nivel);
     return { rotulo: salvamento.nome, bonus: bonusSalvamento(ficha, salvamento.id), atributo: salvamento.atributo, tipo: "salvamento", detalhes: [GRAUS[grau].toLowerCase()] };
   }
 
-  if (/magi|feiti|conjur|truque|spell/.test(n)) {
+  if (MAGIA.test(n)) {
     const numero = numeroAtaque(n);
     const bonus = bonusMagia(ficha);
     const multipla = penalidadeMultipla(numero, false);
@@ -342,7 +417,7 @@ function calcular(ficha: Ficha, teste: string, profundidade = 0): Calculo {
     return { rotulo: `Ataque de magia (${tradicaoDe(ficha) ?? "foco"})`, bonus: bonus + multipla, atributo: atributoMagia(ficha), tipo: "ataque", detalhes };
   }
 
-  if (/impulso|impulse|explosao elemental/.test(n)) {
+  if (IMPULSO.test(n)) {
     const numero = numeroAtaque(n);
     const multipla = penalidadeMultipla(numero, false);
     const prog = classe.id === "cinetico" ? classe.prog.cd : "";
@@ -362,7 +437,7 @@ function calcular(ficha: Ficha, teste: string, profundidade = 0): Calculo {
     return { ...base, bonus: base.bonus + multipla, tipo: "ataque", detalhes: [...base.detalhes, ...(multipla ? [`${numero}º ataque: ${multipla}`] : [])] };
   }
 
-  if (/ataq|atac|golpe|strike/.test(n)) {
+  if (ATAQUE.test(n)) {
     const arma = armaDe(ficha);
     const numero = numeroAtaque(n);
     const multipla = penalidadeMultipla(numero, Boolean(arma.agil));
@@ -381,13 +456,15 @@ function calcular(ficha: Ficha, teste: string, profundidade = 0): Calculo {
     return { ...melhor, rotulo: `Escapar (${melhor.rotulo})` };
   }
 
-  if (/percep|buscar|procurar|senso de motivo|notar|perceb|vigiar|observar|perception/.test(n)) {
+  if (PERCEPCAO.test(n)) {
     return { rotulo: "Percepção", bonus: bonusPercepcao(ficha), atributo: "sab", tipo: "percepcao", detalhes: [] };
   }
 
   if (/recordar|lembrar|conhecimento/.test(n)) {
-    const melhor = CONHECIMENTO.map((id) => calcPericia(ficha, id)).sort((x, y) => y.bonus - x.bonus)[0];
-    return { ...melhor, rotulo: `Recordar Conhecimento (${melhor.rotulo})` };
+    // a perícia citada no texto ("Recordar Conhecimento sobre religião") manda; só sem ela vale a melhor das cinco
+    const citada = conhecimentoCitado(n);
+    const base = citada ? calcPericia(ficha, citada) : melhorConhecimento(ficha);
+    return { ...base, rotulo: `Recordar Conhecimento (${base.rotulo})` };
   }
 
   const pericia = acharPericia(n, false);

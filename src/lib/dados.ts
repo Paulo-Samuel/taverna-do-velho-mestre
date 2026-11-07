@@ -35,12 +35,25 @@ const MAX_DADOS = 100;
 const MAX_LADOS = 1000;
 const MAX_EXPLOSOES = 20;
 
+/** Sorteia um inteiro em [min, maxExclusivo), como crypto.randomInt. */
+export type GeradorInteiro = (min: number, maxExclusivo: number) => number;
+
+let gerador: GeradorInteiro = randomInt;
+
+/**
+ * Troca a fonte de aleatoriedade (só para testes e para os scripts golden: uma sequência fixa torna as rolagens previsíveis).
+ * `null` volta ao crypto.randomInt. Em produção ninguém chama isto.
+ */
+export function definirGerador(novo: GeradorInteiro | null): void {
+  gerador = novo ?? randomInt;
+}
+
 export function d(lados: number): number {
-  return randomInt(1, lados + 1);
+  return gerador(1, lados + 1);
 }
 
 export function dadoFate(): number {
-  return randomInt(-1, 2);
+  return gerador(-1, 2);
 }
 
 const TERMO = /([+-]?)(?:(\d*)d(\d+|%|f)((?:k[hl]?|d[hl])\d+)?(!)?|(\d+))/gi;

@@ -23,7 +23,7 @@ import { FixarSelecao } from "@/components/fatos/fixar-selecao";
 import { PainelFatos } from "@/components/fatos/painel-fatos";
 import { useFatos, type ControleFatos } from "@/components/fatos/use-fatos";
 import { PainelFicha } from "@/components/ficha/painel-ficha";
-import { Avatar, quemAgiu } from "@/components/grupo/avatar";
+import { Avatar, emUsoPorOutroAparelho, ondeEsta, outroAparelhoCom, quemAgiu } from "@/components/grupo/avatar";
 import { PainelGrupo } from "@/components/grupo/painel-grupo";
 import { SeletorAtivo } from "@/components/grupo/seletor-ativo";
 import { Convite } from "@/components/presenca/convite";
@@ -245,11 +245,23 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
   const meuPendente = ativo ? (pendentes.find((m) => pidDoPedido(m) === ativo.id) ?? null) : null;
   const sugestoes = mesa.cena.sugestoes ?? [];
   const mostrarSugestoes = !mesa.ocupado && pendentes.length === 0 && Boolean(ativo) && !minhaNaFila && sugestoes.length > 0;
-  /** Este aparelho pode rolar o teste deste personagem? Dono do personagem, máquina da taverna ou aparelho sozinho na mesa. */
+  /** O mestre já tem o resultado do dado na fila (ação interna, invisível) e ainda não começou a narrar. */
+  const lendoResultado = mesa.lendoResultado && !mesa.ocupado && pendentes.length === 0;
+  // ação por um personagem que outro aparelho está usando agora: a pergunta "mandar mesmo assim?" é feita uma vez por personagem
+  const confirmados = useRef(new Set<number>());
+  /**
+   * Este aparelho pode rolar o teste deste personagem? A máquina da taverna rola por qualquer um. Pela rede, só quem está com o
+   * personagem (a presença deste aparelho, confirmada pelo servidor, tem que apontar para ele), o dono dele pelo apelido, ou um
+   * aparelho sozinho na mesa que já escolheu alguém. Quem só assiste não rola por ninguém.
+   */
   const podeRolarPara = (pid: number | null | undefined) => {
-    if (!mesa.eu.clienteId) return false;
+    if (!mesa.eu.clienteId || pid == null) return false;
+    if (euLocal) return true;
+    const minha = mesa.presenca.find((j) => j.clienteId === mesa.eu.clienteId);
+    if (mesa.eu.personagemId === pid && minha?.personagemId === pid) return true;
     const p = mesa.personagens.find((x) => x.id === pid);
-    return mesa.eu.personagemId === pid || euLocal || mesa.presenca.length <= 1 || Boolean(p?.jogador && p.jogador === mesa.eu.apelido);
+    if (p?.jogador && p.jogador === mesa.eu.apelido) return true;
+    return mesa.presenca.length <= 1 && mesa.eu.personagemId !== null;
   };
   const irParaDado = () => {
     if (!meuPendente) return;
@@ -344,11 +356,18 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
   /** Envia o campo, ou uma ação sugerida (sem apagar o que o jogador estava digitando). */
   async function enviar(sugerida?: string) {
     const bruto = (sugerida ?? acao).trim();
-    if (!bruto || meuPendente) return;
+    if (!bruto || meuPendente || mesa.semSinal) return;
     // pergunta ao mestre: vai entre (( )), que ele já trata como fora do jogo
     const pergunta = sugerida === undefined && perguntar;
     const texto = pergunta && !foraDoJogo(bruto) ? `(( ${bruto} ))` : bruto;
+    // o personagem ativo está nas mãos de outro aparelho agora (mesa mista): confirma uma vez antes de agir por ele
+    const outro = ativo && !texto.startsWith("((") ? outroAparelhoCom(mesa, ativo.id) : null;
+    if (outro && ativo && !confirmados.current.has(ativo.id)) {
+      if (!window.confirm(`${outro.apelido} já está jogando com ${ativo.ficha.nome} agora. Mandar mesmo assim?`)) return;
+      confirmados.current.add(ativo.id);
+    }
     pararVoz();
+    // sem sinal, enviarAcao avisa e devolve false: o texto fica no campo
     if (!(await acoes.enviarAcao(texto))) return;
     if (sugerida === undefined) {
       setAcao("");
@@ -360,13 +379,18 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
     if (!rodada || !ativo || texto.startsWith("((")) return;
     const ja = new Set(agiram).add(ativo.id);
     const i = mesa.personagens.findIndex((p) => p.id === ativo.id);
-    const proximo = [...mesa.personagens.slice(i + 1), ...mesa.personagens.slice(0, i)].find((p) => !ja.has(p.id));
-    // pela rede só passa para personagens sem dono ou do mesmo jogador; na máquina da taverna, para qualquer um
-    if (proximo && (euLocal || !proximo.jogador || proximo.jogador === mesa.eu.apelido)) {
+    const faltando = [...mesa.personagens.slice(i + 1), ...mesa.personagens.slice(0, i)].filter((p) => !ja.has(p.id));
+    // só passa para quem divide este teclado: nunca para um personagem em uso em outro aparelho e, pela rede,
+    // só para personagens sem dono ou do mesmo jogador
+    const proximo = faltando.find((p) => !emUsoPorOutroAparelho(mesa, p.id) && (euLocal || !p.jogador || p.jogador === mesa.eu.apelido));
+    if (proximo) {
       acoes.escolherPersonagem(proximo.id);
       setAviso(`Vez de ${proximo.ficha.nome}. Passe o teclado!`);
-    } else if (!proximo) {
+    } else if (!faltando.length) {
       setAviso("Todo mundo agiu. O mestre vai narrar.");
+    } else {
+      const quem = outroAparelhoCom(mesa, faltando[0].id);
+      setAviso(quem ? `Esperando ${faltando[0].ficha.nome}, que está ${ondeEsta(quem, euLocal)}.` : `Esperando ${faltando[0].ficha.nome}.`);
     }
   }
 
@@ -446,7 +470,12 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
     if (fim) return <FimDaNoite key={m.id} sessao={fim.sessao} data={fim.data} />;
     if (m.tipo === "dado" && d.tipo === "cena_titulo") return <AberturaCapitulo key={m.id} titulo={d.titulo} local={d.local} momento={d.momento} />;
     if (m.tipo === "dado" && dadosDoPedido(m).tipo === "pedido_teste")
-      return <PedidoTeste key={m.id} mensagem={m} personagem={personagemDe(pidDoPedido(m))} podeRolar={podeRolarPara(pidDoPedido(m))} rolar={acoes.rolarTeste} />;
+      return (
+        // sem sinal, o cartão inteiro (Rolar, Aceitar, Rerrolar) fica inerte até a conexão voltar
+        <div key={m.id} inert={mesa.semSinal || undefined} className={mesa.semSinal ? "opacity-60" : undefined}>
+          <PedidoTeste mensagem={m} personagem={personagemDe(pidDoPedido(m))} podeRolar={podeRolarPara(pidDoPedido(m))} rolar={acoes.rolarTeste} />
+        </div>
+      );
     if (m.tipo === "dado")
       return (
         <div key={m.id} className="my-5">
@@ -496,6 +525,18 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
         <p className="my-8 flex items-center justify-center gap-2 text-sm italic text-muted" role="status">
           O mestre coça a barba e pensa
           <Pontinhos />
+        </p>
+      ),
+    });
+  // o dado já foi rolado e o resultado espera na fila (invisível): sem isto o palco ficava mudo entre o dado e a narração
+  else if (lendoResultado)
+    cauda.push({
+      chave: "lendo",
+      no: cenas ? (
+        <MestreEscrevendo frase="O mestre lê o resultado" />
+      ) : (
+        <p className="my-8 flex items-center justify-center gap-2 text-sm italic text-muted" role="status" data-lendo-resultado>
+          O mestre lê o resultado…
         </p>
       ),
     });
@@ -685,6 +726,13 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
             style={{ background: "radial-gradient(ellipse 48% 75% at 50% 42%, color-mix(in srgb, var(--surface) 55%, transparent), transparent 78%)" }}
             aria-hidden
           />
+          {/* conexão caída há mais de 3 s: a faixa some sozinha quando o fluxo de eventos volta */}
+          {mesa.semSinal && (
+            <div role="alert" data-sem-sinal className="relative z-10 flex shrink-0 items-center justify-center gap-2 border-b border-sangue/50 bg-sangue/15 px-4 py-2 text-center text-sm text-foreground">
+              <span className="size-2 shrink-0 animate-pulse rounded-full bg-sangue" aria-hidden />
+              Sem sinal da taverna — tentando de novo…
+            </div>
+          )}
           <Anteriormente
             campanhaId={mesa.campanha.id}
             nome={mesa.campanha.nome}
@@ -791,10 +839,12 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
               {ativo && (
                 <div className="mb-1 flex min-h-10 flex-col justify-end sm:min-h-[90px]" data-vaga-sugestoes>
                   {mostrarSugestoes ? (
-                    <SugestoesCompactas sugestoes={sugestoes} discretas={cenas && !noFimDaCena} aoEscolher={(t) => void enviar(t)} />
+                    <SugestoesCompactas sugestoes={sugestoes} desabilitado={mesa.semSinal} discretas={cenas && !noFimDaCena} aoEscolher={(t) => void enviar(t)} />
                   ) : (
                     <div className="flex min-h-10 items-center justify-center gap-3 text-center text-[13px] italic text-muted sm:min-h-7">
-                      {mesa.ocupado ? (
+                      {lendoResultado ? (
+                        "O mestre lê o resultado…"
+                      ) : mesa.ocupado ? (
                         <>
                           <span>O mestre coça a barba e escreve…</span>
                           <button
@@ -869,7 +919,11 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
                       campo.current?.focus();
                     }}
                   />
-                  <button className="btn-ambar h-11 shrink-0 px-4" disabled={!acao.trim()} title="Enviar (Enter) · Shift+Enter quebra a linha">
+                  <button
+                    className="btn-ambar h-11 shrink-0 px-4"
+                    disabled={!acao.trim() || mesa.semSinal}
+                    title={mesa.semSinal ? "Sem sinal da taverna: espere a conexão voltar" : "Enviar (Enter) · Shift+Enter quebra a linha"}
+                  >
                     {perguntar ? "Enviar" : "Agir"}
                   </button>
                 </div>

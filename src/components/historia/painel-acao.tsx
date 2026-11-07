@@ -26,6 +26,7 @@ export function PainelAcao({
   campoRef,
   preencher,
   sugestoesDiscretas = false,
+  desabilitado = false,
 }: {
   sugestoes: SugestaoAcao[];
   mostrarSugestoes: boolean;
@@ -46,6 +47,8 @@ export function PainelAcao({
   preencher?: { texto: string; n: number } | null;
   /** leitor cena a cena: a pessoa ainda não chegou ao fim da cena */
   sugestoesDiscretas?: boolean;
+  /** sem sinal da taverna: o campo continua editável (o texto não se perde), mas nada sai até a conexão voltar */
+  desabilitado?: boolean;
 }) {
   const [texto, setTexto] = useState("");
   // pedido novo de preencher: ajusta o estado durante a renderização (sem efeito), como manda o React
@@ -61,7 +64,7 @@ export function PainelAcao({
 
   async function mandar(t: string, limpar: boolean) {
     const limpo = t.trim();
-    if (!limpo || enviando || bloqueio) return;
+    if (!limpo || enviando || bloqueio || desabilitado) return;
     // pergunta ao mestre (só o que veio do campo; sugestão é sempre ação)
     const pergunta = limpar && perguntar;
     setEnviando(true);
@@ -83,7 +86,7 @@ export function PainelAcao({
         // três linhas de sugestão no desktop (3 × 28 + 2 × 3), uma no celular; encostadas no campo
         <div className="mb-2 flex min-h-10 flex-col justify-end sm:min-h-[90px]" data-vaga-sugestoes>
           {ver ? (
-            <SugestoesCompactas sugestoes={sugestoes} desabilitado={enviando} discretas={sugestoesDiscretas} aoEscolher={(t) => void mandar(t, false)} />
+            <SugestoesCompactas sugestoes={sugestoes} desabilitado={enviando || desabilitado} discretas={sugestoesDiscretas} aoEscolher={(t) => void mandar(t, false)} />
           ) : (
             <div className="flex min-h-10 items-center justify-center gap-3 text-center text-[13px] italic text-muted sm:min-h-7">{recado}</div>
           )}
@@ -146,9 +149,9 @@ export function PainelAcao({
           />
           <button
             className="grid size-11 shrink-0 place-items-center rounded-md bg-ambar text-lg text-[#1a120c] shadow-[0_0_24px_-6px_var(--ambar)] transition hover:bg-[#f0b762] disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={!texto.trim() || enviando}
+            disabled={!texto.trim() || enviando || desabilitado}
             aria-label={enviando ? "Enviando" : perguntar ? "Enviar a pergunta" : "Enviar ação"}
-            title="Enviar (Enter · Shift+Enter quebra a linha)"
+            title={desabilitado ? "Sem sinal da taverna: espere a conexão voltar" : "Enviar (Enter · Shift+Enter quebra a linha)"}
           >
             {enviando ? (
               <span className="pensando text-base" aria-hidden>

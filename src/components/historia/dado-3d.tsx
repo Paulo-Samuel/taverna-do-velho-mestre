@@ -144,7 +144,8 @@ export function Dado3D({ valor, rolando, tamanho = 140, destaque = null, aoParar
   const girarPlano = numeroPlano === null && !reduzido && (girando || modo === "plano");
   const brilho = parado && destaque ? destaque : null;
 
-  const anuncio = girando
+  // para o leitor de tela: "Rolando" só quando o jogador rolou de fato (esperando o clique o dado também gira, mas em silêncio)
+  const anuncio = rolando
     ? "Rolando o d20…"
     : parado
       ? `Resultado do d20: ${valor}${destaque === "critico" ? ", crítico!" : destaque === "falha" ? ", falha crítica!" : ""}`

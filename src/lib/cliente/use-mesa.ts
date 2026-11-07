@@ -6,11 +6,24 @@ import type { EstadoMesa, PersonagemVisivel } from "@/lib/mesa";
 import type { Cena, EntradaDiario } from "@/lib/sistemas/tipos";
 import type { EventoMesa, Jogador } from "@/lib/tempo-real";
 import * as identidade from "./identidade";
+import { postarJson } from "./http";
 import { FIM_DE_SESSAO, RESULTADO_TESTE } from "@/lib/constantes";
 
 // Estado vivo de uma mesa no navegador: começa com o estado do servidor e segue o fluxo de eventos (SSE).
 
 export type Limite = { janela: string; uso: number | null; renovaEm: number | null };
+
+/** "conectando" até o primeiro onopen (sem alarme vermelho), "caiu" depois de um onerror (o EventSource tenta de novo sozinho). */
+export type Conexao = "conectando" | "ok" | "caiu";
+
+/** Quanto tempo a conexão fica caída antes de a mesa avisar e travar os botões (uma oscilação curta não assusta ninguém). */
+export const ATRASO_SEM_SINAL_MS = 3000;
+
+/**
+ * O servidor bate (ping) a cada 20 s. Sem nenhum evento por este tempo, a conexão morreu em silêncio (Wi-Fi que caiu sem
+ * fechar o socket): o navegador não dispara onerror sozinho nesse caso, então a mesa fecha e reabre o fluxo por conta própria.
+ */
+export const SEM_BATIDA_MS = 45_000;
 
 export type Mesa = {
   campanha: EstadoMesa["campanha"];
@@ -20,14 +33,20 @@ export type Mesa = {
   cena: Cena;
   diario: EntradaDiario[];
   fila: AcaoPendente[];
+  /** a fila bruta só tem ação interna (resultado de teste, fim da noite) esperando o mestre: ele "lê o resultado" */
+  lendoResultado: boolean;
   ocupado: boolean;
   presenca: Jogador[];
   provedor: string;
+  /** a página foi aberta na máquina da taverna (mesa local) */
+  local: boolean;
   /** narração do mestre chegando agora (ainda não virou mensagem) */
   aoVivo: string;
   limite: Limite | null;
   erro: string | null;
-  conectado: boolean;
+  conexao: Conexao;
+  /** a conexão está caída há mais de ATRASO_SEM_SINAL_MS: faixa de aviso e botões de agir/rolar travados */
+  semSinal: boolean;
   /** ids de mensagens de dado chegadas nesta sessão (para animar) */
   novas: Set<number>;
   /** este aparelho */
@@ -50,8 +69,25 @@ export type AcoesMesa = {
   rolarTeste: (mensagemId: number) => Promise<{ natural: number | null; total: number; dados: number[]; grau: string; rotuloGrau: string } | null>;
 };
 
-/** A fila mostrada esconde as ações internas (resultado de teste rolado pelo jogador, o fechamento da noite). */
-const semInternas = (fila: AcaoPendente[]) => fila.filter((a) => !a.acao.startsWith(RESULTADO_TESTE) && a.acao !== FIM_DE_SESSAO);
+/** Ação interna da fila: não aparece no chat (resultado de teste rolado pelo jogador, o fechamento da noite). */
+const interna = (a: AcaoPendente) => a.acao.startsWith(RESULTADO_TESTE) || a.acao === FIM_DE_SESSAO;
+
+/** A fila mostrada esconde as ações internas. */
+const semInternas = (fila: AcaoPendente[]) => fila.filter((a) => !interna(a));
+
+/** Só ação interna esperando: o mestre ainda não pegou o resultado (modo rodada esperando os outros, ou o instante antes de narrar). */
+const soInternas = (fila: AcaoPendente[]) => fila.length > 0 && fila.every(interna);
+
+/**
+ * Personagem ativo ao abrir a mesa: o salvo neste aparelho, se ainda existir. Sem nada salvo, a máquina da taverna (hot-seat) e
+ * a mesa de um personagem só entram direto no primeiro; pela rede, quem não reivindicou nada entra só assistindo (nunca age
+ * pelo personagem de outra pessoa por engano).
+ */
+export function personagemPadrao(salvo: number | null, ids: number[], local: boolean): number | null {
+  if (salvo !== null && ids.includes(salvo)) return salvo;
+  if (local || ids.length === 1) return ids[0] ?? null;
+  return null;
+}
 
 function deEstado(e: EstadoMesa) {
   return {
@@ -62,6 +98,7 @@ function deEstado(e: EstadoMesa) {
     cena: e.cena,
     diario: e.diario,
     fila: semInternas(e.fila),
+    lendoResultado: soInternas(e.fila),
     ocupado: e.ocupado,
     presenca: e.presenca,
     provedor: e.provedor,
@@ -74,7 +111,8 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
   const [aoVivo, setAoVivo] = useState("");
   const [limite, setLimite] = useState<Limite | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [conectado, setConectado] = useState(false);
+  const [conexao, setConexao] = useState<Conexao>("conectando");
+  const [semSinal, setSemSinal] = useState(false);
   const [novas, setNovas] = useState<Set<number>>(new Set());
   const [eu, setEu] = useState({ clienteId: "", apelido: "", personagemId: null as number | null });
   const euRef = useRef(eu);
@@ -82,10 +120,24 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
     euRef.current = eu;
   }, [eu]);
 
+  // caiu há mais de 3 s: aí sim a mesa avisa (a faixa some sozinha quando a conexão volta)
+  useEffect(() => {
+    if (conexao !== "caiu") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSemSinal(false);
+      return;
+    }
+    const t = setTimeout(() => setSemSinal(true), ATRASO_SEM_SINAL_MS);
+    return () => clearTimeout(t);
+  }, [conexao]);
+
   // identidade só existe no navegador
   useEffect(() => {
-    const salvo = identidade.personagemAtivo(id);
-    const valido = inicial.personagens.some((p) => p.id === salvo) ? salvo : (inicial.personagens[0]?.id ?? null);
+    const valido = personagemPadrao(
+      identidade.personagemAtivo(id),
+      inicial.personagens.map((p) => p.id),
+      inicial.local,
+    );
     const novo = { clienteId: identidade.clienteId(), apelido: identidade.apelido(), personagemId: valido };
     euRef.current = novo;
     // localStorage só existe depois da hidratação; ler aqui evita divergência entre servidor e cliente
@@ -124,7 +176,7 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
         setBase((b) => ({ ...b, diario: ev.entradas }));
         break;
       case "estado":
-        setBase((b) => ({ ...b, ocupado: ev.ocupado, fila: semInternas(ev.fila) }));
+        setBase((b) => ({ ...b, ocupado: ev.ocupado, fila: semInternas(ev.fila), lendoResultado: soInternas(ev.fila) }));
         if (!ev.ocupado) setAoVivo("");
         break;
       case "presenca":
@@ -142,17 +194,48 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
     }
   }, []);
 
+  const avisarPresenca = useCallback(
+    (mudancas: { apelido?: string; personagemId?: number | null }) => {
+      if (!euRef.current.clienteId) return;
+      // sem rede fica por isso mesmo: a presença é refeita pelo servidor quando a conexão volta
+      void postarJson(`/api/campanhas/${id}/presenca`, { clienteId: euRef.current.clienteId, ...mudancas });
+    },
+    [id],
+  );
+
   // conexão SSE (reabre sozinha quando cai; o servidor manda o estado inteiro a cada conexão)
   useEffect(() => {
     if (!eu.clienteId) return;
-    const params = new URLSearchParams({ cliente: eu.clienteId, apelido: euRef.current.apelido, personagem: String(euRef.current.personagemId ?? "") });
+    const noInicio = { apelido: euRef.current.apelido, personagemId: euRef.current.personagemId };
+    const params = new URLSearchParams({ cliente: eu.clienteId, apelido: noInicio.apelido, personagem: String(noInicio.personagemId ?? "") });
     let fonte: EventSource | null = null;
     let parado = false;
+    let vigia: ReturnType<typeof setTimeout> | null = null;
+    // vigia das batidas: ficou mudo tempo demais → conta como caído e reabre (o EventSource só percebe sockets fechados de verdade)
+    const rearmar = () => {
+      if (vigia) clearTimeout(vigia);
+      vigia = setTimeout(() => {
+        setConexao("caiu");
+        fonte?.close();
+        if (!parado) abrir();
+      }, SEM_BATIDA_MS);
+    };
     const abrir = () => {
       fonte = new EventSource(`/api/campanhas/${id}/eventos?${params}`);
-      fonte.onopen = () => setConectado(true);
-      fonte.onerror = () => setConectado(false);
+      rearmar();
+      fonte.onopen = () => {
+        rearmar();
+        setConexao("ok");
+        // reconexão: o servidor registrou a presença com os parâmetros de quando a página abriu; se o apelido ou o
+        // personagem mudaram nesse meio-tempo, conta a verdade de novo
+        const atual = euRef.current;
+        if (atual.apelido !== noInicio.apelido || atual.personagemId !== noInicio.personagemId) {
+          avisarPresenca({ apelido: atual.apelido, personagemId: atual.personagemId });
+        }
+      };
+      fonte.onerror = () => setConexao("caiu");
       fonte.onmessage = (msg) => {
+        rearmar();
         const ev = JSON.parse(msg.data);
         // outros painéis (ex.: fatos fixados, src/components/fatos) ouvem a mesma conexão sem abrir outra
         if (ev.e !== "ping" && ev.e !== "texto") window.dispatchEvent(new CustomEvent("taverna:evento", { detail: ev }));
@@ -169,34 +252,23 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
     abrir();
     return () => {
       parado = true;
+      if (vigia) clearTimeout(vigia);
       fonte?.close();
     };
-  }, [id, eu.clienteId, aplicar]);
-
-  const avisarPresenca = useCallback(
-    (mudancas: { apelido?: string; personagemId?: number | null }) => {
-      if (!euRef.current.clienteId) return;
-      void fetch(`/api/campanhas/${id}/presenca`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clienteId: euRef.current.clienteId, ...mudancas }),
-      });
-    },
-    [id],
-  );
+  }, [id, eu.clienteId, aplicar, avisarPresenca]);
 
   const acoes: AcoesMesa = {
     enviarAcao: useCallback(
       async (texto: string, personagemId?: number | null) => {
         setErro(null);
-        const resp = await fetch(`/api/campanhas/${id}/acao`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ acao: texto, personagemId: personagemId ?? euRef.current.personagemId, autor: euRef.current.apelido }),
+        // sem sinal a resposta vem com o aviso e false: o campo não é limpo, a pessoa tenta de novo
+        const r = await postarJson(`/api/campanhas/${id}/acao`, {
+          acao: texto,
+          personagemId: personagemId ?? euRef.current.personagemId,
+          autor: euRef.current.apelido,
         });
-        if (!resp.ok) {
-          const corpo = await resp.json().catch(() => ({}));
-          setErro(corpo.erro ?? `Erro ${resp.status}`);
+        if (!r.ok) {
+          setErro(r.erro);
           return false;
         }
         return true;
@@ -205,12 +277,8 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
     ),
     controle: useCallback(
       async (comando, extra = {}) => {
-        const resp = await fetch(`/api/campanhas/${id}/controle`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ comando, ...extra }),
-        });
-        if (!resp.ok) setErro((await resp.json().catch(() => ({}))).erro ?? `Erro ${resp.status}`);
+        const r = await postarJson(`/api/campanhas/${id}/controle`, { comando, ...extra });
+        if (!r.ok) setErro(r.erro);
       },
       [id],
     ),
@@ -234,22 +302,20 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
     rolarTeste: useCallback(
       async (mensagemId: number) => {
         setErro(null);
-        const resp = await fetch(`/api/campanhas/${id}/rolar`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mensagemId, autor: euRef.current.apelido }),
+        const r = await postarJson<{ resultado?: Awaited<ReturnType<AcoesMesa["rolarTeste"]>> }>(`/api/campanhas/${id}/rolar`, {
+          mensagemId,
+          autor: euRef.current.apelido,
         });
-        const corpo = await resp.json().catch(() => ({}));
-        if (!resp.ok) {
-          setErro(corpo.erro ?? `Erro ${resp.status}`);
+        if (!r.ok) {
+          setErro(r.erro);
           return null;
         }
-        return corpo.resultado ?? null;
+        return r.corpo.resultado ?? null;
       },
       [id],
     ),
     receberMensagem: useCallback((m: Mensagem) => aplicar({ e: "mensagem", mensagem: m }), [aplicar]),
   };
 
-  return [{ ...base, aoVivo, limite, erro, conectado, novas, eu }, acoes];
+  return [{ ...base, local: inicial.local, aoVivo, limite, erro, conexao, semSinal, novas, eu }, acoes];
 }

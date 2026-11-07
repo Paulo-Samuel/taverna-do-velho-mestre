@@ -3,57 +3,95 @@
 RPG de mesa com mestre de IA que roda na máquina da pessoa (Next.js 16 + SQLite do Node). Detalhes de uso no README.md;
 licenças das regras em LICENCAS.md.
 
-## Instalar e rodar (quando a pessoa pedir para "instalar", "configurar" ou "rodar a taverna")
+Este arquivo é, antes de tudo, o roteiro de quem instala a taverna na máquina de outra pessoa usando o Claude Code: siga os
+passos na ordem, confira cada um, e não improvise "consertos" (o item 4 diz o que nunca fazer). O que quebra de verdade na
+instalação está aqui, não em erros de código.
 
-1. **Node 24 ou mais novo** (o banco usa `node:sqlite`). Confira com `node -v`. Se faltar ou for antigo, no Windows:
-   `winget install OpenJS.NodeJS` (depois abra um terminal novo).
-2. `npm install`
-3. Crie o `.env.local` copiando o `.env.example` (`cp .env.example .env.local`, ou `Copy-Item .env.example .env.local` no
-   PowerShell). O padrão `TAVERNA_PROVEDOR=cli` usa o Claude Code logado desta máquina como mestre, sem custo extra de API.
-4. O modo `cli` precisa do executável `claude` com login feito pela própria pessoa:
-   - Teste com `claude --version`. Se não existir no PATH (comum quando só o app desktop está instalado), instale o CLI com
-     `winget install Anthropic.ClaudeCode`, ou ache o `claude.exe` que vem com o app desktop e coloque o caminho completo em
-     `CLAUDE_BIN=` no `.env.local`.
-   - O login é da pessoa: ela roda `claude` uma vez no terminal e entra com a própria conta. Nunca copie, leia ou mova tokens.
-   - `CLAUDE_CLI_MODELO=sonnet` (rápido) ou `opus` (melhor narrativa, gasta mais do plano).
-5. `npm run dev` e abrir http://localhost:3300. A página **Configurações** (`/config`) mostra se o Claude Code foi encontrado e
-   logado e tem o botão **Testar conexão**.
-6. Para jogar com outros aparelhos no mesmo Wi-Fi: `npm run rede` (build + servidor em 0.0.0.0:3300) e liberar o Node.js
-   no firewall do Windows para redes privadas. Na mesa, o botão **Convidar** mostra o link e o QR code.
+## Instalar e rodar (quando a pessoa pedir para "instalar", "configurar", "rodar" ou "atualizar" a taverna)
 
-Para testar a interface sem gastar nada, use `TAVERNA_PROVEDOR=falso` (mestre de teste sem IA).
-
-### Atalho na Área de Trabalho (Windows)
-
-`iniciar-taverna.ps1` liga a taverna em modo de produção (instala dependências e compila quando precisa), espera subir e
-abre o navegador; fechar a janela desliga. Se a pessoa pedir um atalho, crie um `.lnk` na Área de Trabalho
-(`[Environment]::GetFolderPath("Desktop")`) apontando para
-`powershell.exe -NoProfile -ExecutionPolicy Bypass -File "<pasta do repo>\iniciar-taverna.ps1"`, com pasta de trabalho no
-repo e ícone `assets\taverna.ico`. `iniciar-taverna.cmd` faz o mesmo com duplo clique.
+0. **De onde veio a pasta, e onde ela está.**
+   - Sem `.git` na pasta, ela veio de um ZIP: avise que as atualizações vão exigir o Git (o `atualizar-taverna.cmd` explica
+     a migração quando for a hora) e siga.
+   - O lugar certo é `C:\taverna` (ou outra pasta **fora do OneDrive e da Área de Trabalho sincronizada**): dentro do
+     OneDrive o banco trava e a `node_modules` inteira sobe para a nuvem. Se estiver no lugar errado, peça para mover a pasta
+     antes de qualquer outra coisa (e refaça o atalho depois).
+1. **Pré-requisitos** (confira antes; só instale o que faltar):
+   - Node 24 LTS: `node -v`. Faltando ou abaixo de 24: `winget install OpenJS.NodeJS.LTS`. É a linha **LTS**, não a Current:
+     `winget install OpenJS.NodeJS` instala a 26, que não foi testada.
+   - Claude Code **2.1.45 ou mais novo**: `claude --version`. Faltando: `winget install Anthropic.ClaudeCode`; antigo:
+     `claude update`.
+   - Git (para atualizar): `git --version`. Faltando: `winget install Git.Git`.
+   - **Depois de instalar qualquer coisa pelo winget, peça à pessoa para fechar e reabrir o Claude Code antes de continuar.**
+     O PATH só muda em processo novo: a sua sessão atual vai continuar sem achar `node`, `claude` ou `git`, por mais que você
+     repita o comando. Na sessão nova, confira de novo com `node -v`, `claude --version` e `git --version`.
+2. **Login do mestre.** O padrão (`TAVERNA_PROVEDOR=cli`) usa o Claude Code logado nesta máquina como mestre, sem custo
+   extra de API. O login é da própria pessoa: ela roda `claude` uma vez no terminal e entra com a conta dela. Nunca copie,
+   leia ou mova tokens. O `.env.local` nasce sozinho a partir do `.env.example` na primeira vez que o atalho roda; só mexa
+   nele se precisar: `CLAUDE_BIN=desktop` usa sempre o Claude Code mais novo embutido no app Claude (quando o `claude` não
+   está no PATH; um caminho fixo para dentro do app morre a cada atualização dele), `CLAUDE_CLI_MODELO=sonnet` (rápido) ou
+   `opus` (melhor narrativa, gasta mais do plano).
+3. **Ligar a taverna: pelo atalho, nunca pela sua sessão.** Não rode `npm run dev`, `npm start`, `npm run rede` nem
+   `next start` dentro da sua ferramenta de terminal: é um processo que nunca termina e trava a sua sessão. Faça assim:
+   - crie o atalho na Área de Trabalho (`[Environment]::GetFolderPath("Desktop")`): um `.lnk` via
+     `New-Object -ComObject WScript.Shell` com destino
+     `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "<pasta da taverna>\iniciar-taverna.ps1"`, "Iniciar em" na
+     pasta da taverna e ícone `assets\taverna.ico`. `iniciar-taverna.cmd` faz o mesmo com duplo clique;
+   - peça para a pessoa clicar no atalho (na primeira vez ele instala as dependências e compila: alguns minutos);
+   - confira com `curl -s -m 5 -i http://localhost:3300/api/rede`: resposta com `x-taverna: 1` é a taverna no ar; sem esse
+     cabeçalho, quem respondeu foi outro programa;
+   - abra http://localhost:3300/config: a página mostra se o Claude Code foi encontrado e logado, com **Verificar de novo**
+     e **Testar conexão**.
+4. **Nunca**, nem para "consertar": editar `package.json` ou `package-lock.json`; `npm update`; `npm audit fix` (com ou sem
+   `--force`); `npm install <pacote>`; trocar a porta 3300; apagar ou mexer em `data/` (são as campanhas da pessoa); apagar
+   `.env.local`; `git commit`, `git push`, `git reset --hard`, `git checkout -- .`. Se parecer que só isso resolve, pare e
+   peça ajuda (item 6).
+5. **Atualizar:** com a taverna desligada, `atualizar-taverna.cmd` (duplo clique, ou
+   `powershell -NoProfile -ExecutionPolicy Bypass -File atualizar-taverna.ps1`). Ele puxa do GitHub com `git pull --ff-only`,
+   reinstala o que mudou e recompila; recusa-se com a taverna no ar; com arquivo alterado à mão, diz qual é e sugere
+   `git stash`; sem `.git`, mostra como migrar para o Git. Depois é só abrir o atalho de sempre.
+6. **Deu errado:** a janela do atalho fica aberta com a explicação e o código de saída, e tudo o que apareceu está em
+   `data\logs\atalho-<data>.log` (atualização: `data\logs\atualizar-<data>.log`; guardados por 14 dias). Em `/config`, use
+   **Verificar de novo** e **Testar conexão**. O relatório que vai para quem instalou é o log mais recente mais a saída de
+   `node -v`, `claude --version` e `git log -1 --oneline`. Para testar a interface sem gastar nada do plano:
+   `TAVERNA_PROVEDOR=falso` no `.env.local` (mestre de teste sem IA).
+7. **macOS e Linux:** não há atalho; siga "Pelo terminal (qualquer sistema)" no README.md, com os mesmos cuidados: nada de
+   servidor dentro da sua sessão. A pessoa roda `npm run build && npm start` num terminal dela.
+8. **Rede local** (cada um no próprio celular): a pessoa roda `npm run rede` num terminal dela (servidor em 0.0.0.0:3300) e
+   libera o Node.js no firewall do Windows para redes privadas (README, "Abrindo o firewall do Windows"). Na mesa, o botão
+   **Convidar** mostra o link e o QR code.
 
 ## Regras importantes
 
 - O modo `cli` é para uso pessoal: o login da própria pessoa, na própria máquina. Não exponha a taverna na internet nem
   configure o app para usar a conta de outra pessoa.
-- `.env.local` e `data/` (banco com campanhas e fichas) ficam fora do git.
+- `.env.local`, `data/` (banco com campanhas e fichas, e os logs em `data/logs/`) e `musica/` ficam fora do git. Uma
+  atualização nunca mexe neles.
+- A taverna é da porta 3300; os scripts aceitam `TAVERNA_PORTA` só para testar os próprios scripts sem encostar nela.
 
-## Modo história (padrão) x modo avançado
+## Para quem for mexer no código
+
+### Modo história (padrão) x modo avançado
 
 `campanha.config.modoJogo` decide a mesa: "historia" usa `src/app/mesa/[id]/mesa-historia.tsx` e `src/components/historia/*`
 (dado 3D com three.js, música gerada com Web Audio, retratos em SVG, códex); "avancado" usa `mesa.tsx`. No modo história o
 mestre chama `pedir_teste` e o jogador rola pela rota `/api/campanhas/[id]/rolar`; `sugerir_acoes` mostra as opções.
 
-## Mapa do código
+### Mapa do código
 
 - `src/lib/sistemas/` — sistemas de regras (contrato em `tipos.ts`; um arquivo por sistema + pasta de dados).
 - `src/lib/mestre/` — turnos, prompts, ferramentas do mestre e provedores (`cli`, `api`, `falso`); `mcp/taverna-mcp.mjs` é a
   ponte MCP que o Claude Code usa para chamar as ferramentas.
 - `src/lib/dados.ts` — motor de dados (o código decide o número; o modelo só decide quando rolar).
 - `src/lib/tempo-real.ts`, `src/app/api/campanhas/[id]/eventos` — eventos em tempo real (SSE) para todos os aparelhos.
-- `src/lib/rede/` — PIN, porteiro (quem vem pela rede só acessa as mesas) e endereços da rede local.
+- `src/lib/rede/` — PIN, porteiro (quem vem pela rede só acessa as mesas) e endereços da rede local; `src/proxy.ts` chama o
+  porteiro e marca toda resposta com `x-taverna: 1` (é assim que os scripts sabem que quem respondeu na porta foi a taverna).
 - `src/lib/cliente/musica/` — trilha: estilo por sistema (`estilos.ts`), motor Web Audio e tocador das músicas próprias da
   pasta `musica/` (fora do git, ver `musica/LEIA-ME.md`; rotas `src/app/api/musica/`).
 - `src/app/` — páginas (início, nova campanha, mesa, ajustes, entrar, sistemas, configurações).
+- `iniciar-taverna.ps1` / `atualizar-taverna.ps1` (e os `.cmd`) — atalho e atualização do Windows: hash do `package-lock.json`
+  em `node_modules\.taverna-lock` decide o `npm ci`; `.next\BUILD_ID` mais velho que `src/`, `mcp/`, `package.json`,
+  `package-lock.json` ou `next.config.ts` decide o build (o `.env.local` fica de fora); transcript em `data\logs\`.
 
+Para desenvolver: `npm run dev` (porta 3300) num terminal seu, não na sessão de um agente que instala para outra pessoa.
 Next.js 16 tem mudanças grandes (params são Promises, `proxy.ts` no lugar de middleware): consulte
 `node_modules/next/dist/docs/` antes de mexer em rotas ou páginas.

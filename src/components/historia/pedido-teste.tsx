@@ -8,6 +8,7 @@ import { COR_GRAU, corDoNome, sinal } from "./cores";
 import { Dado3D } from "./dado-3d";
 import { lerParada, ParadaDados, PASSO_MS, qtdDados, type Parada, type ResultadoParada } from "./parada-dados";
 import { Retrato } from "./retrato";
+import { usaD20 } from "./usa-d20";
 
 // O momento principal do modo história: o mestre pediu um teste e o jogador rola na tela.
 // Pendente → cartão grande com os dados e o botão. Rolado aqui → d20 3D gira e assenta na face do servidor; nos outros sistemas a
@@ -62,10 +63,7 @@ export function dadosDoPedido(m: Mensagem): DadosPedido {
   return (m.dados ?? {}) as DadosPedido;
 }
 
-/** O d20 3D só serve para testes de d20; paradas de d10 (Vampiro), d100, Fate e 2d6 usam a parada em SVG. */
-function usaD20(d: DadosPedido) {
-  return !d.expressao || /(^|[^\d])d20/i.test(d.expressao);
-}
+// usaD20 (usa-d20.ts) escolhe entre o d20 3D e a parada em SVG (d10 do Vampiro, d100, Fate, 2d6) pela expressão do pedido.
 
 /** "17 + 4 = 21 vs 12" (ou "21 vs 12" quando o sistema não tem dado natural). */
 function conta(natural: number | null | undefined, bonus: number, total: number, alvo: number | null | undefined) {

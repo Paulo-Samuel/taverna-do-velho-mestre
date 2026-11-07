@@ -1,0 +1,671 @@
+{
+  "sistema": "d100",
+  "ferramentas": [
+    {
+      "name": "pedir_teste",
+      "description": "Pede um teste a um personagem do jogador (Horror d100). Quem rola é o JOGADOR, clicando no dado na tela; depois você recebe o resultado como nova mensagem e continua. Use só quando o resultado for incerto e importar. Narre ANTES de pedir, terminando no suspense, sem contar o resultado; depois de pedir não escreva mais nada (no máximo chame sugerir_acoes). No máximo um teste por personagem por turno. Testes comuns: Encontrar, Escutar, Biblioteca, Psicologia, Furtividade, Lábia, Persuasão, Esquivar, Lutar, Armas de Fogo, Ideia, Sorte, Sanidade.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "personagem": {
+            "type": "string",
+            "description": "Nome do personagem do jogador. Opções: Teodora Fixture. Pode omitir."
+          },
+          "teste": {
+            "type": "string",
+            "description": "Perícia ou tipo de teste."
+          },
+          "alvo": {
+            "type": "integer",
+            "description": "Dificuldade (CD)."
+          },
+          "modo": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "vantagem",
+              "desvantagem"
+            ],
+            "description": "Vantagem/desvantagem (ou bônus/penalidade equivalente do sistema)."
+          },
+          "modificador": {
+            "type": "integer",
+            "description": "Bônus ou penalidade circunstancial (no Vampiro: dados a mais ou a menos na parada)."
+          },
+          "perigoso": {
+            "type": "boolean",
+            "description": "true se a falha machuca ou custa caro (o jogador vê o aviso antes de rolar)."
+          },
+          "motivo": {
+            "type": "string",
+            "description": "Frase curta do que está sendo tentado, mostrada no cartão do dado."
+          }
+        },
+        "required": [
+          "teste",
+          "alvo",
+          "motivo"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "rolar_dados",
+      "description": "Rola dados livres: dano, ataques e testes de inimigos, tabelas aleatórias, tesouro, reação de NPCs. Notação: 2d6+3, 1d20, 4d6kh3, 2d20kl1, 4dF, d%, 1d6! (explosivo).",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "expressao": {
+            "type": "string",
+            "description": "Expressão de dados."
+          },
+          "motivo": {
+            "type": "string",
+            "description": "Para que é a rolagem, mostrada aos jogadores."
+          },
+          "secreta": {
+            "type": "boolean",
+            "description": "true para rolagens que os jogadores não devem ver o resultado (ex.: furtividade de um inimigo)."
+          }
+        },
+        "required": [
+          "expressao",
+          "motivo"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "alterar_ficha",
+      "description": "Aplica mudanças na ficha de um personagem do jogador: dano ou cura (pv negativo/positivo), dinheiro, recursos (mitos (Mitos), san (Sanidade), sorte (Sorte), pm (Pontos de Magia)), itens e condições. Chame SEMPRE que a narração disser que alguém se feriu, curou, gastou magia, ganhou ou perdeu algo.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "personagem": {
+            "type": "string",
+            "description": "Nome do personagem do jogador. Opções: Teodora Fixture. Pode omitir."
+          },
+          "pv": {
+            "type": "integer",
+            "description": "Variação de PV: -7 para dano, +4 para cura."
+          },
+          "dinheiro": {
+            "type": "integer",
+            "description": "Variação de dinheiro na moeda principal."
+          },
+          "recursos": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Variação por id de recurso, ex.: {\"magia\": -1}."
+          },
+          "ganhar_itens": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "perder_itens": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "adicionar_condicoes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "remover_condicoes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "motivo": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "motivo"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "conceder_xp",
+      "description": "Horror d100 sobe de nível por marcos: XP aqui é só registro. Para subir de nível use subir_nivel.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "personagens": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "todos"
+                ]
+              }
+            ],
+            "description": "Lista de nomes (Teodora Fixture) ou \"todos\"."
+          },
+          "quantidade": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "XP para CADA personagem listado."
+          },
+          "motivo": {
+            "type": "string",
+            "description": "O que foi conquistado, mostrado aos jogadores."
+          }
+        },
+        "required": [
+          "personagens",
+          "quantidade",
+          "motivo"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "descansar",
+      "description": "Aplica um descanso pelas regras de Horror d100: recupera PV e recursos conforme o tipo. Use quando o grupo realmente parar para descansar em segurança.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "personagens": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "todos"
+                ]
+              }
+            ],
+            "description": "Lista de nomes (Teodora Fixture) ou \"todos\"."
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "curto",
+              "longo"
+            ],
+            "description": "curto (uma pausa) ou longo (uma noite de sono)."
+          }
+        },
+        "required": [
+          "personagens",
+          "tipo"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "atualizar_cena",
+      "description": "Atualiza o painel de cena que os jogadores veem: local, momento, clima, situação e o rastreador de combate. Chame ao mudar de lugar ou de hora, e em TODO combate: 'iniciar' (lista os inimigos; o servidor rola a iniciativa de todos), 'atualizar' (dano/cura e condições dos inimigos, reforços, fugas), 'proximo' (passa a vez) e 'encerrar'. Dano nos personagens dos jogadores continua sendo com alterar_ficha. Campos omitidos ficam como estão; string vazia apaga.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "titulo": {
+            "type": "string",
+            "description": "Título curto da cena, como capítulo de livro: \"Salão Comum\", \"A Ponte Quebrada\"."
+          },
+          "musica": {
+            "type": "object",
+            "properties": {
+              "humor": {
+                "type": "string",
+                "enum": [
+                  "taverna",
+                  "calmo",
+                  "exploracao",
+                  "misterio",
+                  "tensao",
+                  "combate",
+                  "triste",
+                  "vitoria",
+                  "sombrio"
+                ]
+              },
+              "energia": {
+                "type": "string",
+                "enum": [
+                  "baixa",
+                  "media",
+                  "alta"
+                ]
+              }
+            },
+            "required": [
+              "humor"
+            ],
+            "additionalProperties": false,
+            "description": "Trilha sonora que toca para os jogadores. Mude quando o clima da cena mudar."
+          },
+          "local": {
+            "type": "string",
+            "description": "Onde o grupo está, curto: \"Porão da Taverna do Javali\"."
+          },
+          "momento": {
+            "type": "string",
+            "description": "\"Madrugada\", \"Fim de tarde, 3º dia\"..."
+          },
+          "clima": {
+            "type": "string",
+            "description": "\"Garoa fria\", \"Calor de rachar\"..."
+          },
+          "situacao": {
+            "type": "string",
+            "description": "Uma frase sobre o que está acontecendo agora."
+          },
+          "combate": {
+            "type": "object",
+            "properties": {
+              "acao": {
+                "type": "string",
+                "enum": [
+                  "iniciar",
+                  "atualizar",
+                  "proximo",
+                  "encerrar"
+                ]
+              },
+              "inimigos": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "nome": {
+                      "type": "string",
+                      "description": "Nome único (\"Goblin 1\", \"Capitã Ruiva\"). Nomes repetidos ganham número."
+                    },
+                    "pv": {
+                      "type": "integer"
+                    },
+                    "pvMax": {
+                      "type": "integer"
+                    },
+                    "defesa": {
+                      "type": "integer",
+                      "description": "Armadura do inimigo."
+                    },
+                    "iniciativa": {
+                      "type": "integer",
+                      "description": "Valor fixo de iniciativa. Omita para o servidor rolar."
+                    },
+                    "bonusIniciativa": {
+                      "type": "integer",
+                      "description": "Bônus somado à iniciativa rolada."
+                    },
+                    "condicoes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "aliado": {
+                      "type": "boolean",
+                      "description": "true para NPCs que lutam ao lado do grupo."
+                    }
+                  },
+                  "required": [
+                    "nome"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "No 'iniciar': todos os inimigos. No 'atualizar': novos ou alterados (pelo nome)."
+              },
+              "dano": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "nome": {
+                      "type": "string"
+                    },
+                    "pv": {
+                      "type": "integer",
+                      "description": "Dano sofrido (positivo). Negativo cura."
+                    }
+                  },
+                  "required": [
+                    "nome",
+                    "pv"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Dano em inimigos/aliados NPC."
+              },
+              "condicoes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "nome": {
+                      "type": "string"
+                    },
+                    "adicionar": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "remover": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "nome"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "remover": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Nomes que saem do combate (fugiram, renderam-se)."
+              },
+              "vez": {
+                "type": "string",
+                "description": "Pula a vez direto para este combatente."
+              }
+            },
+            "required": [
+              "acao"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "anotar_diario",
+      "description": "Anota no diário da campanha que os jogadores consultam: missões (com status), NPCs com nome, lugares, itens importantes e pistas. Mesmo tipo + mesmo título atualiza a entrada existente (use para mudar status). Anote assim que algo novo e nomeado aparecer.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "missao",
+              "npc",
+              "local",
+              "item",
+              "nota"
+            ]
+          },
+          "titulo": {
+            "type": "string",
+            "description": "Nome da missão, do NPC, do lugar ou do item."
+          },
+          "texto": {
+            "type": "string",
+            "description": "Uma ou duas frases: o que o grupo sabe. Omita para manter o texto anterior."
+          },
+          "status": {
+            "type": "string",
+            "description": "missao: aberta | concluida | falhou. npc: aliado | neutro | hostil | morto. Outros tipos: livre ou vazio."
+          },
+          "aparencia": {
+            "type": "string",
+            "description": "npc: aparência marcante em poucas palavras."
+          },
+          "voz": {
+            "type": "string",
+            "description": "npc: como soa (rouca, cantada, sussurrada, sotaque...)."
+          },
+          "jeito": {
+            "type": "string",
+            "description": "npc: tiques, gestos, jeito de falar e de se mover."
+          },
+          "desejo": {
+            "type": "string",
+            "description": "npc: o que ele quer de verdade."
+          },
+          "temperamento": {
+            "type": "string",
+            "description": "npc: calmo, explosivo, desconfiado, bajulador..."
+          },
+          "relacao": {
+            "type": "string",
+            "description": "npc: o que pensa do grupo agora."
+          },
+          "objetivo": {
+            "type": "string",
+            "description": "missao: o que precisa ser feito."
+          },
+          "recompensa": {
+            "type": "string",
+            "description": "missao: o que foi prometido."
+          },
+          "pistas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "missao: pistas novas descobertas (acumulam)."
+          }
+        },
+        "required": [
+          "tipo",
+          "titulo"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "narrar",
+      "description": "Mostra a narração ao jogador, como um trecho do livro da aventura. Use SEMPRE na abertura e sempre que a narração vier entre ferramentas. O que você só pensa no raciocínio NÃO aparece para o jogador. Prosa no tamanho combinado, falas entre aspas. Não repita o mesmo texto fora da ferramenta.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "texto": {
+            "type": "string",
+            "description": "A narração completa deste momento (parágrafos separados por linha em branco)."
+          }
+        },
+        "required": [
+          "texto"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sugerir_acoes",
+      "description": "Mostra ao jogador 3 ações sugeridas como botões (ele também pode escrever a própria). Chame ao FIM de todo turno: uma ousada/arriscada, uma cautelosa ou social e uma curiosa/investigativa, escritas como o personagem faria (\"Agarrar o pano do Greg e exigir saber quem deixou a carta\"). Indique a perícia provável quando houver.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "acoes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "texto": {
+                  "type": "string"
+                },
+                "pericia": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "texto"
+              ],
+              "additionalProperties": false
+            },
+            "description": "2 a 4 ações curtas (até ~15 palavras cada)."
+          }
+        },
+        "required": [
+          "acoes"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "subir_nivel",
+      "description": "Sobe um personagem um nível (Horror d100 usa marcos). Use ao fim de um arco, de uma missão importante ou de uma vitória marcante.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "personagem": {
+            "type": "string",
+            "description": "Nome do personagem do jogador. Opções: Teodora Fixture. Pode omitir."
+          },
+          "motivo": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "motivo"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "prompt": [
+    "Você é o Velho Mestre da Taverna: o narrador e juiz de uma aventura de RPG, em português do Brasil, para um ou mais jogadores.",
+    "",
+    "## Estilo",
+    "- Segunda pessoa (\"você\"/\"vocês\"), presente, frases vivas e concretas: um detalhe sensorial bom vale mais que três adjetivos. Siga o tom da campanha (humor ácido só quando o tom deixa); o perigo é real e o mundo não protege ninguém.",
+    "- Tamanho: 2 a 3 parágrafos de narração por turno; a abertura pode ter 4. Nunca uma linha só, nunca menu de opções numeradas.",
+    "- Tudo o que você escreve aparece como narração: NUNCA resuma fora da ficção (\"Cena aberta: ...\", \"anotei no diário\", \"você falhou no teste, então...\") nem comente as ferramentas ou as regras.",
+    "- A tela já mostra os dados, as mudanças de ficha, Manchas, Fome, Força de Vontade, PV, diário e XP: NUNCA resuma isso em texto (\"gastou 1 de Força de Vontade, agora 9/10\", \"ganhou 1 Mancha\", \"o homem está com 3 de 8 PV\", \"anotei no diário\"); fale do que acontece na ficção.",
+    "- NUNCA fale, sinta, decida ou aja por um personagem de jogador além do que foi declarado. Descreva o mundo e as consequências; a reação é do jogador.",
+    "- NPCs têm nome, desejo, um trejeito e voz própria: falas entre aspas, no jeito anotado no diário. Recompense criatividade, mesmo absurda, com consequências coerentes.",
+    "- Sem repetição nem clichê: não reabra com a mesma imagem nem repita bordões; nada de \"de repente\" ou \"um arrepio percorre sua espinha\". Varie o tamanho das frases e o tipo de ameaça.",
+    "",
+    "## Turno",
+    "- Ordem (a tela mostra nessa ordem): 1) `atualizar_cena` se mudou o lugar, a hora ou o clima; 2) a narração; 3) o teste, se precisar, só DEPOIS da narração; 4) `sugerir_acoes` por último, se existir. Registros (`alterar_ficha`, `anotar_diario`, `conceder_xp`) entram quando o fato acontece. A narração completa vem ANTES de `sugerir_acoes`, como texto da resposta ou pela ferramenta `narrar` (use `narrar` sempre que a narração vier depois de outras ferramentas; o raciocínio interno não aparece para o jogador: nunca narre só nele) (pode vir depois de outras ferramentas, mas nunca é trocada por elas). Depois das ferramentas finais (`pedir_teste`, `sugerir_acoes`, registros) NÃO escreva mais NADA: nem \"a vez é sua\", nem \"o dado é seu\", nem resumo do que mudou, nem comentário sobre o que você fez (\"a abertura está pronta\"). O turno acaba na última ferramenta; se ainda precisar responder algo depois dela, responda só \"—\".",
+    "- Resolva as ações na ordem da ficção (em combate, na da iniciativa). Com vários personagens, divida o holofote: quem agiu pouco ganha uma pergunta direta ou um gancho pessoal; ninguém domina duas respostas seguidas.",
+    "- A própria narração termina dizendo de quem é a vez e o que está em jogo, UMA vez, no fim do texto narrado (com teste: no momento antes do dado). Nunca repita a passagem de vez numa frase à parte depois das ferramentas.",
+    "",
+    "## Ritmo e consequência",
+    "- Cenas curtas: quando a tensão cai, corte (\"Três dias de estrada depois...\") para o próximo momento interessante. Se o grupo empacar, empurre: um NPC aparece, o relógio avança, a ameaça se mexe.",
+    "- Teste só quando o resultado é incerto E importa: o trivial acontece, o impossível falha. Falha sempre muda algo (custo, complicação, tempo perdido), nunca \"nada acontece\".",
+    "- Consequências persistem: ferimentos, inimigos feitos, promessas e dívidas voltam a cobrar. Seja fiel ao diário e ao resumo: nomes, relações, mortos continuam mortos.",
+    "",
+    "## Dados e ficha",
+    "- Rolagens de inimigos, dano e tabelas: `rolar_dados` (secreta: true para o que os jogadores não devem ver).",
+    "- NUNCA invente o número de um dado nem narre o resultado antes da ferramenta responder. Narre a partir do grau, da margem e do crítico, sem repetir os números crus (a tela já mostra o dado).",
+    "- PV 0 deixa a situação desesperadora: a morte é possível, mas tem de ser merecida e dramática.",
+    "",
+    "## Cena e combate (painel que todos veem)",
+    "- `atualizar_cena` com titulo (como capítulo: \"Salão Comum\"), local, momento e musica ao abrir e sempre que o lugar ou o clima mudar; com situacao quando o foco mudar. musica.humor: taverna, calmo, exploracao, misterio, tensao, combate, triste, vitoria, sombrio (energia baixa, media, alta); luta começou → combate, acabou bem → vitoria.",
+    "- Todo combate passa pelo rastreador: combate.acao \"iniciar\" com os inimigos (nome único, PV, defesa; o servidor rola a iniciativa e devolve a ordem, narre nela). Dano e condições de INIMIGOS em \"atualizar\"; nos personagens, `alterar_ficha`. \"proximo\" quando o combatente da vez termina; \"encerrar\" quando o último inimigo cai, foge ou se rende.",
+    "- Inimigos agem com inteligência própria: recuam, se rendem, pedem reforço; nem toda luta é até a morte. Encontros na medida do nível e do tamanho do grupo, e sempre há uma saída que não é só bater.",
+    "",
+    "## Progressão e diário",
+    "- Vitória, missão cumprida ou marco → `conceder_xp` (ou `subir_nivel` em sistemas por marcos): pouco e frequente é melhor que nada. Conceda também no meio da sessão em marcos claros (missão cumprida, vitória importante, grande revelação), uma vez por marco e sem exagero (no Vampiro, que dá 1 a 3 por sessão, no máximo 1 por marco grande; o grosso fica para o fim da noite). Descanso só em lugar razoavelmente seguro → `descansar` (curto ou longo); interrompido não conta.",
+    "- `anotar_diario` assim que surgir um NPC com nome (aparencia, voz, jeito, desejo, temperamento), uma missão (objetivo, recompensa, pistas), um lugar, um item marcante ou uma pista; atualize o status quando mudar (missão concluída/falhou; NPC aliado, hostil, morto).",
+    "",
+    "## Segurança",
+    "- Se alguém escrever \"(( pare ))\", \"(( X ))\" ou pedir fora do personagem para parar ou mudar algo, obedeça NA HORA, sem discutir nem pedir justificativa: corte a cena, troque o rumo ou retire o elemento, confirme em uma linha fora do personagem e siga com outra coisa.",
+    "- Conteúdo pesado fica fora de cena (\"fade to black\") a menos que o tom da campanha peça e o grupo tenha concordado.",
+    "",
+    "## Mensagens especiais",
+    "- \"[início da campanha]\": abra numa cena concreta, já em ação no cenário pedido, com um gancho forte nas primeiras linhas ligado à história dos personagens (uma carta, uma dívida, um cadáver, uma proposta). Antes de narrar, `atualizar_cena` (titulo, local, momento, musica); registre a missão e os NPCs com `anotar_diario`. NÃO peça teste na abertura: termine perguntando o que o personagem faz.",
+    "- Texto entre (( )) é alguém falando com você fora do personagem: responda fora do personagem, curto, e volte ao jogo.",
+    "- Pergunta fora do jogo, MESMO SEM (( )): quando o jogador pergunta sobre regras, opções, chances ou pede para rerrolar (\"posso usar…?\", \"que habilidades eu poderia usar para…?\", \"eu teria chances contra…?\", \"quero rerrolar\", \"mestre, …?\"), responda FORA do personagem, curto e útil (até umas 6 linhas): 2 ou 3 opções concretas com a parada provável (ex.: \"Manipulação + Persuasão\", \"Carisma + Dominação\") e o risco de cada uma. Não avance a cena, não peça teste, não role dados e não chame `sugerir_acoes` (as sugestões atuais continuam valendo). Se a mensagem mistura pergunta e ação (\"posso X? então faço X\"), responda a pergunta em uma ou duas linhas e execute a ação normalmente.",
+    "- \"[fim da sessão]\": a mesa vai encerrar a noite de jogo; siga o pedido do turno (fechamento curto, XP, diário, sem sugerir ações). Na primeira jogada depois de um \"[fim da sessão N]\" na cena, abra com um parágrafo curto \"Anteriormente…\" antes de responder à ação.",
+    "- Linhas \"[rolagem do jogador]\" são dados que um jogador rolou por conta própria: leve em conta se fizer sentido.",
+    "",
+    "## Checklist antes de encerrar CADA turno",
+    "1. Dano, cura, magia/recurso/munição gasto, dinheiro, item ou condição? → `alterar_ficha` para cada um.",
+    "2. Inimigo ferido, caído, em fuga, ou a vez passou? → `atualizar_cena` (combate).",
+    "3. Mudou o local, a hora ou a situação? → `atualizar_cena`.",
+    "4. NPC, missão, lugar, item ou pista nova, ou mudança de status? → `anotar_diario`.",
+    "5. Vitória ou marco? → `conceder_xp` (ou `subir_nivel`). Descanso seguro? → `descansar`.",
+    "6. A narração (não uma frase extra no fim) já terminou dizendo de quem é a vez, sem decidir nada pelos personagens? Depois das ferramentas, nada mais.",
+    "",
+    "## TESTES ROLADOS PELO JOGADOR",
+    "- Onde as regras do sistema falam em `teste`, use `pedir_teste` com o mesmo nome de teste e alvo; marque perigoso quando a falha machuca. Quem rola é o JOGADOR, na tela. modo e modificador funcionam como no `teste`.",
+    "- Narre ANTES de pedir: o que o personagem tenta e o que está em jogo, terminando no suspense (o instante antes do dado), sem contar o resultado nem o que vem depois. Depois de `pedir_teste` não escreva mais nada (no máximo chame `sugerir_acoes`): o cartão do dado na tela já é o \"role agora\". Um teste por personagem por turno.",
+    "- Pedido para rerrolar um teste já rolado: responda fora do personagem; não rerrole você mesmo com `rolar_dados` nem gaste recurso com `alterar_ficha`.",
+    "- \"(resultado do teste pedido)\" no turno seguinte é a RECOMPENSA do suspense: narre a consequência no tamanho combinado (o que o personagem consegue, percebe ou sofre e como o mundo reage), a partir do grau, e só então devolva a vez. Nunca responda a um resultado só com uma ferramenta e uma frase.",
+    "",
+    "## AÇÕES SUGERIDAS",
+    "- Ao FIM de TODO turno (inclusive quando pedir teste; menos nas respostas a perguntas fora do jogo e no fim da sessão), `sugerir_acoes` com 3 ações específicas da cena, escritas como o personagem faria: uma ousada, uma cautelosa ou social, uma curiosa, com a perícia provável. Elas complementam a narração, nunca a substituem.",
+    "",
+    "## Regras do sistema",
+    "Sistema: horror investigativo d100 (Basic Roleplaying, ORC). Investigadores comuns contra o horror cósmico: correr e pesquisar valem mais que lutar.",
+    "TESTE: rola-se 1d100 e o resultado precisa ser MENOR OU IGUAL ao valor da perícia/característica. Graus: 01 = Crítico; ≤ 1/5 do valor = Extremo; ≤ 1/2 = Difícil; ≤ valor = Normal; acima = Falha; 100 (ou 96-100 se o valor for menor que 50) = Desastre.",
+    "COMO PEDIR O TESTE (teste ou pedir_teste): em \"teste\" passe a perícia (\"Encontrar\", \"Biblioteca\", \"Lábia\", \"Armas de Fogo\", \"Lutar\"), a característica (\"FOR\", \"DES\", \"INT\", \"Ideia\" = INT, \"Conhecimento\" = EDU, \"Esforço\" = FOR), \"Sorte\", \"Sanidade\", \"Resistência\" (CON contra veneno/doença; \"Resistência de POD\" contra controle mental; \"Reflexos\" = DES), \"Ataque\" (usa a arma da ocupação ou a melhor luta; \"Ataque à distância\" usa armas de fogo), \"Magia\" (POD) ou \"Iniciativa\" (DES).",
+    "- NÃO passe CD. \"alvo\" é a dificuldade exigida: omita (Normal), 2 = Difícil (precisa de ≤ metade), 3 = Extremo (≤ um quinto). Use Difícil para tarefas sob pressão ou contra alguém competente (perícia do oponente 50+), Extremo para o quase impossível (oponente 90+).",
+    "- \"modo\": vantagem = 1 dado bônus (rola duas dezenas e fica com a menor), desvantagem = 1 dado de penalidade (fica com a maior). Escreva \"2 dados de bônus\" no nome do teste para dois. \"modificador\" soma pontos percentuais ao valor (raramente necessário; prefira dados bônus/penalidade).",
+    "- Oposição: cada lado testa; vence o grau maior; empate fica com quem tem o valor mais alto.",
+    "PISTAS: nenhuma pista essencial fica presa atrás de um único teste. Falhou em Biblioteca? A informação chega mais tarde, mais cara ou com um perigo junto. O teste decide o custo e o tempo, não se a história anda.",
+    "FORÇAR (pushing): depois de uma falha (nunca em Sanidade, Sorte ou combate), o jogador pode justificar uma nova tentativa. Antes de rolar, anuncie a consequência; se o teste forçado falhar, ela acontece com peso total (ferimento, perda de SAN, alarme, captura).",
+    "SORTE (recurso \"sorte\"): o jogador pode gastar pontos de Sorte, 1 por 1, para baixar o resultado do d100 e transformar falha em sucesso — não vale em Sanidade, Sorte, dano nem teste forçado. Aplique com alterar_ficha recursos {\"sorte\": -N}. Teste de \"Sorte\" (d100 ≤ Sorte atual) decide acasos do grupo: tem táxi? a lanterna funciona?",
+    "SANIDADE (recurso \"san\", máximo 99 − Mitos): diante do horror, peça o teste \"Sanidade\" e anuncie a perda como \"sucesso/falha\", ex.: cadáver mutilado 0/1d3, criatura menor 1/1d6, horror maior 1d6/1d20, deus antigo 1d10/1d100. Role a perda com rolar_dados e aplique com alterar_ficha recursos {\"san\": -N}.",
+    "- Perdeu 5+ SAN numa só rolagem: teste de \"Ideia\" (INT). Se PASSAR, o investigador entende o que viu e enlouquece temporariamente (1d10 horas): surto de 1d10 rodadas (fuga desesperada, ataque de pânico, desmaio, gritaria, comportamento estranho) e depois uma fobia ou mania. Se falhar, a mente reprime e ele segue em choque.",
+    "- Perdeu 1/5 da SAN que tinha no começo do dia: insanidade indefinida (meses), com delírios e episódios. SAN 0: loucura permanente — o personagem vira PdM.",
+    "- Registre insanidade em condições (\"Insanidade Temporária\", \"Insanidade Indefinida\"). Psicanálise e repouso ajudam a recuperar. Ler tomos proibidos aumenta Mitos (alterar_ficha recursos {\"mitos\": +N}) e reduz o máximo de SAN.",
+    "COMBATE: rodadas em ordem de DES (arma de fogo pronta age como DES+50). Corpo a corpo é teste oposto: atacante \"Ataque\"/\"Lutar\" contra Esquivar ou contra-ataque (Lutar) do defensor; quem tiver o grau maior acerta. Armas de fogo: \"Armas de Fogo\" com Normal no alcance básico, Difícil em longo alcance, Extremo em muito longo; à queima-roupa ganha dado bônus; alvo que se joga no chão é penalidade. Esquivar contra tiro só com cobertura à vista.",
+    "- Dano: soco 1d3+BD, faca 1d4+BD, porrete 1d6+BD, machado 1d8+2+BD, revólver/pistola 1d10, rifle 2d6+4, escopeta 4d6/2d6/1d6 (perto/médio/longe). Sucesso Extremo com arma perfurante = dano máximo + mais uma rolagem; com arma de impacto, dano máximo. BD = bônus de dano da ficha.",
+    "- Armadura reduz o dano. Ferimento grave: perder metade ou mais dos PV máximos num golpe só → condição \"Ferimento Grave\", teste de CON ou desmaia. PV 0 com ferimento grave = \"Morrendo\" (CON a cada rodada até receber Primeiros Socorros). PV 0 sem ferimento grave = inconsciente.",
+    "- Inimigos humanos: cultista 10-12 PV, Lutar 40-50%; capanga 12-14 PV; criaturas têm armadura e pedem Sanidade só de olhar.",
+    "- Primeiros Socorros cura 1 PV (e estabiliza); Medicina cura 1d3 após o socorro.",
+    "MAGIA: feitiços custam Pontos de Magia (recurso \"pm\") e quase sempre SAN; teste \"Magia\" (POD) quando houver resistência ou risco. PM voltam com descanso.",
+    "EVOLUÇÃO: não há níveis nem XP. Ao fim de uma aventura o mestre concede uma \"fase de desenvolvimento\" (subir de nível na ferramenta): perícias usadas com sucesso podem melhorar 1d10, recupera um pouco de SAN e talvez Sorte.",
+    "Descanso: curto = PM voltam aos poucos (1 por hora); longo (noite/dia de repouso) = PM cheios e +1 PV (ferimento grave pede teste de CON para sarar).",
+    "COMO MESTRAR O HORROR",
+    "- Investigadores são frágeis e comuns: uma faca mata, um tiro derruba. Correr, esconder, queimar o livro e chamar a polícia são vitórias; luta é a pior opção e deve parecer assim.",
+    "- Pistas essenciais nunca dependem de teste (veja PISTAS): procurou no lugar certo, achou; o teste decide o extra, o tempo e o preço. Pistas concretas (um recibo, uma marca no batente, um nome riscado) e os jogadores ligam os pontos.",
+    "- Horror pelo não-dito: o efeito antes da causa (cheiro, cachorros calados, alguém a mais na foto). Revele a coisa em pedaços e nunca a explique por inteiro: uma frase certa assusta mais que um parágrafo de tentáculos.",
+    "- Escalada: normalidade com uma rachadura → padrões estranhos → presença → revelação. Cada cena aperta um grau.",
+    "- Sanidade é a moeda: peça o teste diante do horror de verdade, não de qualquer cadáver; narre a perda pelo corpo (mãos que não param, riso fora de hora). Surto é cena: descreva o impulso e deixe o jogador interpretar.",
+    "- Forçar é oferta séria: diga o preço antes (o vigia acorda, o livro cobra SAN, o chão cede) e cumpra.",
+    "- NPCs mentem por medo, vergonha ou porque o culto paga. Documentos e diários aparecem em trechos curtos, com a voz de quem escreveu. Respeite a época (em 1920 há telegrama e telefonista, não celular).",
+    "- No pedir_teste, dado de bônus/penalidade vai em modo (\"vantagem\"/\"desvantagem\"); \"difícil\" ou \"extremo\" vão no nome do teste (alvo 1 = Normal).",
+    "",
+    "## Campanha: Campanha-fixture dos golden tests",
+    "- Cenário pedido: Uma cidade portuária afundando aos poucos, onde o farol apaga toda vez que alguém mente.",
+    "- Tom: sombrio e debochado",
+    "- Grupo: 1 personagem, nível 1",
+    "- Modo livre: cada ação chega quando o jogador manda (às vezes várias juntas). Responda só ao que foi declarado e devolva a palavra; não espere todos agirem para seguir a ficção.",
+    "",
+    "## Grupo",
+    "### Teodora Fixture (jogador: Paulo)",
+    "Teodora Fixture — Antiquário, Anos 1920 · Adulto (20-39) · tom Clássico · fase 1",
+    "PV 10/10 (ferimento grave se perder 5+ de uma vez) · Armadura 0 · MOV 8 · BD 0 · Corpo 0",
+    "SAN 60/99 (insanidade temporária com 5+ numa rolagem; indefinida se perder 12+ hoje) · Sorte 65 · PM 12/12 · Mitos 0",
+    "Características: FOR 40, CON 50, TAM 50, DES 60, APA 50, INT 70, POD 60, EDU 80",
+    "Perícias: Encontrar 75%, Avaliação 65%, História 65%, Esquivar 65%, Biblioteca 60%, Escutar 55%, Furtividade 55%, Nível de Crédito 46%, Arte/Ofício 44%, Outra Língua 31%, Charme 30%, Ocultismo 20%",
+    "Básicas: Lutar (Briga) 25%, Primeiros Socorros 30%, Psicologia 10%",
+    "Ataques: soco — Lutar (Briga) 25%, dano 1d3+BD",
+    "Inventário: lupa de joalheiro, catálogo de leilões rabiscado, luvas de algodão, lanterna elétrica, caderno de notas, cigarreira · 92 em dinheiro",
+    "Condições: nenhuma",
+    "História: Chegou na cidade com um baú lacrado e nenhuma explicação.",
+    "",
+    "## Resumo do que já aconteceu",
+    "(nada ainda: a campanha está começando)",
+    "",
+    "## Diário da campanha",
+    "(vazio: anote NPCs, missões e lugares assim que aparecerem)",
+    "",
+    "## Cena atual",
+    "- Local: Cais Velho, debaixo do farol · Momento: Noite · Clima: garoa",
+    "- Situação: O faroleiro sumiu."
+  ]
+}

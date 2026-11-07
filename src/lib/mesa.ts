@@ -40,16 +40,22 @@ export type EstadoMesa = {
   ocupado: boolean;
   presenca: Jogador[];
   provedor: string;
+  /**
+   * A página foi aberta na máquina da taverna (mesa local, hot-seat). Pela rede, quem não reivindicou personagem entra
+   * só assistindo. O estado reenviado pelo fluxo de eventos não precisa disso (o cliente já sabe) e vem com false.
+   */
+  local: boolean;
 };
 
 /** Quantas mensagens antigas vão no estado inicial. */
 const MENSAGENS_INICIAIS = 300;
 
-export function estadoMesa(campanhaId: number): EstadoMesa | null {
+export function estadoMesa(campanhaId: number, opcoes: { local?: boolean } = {}): EstadoMesa | null {
   const c = obterCampanha(campanhaId);
   if (!c) return null;
   const sistema = obterSistema(c.sistema);
   return {
+    local: opcoes.local ?? false,
     campanha: { id: c.id, nome: c.nome, sistema: c.sistema, cenario: c.cenario, tom: c.tom, modo: c.config.modo ?? "livre",
       temPin: Boolean(c.config.pin),
       modoJogo: c.config.modoJogo ?? "avancado",

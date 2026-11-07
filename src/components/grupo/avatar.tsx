@@ -2,9 +2,10 @@
 
 import type { Mesa } from "@/lib/cliente/use-mesa";
 import type { PersonagemVisivel } from "@/lib/mesa";
+import type { Jogador } from "@/lib/tempo-real";
 import { INICIO } from "@/lib/constantes";
 
-// Peças compartilhadas do grupo: avatar com iniciais, cores por personagem e quem já agiu na rodada.
+// Peças compartilhadas do grupo: avatar com iniciais, cores por personagem, quem já agiu na rodada e quem está em uso em outro aparelho.
 
 /** Cores fixas por posição no grupo, para reconhecer o personagem de relance no chip, no cartão e no chat. */
 const CORES = [
@@ -45,6 +46,32 @@ export function Avatar({ mesa, personagem, tamanho = "md" }: { mesa: Pick<Mesa, 
 /** No modo rodada: ids de quem já tem ação na fila (a abertura da campanha não conta). */
 export function quemAgiu(mesa: Pick<Mesa, "fila">): Set<number> {
   return new Set(mesa.fila.filter((a) => a.acao !== INICIO && a.personagemId !== null).map((a) => a.personagemId as number));
+}
+
+const mesmoNome = (a: string, b: string) => a.trim().toLocaleLowerCase("pt-BR") === b.trim().toLocaleLowerCase("pt-BR");
+
+/**
+ * Outro aparelho que está com este personagem agora: o que o tem como ativo ou, se o personagem tem dono, o aparelho do dono
+ * conectado à mesa (desde que o dono não seja eu). null quando o personagem está livre para este aparelho.
+ * Numa mesa mista (computador + celulares), é o que impede o hot-seat de passar a vez para quem está no celular do amigo.
+ */
+export function outroAparelhoCom(mesa: Pick<Mesa, "personagens" | "presenca" | "eu">, pid: number): Jogador | null {
+  const outros = mesa.presenca.filter((j) => j.clienteId !== mesa.eu.clienteId);
+  const usando = outros.find((j) => j.personagemId === pid);
+  if (usando) return usando;
+  const dono = mesa.personagens.find((p) => p.id === pid)?.jogador;
+  if (!dono || mesmoNome(dono, mesa.eu.apelido)) return null;
+  return outros.find((j) => mesmoNome(j.apelido, dono)) ?? null;
+}
+
+export function emUsoPorOutroAparelho(mesa: Pick<Mesa, "personagens" | "presenca" | "eu">, pid: number): boolean {
+  return outroAparelhoCom(mesa, pid) !== null;
+}
+
+/** Onde está o outro aparelho, para os avisos: "no celular de Amigo", "no computador da taverna" ou, vendo daqui mesmo, "noutra janela desta máquina". */
+export function ondeEsta(j: Jogador, euLocal: boolean): string {
+  if (!j.local) return `no celular de ${j.apelido}`;
+  return euLocal ? "noutra janela desta máquina" : "no computador da taverna";
 }
 
 /** Rótulo "Humano · Guerreiro · Nível 3" pelos dados públicos do sistema. */

@@ -24,10 +24,16 @@ function gravar(chave: string, valor: string | null) {
   }
 }
 
+/** Id aleatório: crypto.randomUUID só existe em contexto seguro (https ou localhost); pela rede local (http://192.168…) não há. */
+function idAleatorio(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export function clienteId(): string {
   let id = ler("taverna:cliente");
   if (!id) {
-    id = crypto.randomUUID();
+    id = idAleatorio();
     gravar("taverna:cliente", id);
   }
   return id;

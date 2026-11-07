@@ -2,8 +2,8 @@
 
 import { useActionState, useCallback, useEffect, useRef, useState, useTransition } from "react";
 import type { AjustesMestre, IdProvedor } from "@/lib/mestre";
-import { salvarAjustesAcao, statusLoginAcao, testarConexaoAcao, type ResultadoTeste } from "./acoes";
-import type { StatusClaude } from "./claude-local";
+import { salvarAjustesAcao, statusLoginAcao, testarConexaoAcao, usarExecutavelAcao, type EstadoSalvar, type ResultadoTeste } from "./acoes";
+import type { AlternativaClaude, StatusClaude } from "./claude-local";
 
 export type PadroesEnv = {
   provedor: IdProvedor;
@@ -129,7 +129,10 @@ export function FormularioConfig({ ajustes, padroes }: { ajustes: AjustesMestre;
               autoComplete="off"
               spellCheck={false}
             />
-            <span className="mt-1 block text-xs text-muted">Só se o &quot;claude&quot; não estiver no PATH (ex.: o que vem dentro do app desktop).</span>
+            <span className="mt-1 block text-xs text-muted">
+              Vazio: a taverna procura sozinha (PATH, npm, app desktop). Ou o caminho do claude.exe, uma pasta com ele, ou{" "}
+              <code className="text-ambar">desktop</code> para usar sempre o mais novo embutido no app Claude.
+            </span>
           </label>
         </div>
         <StatusLogin binRef={formRef} ativo={efetivo === "cli"} />
@@ -230,11 +233,30 @@ function CartaoOpcao(props: { marcado: boolean; aoMarcar: () => void; valor: str
 function StatusLogin({ binRef, ativo }: { binRef: React.RefObject<HTMLFormElement | null>; ativo: boolean }) {
   const [status, setStatus] = useState<StatusClaude | null>(null);
   const [verificando, iniciar] = useTransition();
+  const [gravado, setGravado] = useState<EstadoSalvar>(null);
+  const [gravando, iniciarGravar] = useTransition();
 
   const verificar = useCallback(() => {
     const bin = String(new FormData(binRef.current ?? undefined).get("binCli") ?? "");
     iniciar(async () => setStatus(await statusLoginAcao(bin)));
   }, [binRef]);
+
+  // "Usar este": grava o executável achado no ajuste, mostra no campo e confere de novo
+  const usar = useCallback(
+    (caminho: string) => {
+      setGravado(null);
+      iniciarGravar(async () => {
+        const r = await usarExecutavelAcao(caminho);
+        setGravado(r);
+        if (r?.ok) {
+          const campo = binRef.current?.elements.namedItem("binCli");
+          if (campo instanceof HTMLInputElement) campo.value = caminho;
+          verificar();
+        }
+      });
+    },
+    [binRef, verificar],
+  );
 
   // confere sozinho na primeira vez que a seção aparece
   const conferido = useRef(false);
@@ -245,11 +267,13 @@ function StatusLogin({ binRef, ativo }: { binRef: React.RefObject<HTMLFormElemen
     }
   }, [ativo, verificar]);
 
+  const ocupado = verificando || gravando;
+
   return (
     <div className="cartao p-4 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="titulo text-base text-pergaminho">Login do Claude Code</p>
-        <button type="button" className="btn-borda min-h-10 px-3 py-1.5 text-xs" onClick={verificar} disabled={verificando}>
+        <button type="button" className="btn-borda min-h-10 px-3 py-1.5 text-xs" onClick={verificar} disabled={ocupado}>
           {verificando ? "Perguntando…" : "Verificar de novo"}
         </button>
       </div>
@@ -258,22 +282,54 @@ function StatusLogin({ binRef, ativo }: { binRef: React.RefObject<HTMLFormElemen
         <p className="mt-2 text-muted">{verificando ? "Perguntando ao Claude Code se ele está acordado…" : "Ainda não verificado."}</p>
       ) : !status.instalado ? (
         <div className="mt-2 space-y-2">
-          <p className="text-sangue">Claude Code não encontrado{status.caminho ? ` em ${status.caminho}` : ""}.</p>
+          {status.caminhoConfiguradoSumiu ? (
+            <CaminhoSumiu caminho={status.caminhoConfiguradoSumiu} />
+          ) : (
+            <p className="text-sangue">Claude Code não encontrado{status.caminho ? ` em ${status.caminho}` : ""}.</p>
+          )}
           {status.erro && <p className="font-mono text-xs text-muted">{status.erro}</p>}
           <Instalacao />
         </div>
       ) : (
-        <div className="mt-2 space-y-1">
+        <div className="mt-2 space-y-2">
+          {status.caminhoConfiguradoSumiu && (
+            <div className="space-y-2 rounded-xl border border-ambar-forte/50 bg-ambar/5 p-3">
+              <CaminhoSumiu caminho={status.caminhoConfiguradoSumiu} />
+              <p className="text-muted">
+                Encontrei este <span className="text-foreground">({status.versao ?? "?"}, {rotuloOrigem(status)})</span> e estou usando por enquanto; para
+                fixar, clique em usar este:
+              </p>
+              <LinhaExecutavel caminho={status.caminho ?? ""} aoUsar={usar} ocupado={ocupado} />
+            </div>
+          )}
           <p className="text-muted">
             Versão <span className="text-foreground">{status.versao ?? "?"}</span>
+            {status.origem && !status.caminhoConfiguradoSumiu && <span className="text-xs"> ({rotuloOrigem(status)})</span>}
             <span className="block break-all font-mono text-xs">{status.caminho}</span>
+            {status.executaDeFato && (
+              <span className="block break-all text-xs">
+                Executa de fato: <span className="font-mono">{status.executaDeFato}</span>
+                {status.atalho && <> (traduzido do atalho do npm {status.atalho})</>}
+              </span>
+            )}
           </p>
+          {status.desatualizado && (
+            <p className="text-sangue">
+              Claude Code {status.versao} é mais antigo que o mínimo {status.versaoMinima} — rode <code className="text-ambar">claude update</code> (ou
+              reinstale pelo winget) e verifique de novo.
+            </p>
+          )}
+          {status.maisNovoQueTestado && (
+            <p className="text-xs text-muted">Versão mais nova que a testada ({status.versaoTestada}): se o mestre falhar, mande o diagnóstico.</p>
+          )}
           {status.logado ? (
             <p className="text-musgo">
               Logado{status.metodo === "claude.ai" ? " com a conta do claude.ai" : status.metodo ? ` (${status.metodo})` : ""}
               {status.plano ? `, plano ${status.plano}` : ""}
               {status.email ? ` — ${status.email}` : ""}.
             </p>
+          ) : status.erro ? (
+            <p className="text-sangue">Instalado, mas não consegui conferir o login.</p>
           ) : (
             <div className="space-y-2">
               <p className="text-sangue">Instalado, mas sem login.</p>
@@ -288,6 +344,63 @@ function StatusLogin({ binRef, ativo }: { binRef: React.RefObject<HTMLFormElemen
           {status.erro && <p className="font-mono text-xs text-muted">{status.erro}</p>}
         </div>
       )}
+
+      {status && status.alternativas.length > 0 && (
+        <details className="mt-3 text-xs text-muted">
+          <summary className="cursor-pointer">
+            {status.instalado ? "Outras instalações nesta máquina" : "Instalações encontradas nesta máquina"} ({status.alternativas.length})
+          </summary>
+          <ul className="mt-2 space-y-2">
+            {status.alternativas.map((a: AlternativaClaude) => (
+              <li key={a.caminho} className="space-y-1">
+                <span>
+                  {a.versao ?? "versão ?"} · {a.rotulo}
+                </span>
+                <LinhaExecutavel caminho={a.caminho} aoUsar={usar} ocupado={ocupado} />
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {gravado && (
+        <p role="status" className={`mt-2 text-xs ${gravado.ok ? "text-musgo" : "text-sangue"}`}>
+          {gravado.mensagem}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function rotuloOrigem(status: StatusClaude) {
+  const r: Record<string, string> = {
+    configurado: "caminho configurado",
+    desktop: "embutido no app Claude",
+    where: "no PATH",
+    "local-bin": "instalador oficial",
+    "claude-data": "embutido no app Claude",
+    npm: "instalado pelo npm",
+    path: "no PATH",
+  };
+  return status.origem ? (r[status.origem] ?? status.origem) : "";
+}
+
+function CaminhoSumiu({ caminho }: { caminho: string }) {
+  return (
+    <p className="text-sangue">
+      O executável configurado não existe mais (o app Claude atualizou e trocou de pasta):
+      <span className="block break-all font-mono text-xs text-muted">{caminho}</span>
+    </p>
+  );
+}
+
+function LinhaExecutavel({ caminho, aoUsar, ocupado }: { caminho: string; aoUsar: (c: string) => void; ocupado: boolean }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <code className="min-w-0 flex-1 break-all font-mono text-xs text-foreground">{caminho}</code>
+      <button type="button" className="btn-borda min-h-9 px-3 py-1 text-xs" onClick={() => aoUsar(caminho)} disabled={ocupado}>
+        Usar este
+      </button>
     </div>
   );
 }

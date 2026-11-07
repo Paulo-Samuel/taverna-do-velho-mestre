@@ -18,15 +18,62 @@ inventa resultado de dado, nem que queira.
 
 ## Instalação
 
-Requer **Node 24+** (usa `node:sqlite`, sem dependência nativa).
+Requisitos:
+
+- **Node 24 LTS** (usa `node:sqlite`, sem dependência nativa). No Windows: `winget install OpenJS.NodeJS.LTS`. A linha
+  Current (26) deve funcionar, mas não foi testada.
+- Para o mestre no modo `cli` (padrão): **Claude Code 2.1.45 ou mais novo** (`claude --version`; testado com 2.1.316),
+  com login feito pela própria pessoa. Antigo: `claude update`.
+- Para receber atualizações: **Git** (`winget install Git.Git`).
+
+### Windows: o atalho
+
+1. Baixe a taverna com o Git numa pasta **fora do OneDrive e da Área de Trabalho sincronizada**, por exemplo `C:\taverna`:
+   `git clone https://github.com/Paulo-Samuel/taverna-do-velho-mestre.git C:\taverna`. Dentro do OneDrive o banco trava e a
+   `node_modules` inteira vai para a nuvem. Dá para baixar o ZIP, mas aí não há como atualizar depois (veja
+   [Atualizar](#atualizar)).
+2. Dê duplo clique em `iniciar-taverna.cmd`. Na primeira vez ele instala as dependências e compila (alguns minutos); depois
+   abre o navegador em http://localhost:3300. Fechar a janela preta desliga a taverna.
+3. Opcional: um atalho na Área de Trabalho com destino
+   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\taverna\iniciar-taverna.ps1"`, "Iniciar em" na pasta da
+   taverna e ícone `assets\taverna.ico`.
+
+O que o atalho faz sozinho: confere o Node; instala exatamente o que está no `package-lock.json` (`npm ci`) sempre que esse
+arquivo muda (guarda o hash em `node_modules\.taverna-lock`); recompila quando o código muda, e só então (mexer só no
+`.env.local` não recompila, o servidor lê esse arquivo ao ligar); se a compilação falhar, reinstala e tenta mais uma vez; e
+só considera a taverna "já aberta" quando quem responde na porta 3300 é ela mesma (toda resposta da taverna leva o cabeçalho
+`x-taverna: 1`, posto em `src/proxy.ts`), nunca outro programa que esteja na porta. Se algo der errado, a janela fica aberta
+com a explicação e o código de saída, e tudo o que apareceu nela está em `data\logs\atalho-<data>.log` (guardado por 14
+dias; abre no Bloco de Notas ao apertar Enter). É esse arquivo que você manda para quem instalou. Porta 3300 ocupada por
+outro programa, banco travado por outra taverna aberta e módulo faltando têm dicas próprias.
+
+### Pelo terminal (qualquer sistema)
 
 ```bash
 npm install
 cp .env.example .env.local   # opcional: dá para escolher tudo pela página /config
-npm run dev                  # http://localhost:3300
+npm run dev                  # http://localhost:3300 (desenvolvimento)
+npm run build && npm start   # produção, o mesmo que o atalho faz
 ```
 
+No macOS e no Linux não há atalho pronto: use os comandos acima (Node pelo instalador oficial ou nvm; Claude Code pelo
+instalador oficial, que o deixa em `~/.local/bin/claude`). Para atualizar: `git pull --ff-only`, `npm install` e
+`npm run build` de novo.
+
 O banco fica em `data/taverna.db` (campanhas, fichas, histórico, diário e ajustes). Apague o arquivo para começar do zero.
+
+## Atualizar
+
+Com a taverna **desligada**, duplo clique em `atualizar-taverna.cmd` (ou
+`powershell -NoProfile -ExecutionPolicy Bypass -File atualizar-taverna.ps1`). Ele puxa a versão nova do GitHub
+(`git fetch` + `git pull --ff-only`), reinstala as dependências se o `package-lock.json` mudou, recompila e termina com
+"Pronto — abra o atalho". Ele se recusa a rodar com a taverna no ar; sem internet, diz isso; se houver arquivo alterado à
+mão, diz qual é e sugere `git stash`. Suas campanhas (`data\`), configurações (`.env.local`) e músicas (`musica\`) ficam fora
+do git e não são tocadas. Registro em `data\logs\atualizar-<data>.log`.
+
+Se a pasta veio de um ZIP (sem `.git`), o próprio `atualizar-taverna.cmd` mostra como passar para o Git uma vez só:
+`winget install Git.Git` (e reabrir o terminal), `git clone https://github.com/Paulo-Samuel/taverna-do-velho-mestre.git C:\taverna`
+e copiar `data\`, `.env.local` e `musica\` da pasta antiga para a nova. Daí em diante, atualizar é um duplo clique.
 
 ## Quem é o mestre (provedores)
 
@@ -39,14 +86,15 @@ volta a valer o `.env`. A página também mostra se o Claude Code está instalad
 | `api` | API da Anthropic com loop de ferramentas e streaming (`src/lib/mestre/provedor-api.ts`). Modelo padrão `claude-sonnet-5-5`. | Créditos da `ANTHROPIC_API_KEY`, por uso. |
 | `falso` | Mestre de teste, sem IA: rola dados e responde frases prontas. | Grátis. Serve para testar mesa, rolador e rede. |
 
-Variáveis do `.env.local`: `TAVERNA_PROVEDOR`, `CLAUDE_BIN` (caminho do executável, se `claude` não estiver no PATH),
+Variáveis do `.env.local`: `TAVERNA_PROVEDOR`, `CLAUDE_BIN` (caminho do executável se `claude` não estiver no PATH, ou
+`desktop` para usar sempre o Claude Code mais novo embutido no app Claude, que troca de pasta a cada atualização),
 `CLAUDE_CLI_MODELO` (`sonnet`, `opus`, `haiku` ou nome completo), `ANTHROPIC_API_KEY` e `TAVERNA_MODELO_API`. A chave de API
 só é lida do ambiente; a página de configurações nunca pede nem guarda chave.
 
 ### Modo `cli`: uso pessoal
 
-1. Instale o Claude Code (`winget install Anthropic.ClaudeCode` no Windows) e rode `claude` uma vez para fazer login com a
-   sua conta.
+1. Instale o Claude Code (`winget install Anthropic.ClaudeCode` no Windows; precisa ser **2.1.45 ou mais novo**, confira com
+   `claude --version` e atualize com `claude update`) e rode `claude` uma vez para fazer login com a sua conta.
 2. Rode a taverna **na mesma máquina**. O app não lê nem copia o token: só executa o binário oficial e lê a saída.
 3. O app remove `ANTHROPIC_API_KEY` do ambiente do processo filho, para não cobrar créditos da API por engano.
 

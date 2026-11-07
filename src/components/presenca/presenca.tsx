@@ -59,6 +59,9 @@ export function Presenca({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
   const [semAcesso, setSemAcesso] = useState(false);
   const caixa = useRef<HTMLDivElement>(null);
   const id = mesa.campanha.id;
+  // três fases: "conectando" (primeira abertura, sem alarme), "ok" e "caiu" (vermelho; o EventSource tenta de novo sozinho)
+  const conectado = mesa.conexao === "ok";
+  const caiu = mesa.conexao === "caiu";
   const nomeDe = (pid: number | null) => mesa.personagens.find((p) => p.id === pid)?.ficha.nome;
   // eu primeiro, depois quem está na máquina da taverna, depois a rede
   const jogadores = [...mesa.presenca].sort(
@@ -82,16 +85,17 @@ export function Presenca({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
 
   // conexão caída por um tempo: pode ser só o Wi-Fi, ou o PIN que mudou (aí o servidor recusa e o EventSource desiste)
   useEffect(() => {
-    if (mesa.conectado || !mesa.eu.clienteId) return;
+    if (!caiu || !mesa.eu.clienteId) return;
     const t = setTimeout(async () => {
       const r = await fetch(`/api/campanhas/${id}/pin`, { cache: "no-store" }).catch(() => null);
-      const corpo = r?.ok ? ((await r.json()) as { liberado?: boolean }) : null;
+      const corpo = r?.ok ? ((await r.json().catch(() => null)) as { liberado?: boolean } | null) : null;
       if (corpo && !corpo.liberado) setSemAcesso(true);
     }, 5000);
     return () => clearTimeout(t);
-  }, [mesa.conectado, mesa.eu.clienteId, id]);
+  }, [caiu, mesa.eu.clienteId, id]);
 
-  const situacao = mesa.conectado ? "Conectado" : semAcesso ? "Barrado na porta" : "Reconectando…";
+  const situacao = conectado ? "Conectado" : semAcesso ? "Barrado na porta" : caiu ? "Reconectando…" : "Conectando…";
+  const corDoPonto = conectado ? "bg-musgo" : caiu ? "animate-pulse bg-sangue" : "bg-muted/70";
 
   return (
     <div ref={caixa} className="relative">
@@ -103,7 +107,7 @@ export function Presenca({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
         aria-label={`${situacao}. ${mesa.presenca.length} na mesa`}
         title={`${situacao} · ${mesa.presenca.length} na mesa`}
       >
-        <span className={`size-2 shrink-0 rounded-full ${mesa.conectado ? "bg-musgo" : "animate-pulse bg-sangue"}`} />
+        <span className={`size-2 shrink-0 rounded-full ${corDoPonto}`} data-conexao={mesa.conexao} />
         {/* no celular só o número e um bonequinho, para não quebrar a linha do cabeçalho */}
         <span className="tabular-nums">{mesa.presenca.length}</span>
         <span className="opacity-70 grayscale sm:hidden" aria-hidden>
@@ -114,9 +118,9 @@ export function Presenca({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
 
       {aberto && (
         <div className="cartao surgir fixed inset-x-4 top-20 z-40 p-4 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80">
-          <p className={`mb-3 flex items-center gap-2 text-xs ${mesa.conectado ? "text-musgo" : "text-sangue"}`}>
-            <span className={`size-2 rounded-full ${mesa.conectado ? "bg-musgo" : "animate-pulse bg-sangue"}`} />
-            {mesa.conectado ? "Conectado à mesa" : semAcesso ? "O PIN da mesa mudou" : "Sem sinal da taverna, tentando de novo…"}
+          <p className={`mb-3 flex items-center gap-2 text-xs ${conectado ? "text-musgo" : caiu ? "text-sangue" : "text-muted"}`}>
+            <span className={`size-2 rounded-full ${corDoPonto}`} />
+            {conectado ? "Conectado à mesa" : semAcesso ? "O PIN da mesa mudou" : caiu ? "Sem sinal da taverna, tentando de novo…" : "Conectando à mesa…"}
           </p>
 
           <p className="mb-1.5 text-xs uppercase tracking-wider text-muted">Na mesa agora</p>
@@ -153,7 +157,7 @@ export function Presenca({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
         </div>
       )}
 
-      {semAcesso && !mesa.conectado && (
+      {semAcesso && !conectado && (
         <div className="fixed inset-x-4 bottom-24 z-40 mx-auto max-w-md rounded-md border border-sangue/60 bg-surface px-4 py-3 text-sm shadow-lg">
           A porta da taverna mudou de tranca (PIN novo).{" "}
           <Link href={`/mesa/${id}/entrar`} className="text-ambar underline">
