@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
+import { RetratoSVG } from "../historia/retrato/desenho";
 import type { Chip, GrupoChips } from "./cena";
 
 // "O que mudou na cena": as linhas de ficha, diário e XP do turno numa faixa de chips no fim da cena, por personagem
@@ -97,9 +98,16 @@ export function Mudancas({
                       if (!aberto?.fixo) setAberto(null);
                     }}
                   >
-                    <span aria-hidden className="leitor-chip-icone">
-                      {c.icone}
-                    </span>
+                    {c.retrato ? (
+                      // pessoa nova do diário: o rosto dela no lugar do ícone (o rótulo já diz o nome)
+                      <span aria-hidden className="leitor-chip-icone -ml-1.5 inline-flex shrink-0 overflow-hidden rounded-full">
+                        <RetratoSVG dados={c.retrato} tamanho={22} className={c.riscado ? "grayscale" : undefined} titulo="" />
+                      </span>
+                    ) : (
+                      <span aria-hidden className="leitor-chip-icone">
+                        {c.icone}
+                      </span>
+                    )}
                     <span className={c.riscado ? "line-through decoration-current/50" : ""}>{c.rotulo}</span>
                   </button>
                 );

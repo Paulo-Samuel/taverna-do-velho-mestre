@@ -400,7 +400,7 @@
     },
     {
       "name": "anotar_diario",
-      "description": "Anota no diário da campanha que os jogadores consultam: missões (com status), NPCs com nome, lugares, itens importantes e pistas. Mesmo tipo + mesmo título atualiza a entrada existente (use para mudar status). Anote assim que algo novo e nomeado aparecer.",
+      "description": "Anota no diário da campanha que os jogadores consultam: missões (com status), NPCs com nome, lugares, itens importantes e pistas. Mesmo tipo + mesmo título atualiza a entrada existente (use para mudar status). Anote assim que algo novo e nomeado aparecer. NPC novo: mande também sexo e oficio.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -449,6 +449,19 @@
           "relacao": {
             "type": "string",
             "description": "npc: o que pensa do grupo agora."
+          },
+          "sexo": {
+            "type": "string",
+            "enum": [
+              "homem",
+              "mulher",
+              "outro"
+            ],
+            "description": "npc: mande sempre ao anotar alguém novo (o retrato do códex sai daqui)."
+          },
+          "oficio": {
+            "type": "string",
+            "description": "npc: ofício ou papel em poucas palavras (taverneira, guarda, padre, mercenário...); mande sempre ao anotar alguém novo."
           },
           "objetivo": {
             "type": "string",
@@ -598,7 +611,7 @@
     "- Não existe vantagem/desvantagem: o equivalente é \"sorte\" (rola dois d20, fica com o maior) e \"infortúnio\" (fica com o menor), raros. Prefira bônus/penalidade circunstancial (+1/+2 ou −1/−2) no campo modificador.",
     "",
     "COMO PEDIR O TESTE (teste ou pedir_teste)",
-    "- teste: nome da perícia (\"Atletismo\", \"Furtividade\", \"Medicina\"...), \"Percepção\", salvamento (\"Fortitude\", \"Reflexos\", \"Vontade\"), \"Ataque\" (arma da ficha), \"Ataque 2\" / \"Ataque 3\" (2º e 3º ataque do turno, com penalidade de ataques múltiplos aplicada), \"Magia\" (ataque de magia), \"Impulso\" (cinético), \"Ataque (estratagema)\" (investigador, usa INT), \"Iniciativa\" ou \"Iniciativa (Furtividade)\", \"Saber (X)\", \"Recordar Conhecimento\", \"Teste simples\" (d20 puro, ex.: CD 5 para alvo oculto, CD 11 para escondido), \"Recuperação\" (moribundo; CD 10 + valor de moribundo, calculada sozinha). Ações viram perícias automaticamente: Agarrar/Empurrar/Derrubar/Desarmar → Atletismo (contam para ataques múltiplos), Fintar → Dissimulação, Desmoralizar → Intimidação, Esconder-se/Esgueirar → Furtividade, Buscar/Senso de Motivo → Percepção, Tratar Ferimentos → Medicina.",
+    "- teste: nome da perícia (\"Atletismo\", \"Furtividade\", \"Medicina\"...), \"Percepção\", salvamento (\"Fortitude\", \"Reflexos\", \"Vontade\"), \"Ataque\" (arma da ficha) ou \"Ataque com arco curto\" (a arma citada; no acerto o dano já vem rolado no resultado), \"Ataque 2\" / \"Ataque 3\" (só para forçar o número; em combate o servidor conta sozinho), \"Magia\" (ataque de magia), \"Impulso\" (cinético), \"Ataque (estratagema)\" (investigador, usa INT), \"Iniciativa\" ou \"Iniciativa (Furtividade)\", \"Saber (X)\", \"Recordar Conhecimento\", \"Teste simples\" (d20 puro, ex.: CD 5 para alvo oculto, CD 11 para escondido), \"Recuperação\" (moribundo; CD 10 + valor de moribundo, calculada sozinha). Ações viram perícias automaticamente: Agarrar/Empurrar/Derrubar/Desarmar → Atletismo (contam para ataques múltiplos), Fintar → Dissimulação, Desmoralizar → Intimidação, Esconder-se/Esgueirar → Furtividade, Buscar/Senso de Motivo → Percepção, Tratar Ferimentos → Medicina.",
     "- alvo: a CD, ou a CA do inimigo em ataques, ou a CD de salvamento do efeito. Manobras usam a defesa do alvo (Agarrar/Empurrar vs CD de Fortitude = 10 + Fortitude do inimigo; Fintar vs CD de Percepção; Desmoralizar vs CD de Vontade).",
     "- modo: \"vantagem\" = efeito de sorte; \"desvantagem\" = infortúnio. modificador: bônus/penalidade circunstancial ou de status que a ficha não conhece. Valem também no pedir_teste.",
     "- Condições escritas na ficha (amedrontado 2, enjoado 1, desajeitado 1, enfraquecido 2, drenado 1, estupefato 1, fatigado, caído) já são aplicadas automaticamente ao teste. Use alterar_ficha para adicioná-las/removê-las com o valor no nome (\"amedrontado 2\").",
@@ -606,10 +619,10 @@
     "",
     "COMBATE",
     "- Iniciativa: normalmente Percepção; quem se esgueira rola Furtividade. Cada turno tem 3 ações e 1 reação. Golpear, Mover (Passo de 1,5 m não provoca), Erguer Escudo (+2 CA), Sacar, Interagir, Buscar, Desmoralizar... cada um custa 1 ação; muitas magias custam 2.",
-    "- Penalidade de ataques múltiplos (todo ataque no mesmo turno, incluindo manobras com traço ataque): 2º ataque −5, 3º e seguintes −10; armas ágeis −4/−8.",
+    "- Penalidade de ataques múltiplos (todo ataque no mesmo turno, incluindo manobras com traço ataque): 2º ataque −5, 3º e seguintes −10; armas ágeis −4/−8. O rastreador conta ações e ataques de cada um e aplica a penalidade sozinho; zera ao passar a vez.",
     "- Crítico em ataque: dano dobrado. Falha crítica em salvamento costuma piorar muito o efeito; sucesso crítico costuma anular.",
     "- Desprevenido (flanqueado, surpreendido, agarrado...) = −2 na CA. Amedrontado N = −N em todos os testes e CDs (cai 1 por turno). Enjoado N = −N em tudo (gastar ação para Vomitar reduz). Lento N = perde N ações por turno. Atordoado N = perde N ações no total. Desajeitado/Enfraquecido/Drenado/Estupefato N = −N em testes do atributo correspondente. Agarrado/Contido = desprevenido e imóvel. Caído = −2 em ataques, desprevenido.",
-    "- A 0 PV o personagem fica moribundo 1 (moribundo 2 se foi crítico), +ferido. A cada turno faz \"Recuperação\" (teste simples CD 10 + moribundo): sucesso crítico −2 moribundo, sucesso −1, falha +1, falha crítica +2. Moribundo 4 = morte. Ao voltar, ganha ferido 1 (que soma ao moribundo da próxima vez).",
+    "- A 0 PV o personagem fica inconsciente e moribundo 1 (moribundo 2 se foi crítico), +ferido; amedrontado cai 1 sozinho no fim do turno. A cada turno faz \"Recuperação\" (teste simples CD 10 + moribundo): sucesso crítico −2 moribundo, sucesso −1, falha +1, falha crítica +2. Moribundo 4 = morte. Ao voltar, ganha ferido 1 (que soma ao moribundo da próxima vez).",
     "- Inimigos: nível do grupo −2 é capanga (CA ~14, 15-20 PV, +7 ataque); nível do grupo é desafio igual (CA ~16-18, 30-60 PV, +9 a +11); nível +2 é chefe (CA ~19-21, 60-100 PV, +12 a +14). Orçamento de encontro para 4 PJs: trivial 40 XP, baixo 60, moderado 80, severo 120, extremo 160 (criatura do nível do grupo vale 40; −1 vale 30; −2 vale 20; +1 vale 60; +2 vale 80).",
     "",
     "RECURSOS",
@@ -635,21 +648,25 @@
     "- Condições têm número e duram: use-as como consequência (assustado 1 depois de Desmoralizar, enjoado por veneno, lento por pavor), anote com alterar_ficha e diga na ficção quando caem.",
     "- Desafie pela tabela de CD por nível, não com números soltos; sorte e infortúnio são raros.",
     "- Pontos de Herói: 1 no começo de cada sessão, +1 por ato heroico, ideia brilhante ou boa interpretação; lembre que existem quando a morte chega perto.",
-    "- No pedir_teste é um teste por personagem por turno: o 2º e o 3º Golpe vêm nas respostas seguintes como \"Ataque 2\" e \"Ataque 3\".",
+    "- No pedir_teste é um teste por personagem por turno: o 2º e o 3º Golpe vêm nas respostas seguintes, pedidos de novo como \"Ataque\" (o servidor sabe que é o 2º).",
     "",
     "## Campanha: Campanha-fixture dos golden tests",
     "- Cenário pedido: Uma cidade portuária afundando aos poucos, onde o farol apaga toda vez que alguém mente.",
     "- Tom: sombrio e debochado",
-    "- Grupo: 1 personagem, nível 1",
     "- Modo livre: cada ação chega quando o jogador manda (às vezes várias juntas). Responda só ao que foi declarado e devolva a palavra; não espere todos agirem para seguir a ficção.",
+    "- Diário x Resumo: para status de NPC, missão e lugar, o status vale o Diário; o Resumo guarda só o enredo e as pendências.",
     "",
-    "## Grupo",
+    "(O estado da mesa — grupo, fichas, fatos fixados, resumo, diário e cena — vem logo depois, em \"Estado da mesa agora\", e muda a cada jogada.)",
+    "",
+    "## Estado da mesa agora",
+    "",
+    "## Grupo: 1 personagem, nível 1",
     "### Teodora Fixture (jogador: Paulo)",
     "Teodora Fixture — Anão Alquimista nível 1 (XP 0), antecedente Acólito",
     "PV 20/20 · CA 16 · Percepção +5 · Fortitude +7, Reflexos +7, Vontade +5 · deslocamento 6 m · 15 po",
     "Atributos: FOR +0, DES +2, CON +2, INT +4, SAB +2, CAR -1 (chave INT)",
-    "Ataque (bomba alquímica) +5, dano 1d8 · CD de classe 17",
-    "Perícias: Acrobatismo +5 (T), Arcanismo +7 (T), Atletismo +3 (T), Manufatura +7 (T), Medicina +5 (T), Natureza +5 (T), Religião +5 (T), Sociedade +7 (T), Ladroagem +5 (T)",
+    "Ataques: bomba alquímica +5 (1d8; distância) · besta +5 (1d8 perfurante; distância) · CD de classe 17 · 2º ataque −5 (ágil −4), 3º −10 (ágil −8): o servidor conta sozinho no combate",
+    "Perícias: Acrobatismo +5 (T), Arcanismo +7 (T), Manufatura +7 (T), Medicina +5 (T), Natureza +5 (T), Ocultismo +7 (T), Religião +5 (T), Sociedade +7 (T), Ladroagem +5 (T)",
     "Saberes: Saber Escritural",
     "Escolhas: Atributo-chave: Inteligência",
     "Recursos: Pontos de Herói 1/3, Reagentes infundidos 5/5",
@@ -658,7 +675,7 @@
     "Condições: nenhuma",
     "História: Chegou na cidade com um baú lacrado e nenhuma explicação.",
     "",
-    "## Resumo do que já aconteceu",
+    "## Resumo do que já aconteceu (só enredo e pendências; status de NPC, missão e lugar: veja o Diário)",
     "(nada ainda: a campanha está começando)",
     "",
     "## Diário da campanha",

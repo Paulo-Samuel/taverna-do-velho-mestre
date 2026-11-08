@@ -29,10 +29,16 @@ export type EventoMesa =
   | { e: "diario"; entradas: EntradaDiario[] }
   /** fatos fixados pelo jogador (lista inteira, na ordem) */
   | { e: "fatos"; fatos: Fato[] }
-  | { e: "estado"; ocupado: boolean; fila: AcaoPendente[] }
+  /** `aguardando`: segundos que a API pediu para esperar (429) antes de o mestre tentar de novo sozinho */
+  | { e: "estado"; ocupado: boolean; fila: AcaoPendente[]; aguardando?: number }
   | { e: "presenca"; jogadores: Jogador[] }
   | { e: "limite"; janela: string; uso: number | null; renovaEm: number | null }
-  | { e: "erro"; erro: string }
+  /**
+   * Falha do turno (já traduzida para o português). `refazer`: o turno tinha instantâneo, então "Tentar de novo" pode
+   * reenfileirar as mesmas ações (desfazer com refazer). `acao`: o que a frase sugere (abrir Configurações ou tentar de
+   * novo). `aviso`: não derrubou o turno (ex.: o resumo automático falhou), só merece atenção.
+   */
+  | { e: "erro"; erro: string; refazer?: boolean; acao?: "config" | "tentar"; aviso?: boolean }
   /** algo mudou demais (ex.: turno desfeito): o cliente deve recarregar o estado inteiro */
   | { e: "recarregar" };
 

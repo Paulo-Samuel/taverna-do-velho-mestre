@@ -29,7 +29,10 @@ export function agruparTurnos(mensagens: Mensagem[]): Turno[] {
       if (!t || t.itens.length > 0) t = novo(m);
       t.acoes.push(m);
     } else if (m.tipo === "sistema") {
-      if (!t || t.acoes.length > 0 || t.itens.length > 0) t = novo(m);
+      // recado do mestre sobre o turno que acabou (fim anormal, divergência do resumo) fica no mesmo turno: os botões
+      // Desfazer/Outra resposta continuam no turno cortado; os outros avisos de sistema abrem turno
+      const recado = ["aviso", "divergencia"].includes((m.dados as { tipo?: string } | null)?.tipo ?? "");
+      if (!t || (!recado && (t.acoes.length > 0 || t.itens.length > 0))) t = novo(m);
       t.itens.push(m);
     } else {
       if (!t) t = novo(m);

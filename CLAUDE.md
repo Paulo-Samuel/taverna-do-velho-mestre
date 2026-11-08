@@ -30,6 +30,11 @@ instalação está aqui, não em erros de código.
    nele se precisar: `CLAUDE_BIN=desktop` usa sempre o Claude Code mais novo embutido no app Claude (quando o `claude` não
    está no PATH; um caminho fixo para dentro do app morre a cada atualização dele), `CLAUDE_CLI_MODELO=sonnet` (rápido) ou
    `opus` (melhor narrativa, gasta mais do plano).
+   **Para o amigo sem plano:** `TAVERNA_PROVEDOR=api` e `ANTHROPIC_API_KEY=<chave dele>` no `.env.local` (a pessoa cola a
+   própria chave; você não lê, não copia e não mostra a chave). Reinicie a taverna e confira em `/config`: ela mostra a origem
+   da chave e os 4 últimos caracteres. Sem chave, `/config` recusa a API e a mesa recusa a ação, sem perder o turno. Custo, do
+   mais barato ao mais caro: Haiku, Sonnet (padrão), Opus, Fable; o esforço `medium` é o padrão dos turnos (README, "Modo
+   `api`").
 3. **Ligar a taverna: pelo atalho, nunca pela sua sessão.** Não rode `npm run dev`, `npm start`, `npm run rede` nem
    `next start` dentro da sua ferramenta de terminal: é um processo que nunca termina e trava a sua sessão. Faça assim:
    - crie o atalho na Área de Trabalho (`[Environment]::GetFolderPath("Desktop")`): um `.lnk` via

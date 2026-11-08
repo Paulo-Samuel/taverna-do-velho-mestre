@@ -38,12 +38,28 @@ import { arremateRedundante } from "./arremate";
 import { definirFerramentas, executarFerramenta, type ContextoFerramentas } from "./ferramentas";
 import { LIMITE_SEM_RESUMO, MANTER_LITERAIS } from "./memoria";
 import { encerrarTurno, enderecoInterno, registrarTurno } from "./ponte";
-import { fimDeSessao, nomeDoPersonagem, promptDeContinuacao, promptDoResumo, promptDoSistema, promptDoTurno, SISTEMA_RESUMO, type AcaoDoTurno, type FimDeSessao } from "./prompt";
-import { criarProvedorApi } from "./provedor-api";
+import { ErroDoMestre, traduzirErro } from "./erros-api";
+import {
+  diarioParaResumo,
+  fimDeSessao,
+  medirPrompt,
+  nomeDoPersonagem,
+  promptDeContinuacao,
+  promptDoResumo,
+  promptDoTurno,
+  promptEmBlocos,
+  separarDivergencias,
+  SISTEMA_RESUMO,
+  transcricao,
+  type AcaoDoTurno,
+  type FimDeSessao,
+  type MedidaPrompt,
+} from "./prompt";
+import { criarProvedorApi, ESFORCO_PADRAO, ehEsforco } from "./provedor-api";
 import { criarProvedorCli } from "./provedor-cli";
 import { provedorFalso } from "./provedor-falso";
 import { filaPronta } from "./rodada";
-import type { EventoMestre, Provedor } from "./tipos";
+import type { EsforcoApi, EventoMestre, Provedor } from "./tipos";
 
 export { FIM_DE_SESSAO, INICIO };
 
@@ -60,22 +76,82 @@ export type AjustesMestre = {
   binCli?: string;
   /** modelo da API ("claude-sonnet-5-5"...) */
   modeloApi?: string;
+  /** esforço da API nos turnos (low/medium/high); vazio = medium. O resumo usa sempre low. */
+  esforcoApi?: EsforcoApi;
 };
 
 export function lerAjustesMestre(): AjustesMestre {
   return lerAjuste<AjustesMestre>("mestre", {});
 }
 
+/**
+ * O provedor configurado. Nunca lança: com o mestre indisponível (ex.: API sem ANTHROPIC_API_KEY) devolve um provedor
+ * "parado", com o nome certo para as páginas e o estado da mesa, que recusa turno e texto com a mesma frase em português.
+ * Quem precisa saber ANTES de enfileirar usa mestreIndisponivel().
+ */
 export function provedorAtual(): Provedor {
-  return criarProvedor(lerAjustesMestre());
+  const ajustes = lerAjustesMestre();
+  try {
+    return criarProvedor(ajustes);
+  } catch (e) {
+    return provedorParado(idDoProvedor(ajustes), e);
+  }
 }
 
-/** Monta o provedor a partir de ajustes quaisquer (a página de configurações testa antes de salvar). */
+const NOMES_PARADOS: Record<IdProvedor, string> = { api: "API da Anthropic", cli: "Claude Code", falso: "Mestre de teste" };
+
+function provedorParado(id: IdProvedor, causa: unknown): Provedor {
+  const t = traduzirErro(causa);
+  const recusar = () => Promise.reject(new ErroDoMestre(t.mensagem, t.acao ?? "config"));
+  return { id, nome: `${NOMES_PARADOS[id]} (indisponível: confira em Configurações)`, turno: recusar, texto: recusar };
+}
+
+/** Qual provedor vale para estes ajustes: ajuste → TAVERNA_PROVEDOR → cli. */
+export function idDoProvedor(a: AjustesMestre): IdProvedor {
+  const env = process.env.TAVERNA_PROVEDOR?.trim();
+  return a.provedor ?? (env === "api" || env === "falso" || env === "cli" ? env : "cli");
+}
+
+/** A chave da API vem só do ambiente (.env.local); nunca de perfis do SDK nem da página. */
+export function chaveDaApi(): string | undefined {
+  return process.env.ANTHROPIC_API_KEY?.trim() || undefined;
+}
+
+export const SEM_CHAVE_API = "O mestre da API está sem chave: ponha ANTHROPIC_API_KEY no .env.local, reinicie a taverna e confira em Configurações.";
+
+/**
+ * Monta o provedor a partir de ajustes quaisquer (a página de configurações testa antes de salvar).
+ * Provedor da API sem ANTHROPIC_API_KEY lança ErroDoMestre em português (a rota /acao responde 409 antes de enfileirar).
+ */
 export function criarProvedor(a: AjustesMestre): Provedor {
-  const id = a.provedor ?? (process.env.TAVERNA_PROVEDOR as IdProvedor | undefined) ?? "cli";
-  if (id === "api") return criarProvedorApi({ modelo: a.modeloApi });
+  const id = idDoProvedor(a);
+  if (id === "api") {
+    const chave = chaveDaApi();
+    if (!chave) throw new ErroDoMestre(SEM_CHAVE_API, "config");
+    return criarProvedorApi({ modelo: a.modeloApi, chave, esforco: ehEsforco(a.esforcoApi) ? a.esforcoApi : ESFORCO_PADRAO });
+  }
   if (id === "falso") return provedorFalso;
   return criarProvedorCli({ modelo: a.modeloCli || undefined, bin: a.binCli || undefined });
+}
+
+/** Confere se o mestre configurado consegue começar um turno; devolve a frase em português quando não. */
+export function mestreIndisponivel(): string | null {
+  try {
+    criarProvedor(lerAjustesMestre());
+    return null;
+  } catch (e) {
+    return traduzirErro(e).mensagem;
+  }
+}
+
+// ---------- medida do prompt (custo da jogada) ----------
+
+const gm = globalThis as unknown as { __tavernaMedidas?: Map<number, MedidaPrompt & { cacheLido?: number; entrada?: number; rodadas?: number }> };
+const medidas = (gm.__tavernaMedidas ??= new Map());
+
+/** Última medida do prompt desta mesa (tamanhos dos blocos e, na API, tokens e cache lido), para a página de ajustes. */
+export function ultimaMedidaPrompt(campanhaId: number) {
+  return medidas.get(campanhaId) ?? null;
 }
 
 // ---------- estado de execução por mesa ----------
@@ -94,8 +170,13 @@ export function mesaOcupada(id: number) {
   return execucao(id).ocupado;
 }
 
-function publicarEstado(id: number) {
-  publicar(id, { e: "estado", ocupado: execucao(id).ocupado, fila: listarFila(id) });
+function publicarEstado(id: number, aguardando?: number) {
+  publicar(id, { e: "estado", ocupado: execucao(id).ocupado, fila: listarFila(id), ...(aguardando ? { aguardando } : {}) });
+}
+
+/** Recado de sistema na mesa (aviso de fim anormal do turno, divergência do resumo): fora da transcrição e do resumo. */
+function recadoDeSistema(campanhaId: number, texto: string, tipo: "aviso" | "divergencia") {
+  publicar(campanhaId, { e: "mensagem", mensagem: adicionarMensagem(campanhaId, "sistema", texto, { dados: { tipo } }) });
 }
 
 /**
@@ -216,14 +297,30 @@ async function processar(campanhaId: number, forcar: boolean) {
     let primeira = true;
     while (prontoParaNarrar(campanhaId, forcar && primeira)) {
       primeira = false;
+      // mestre indisponível (ex.: API sem chave): as ações ficam na fila (resultado de teste, forçar, encerrar a noite,
+      // abertura) e a mesa mostra o porquê; nada se perde, e a próxima ação depois de resolver leva tudo junto
+      const indisponivel = mestreIndisponivel();
+      if (indisponivel) {
+        publicar(campanhaId, { e: "erro", erro: indisponivel, acao: "config" });
+        break;
+      }
       const acoes = retirarFila(campanhaId);
-      ex.controlador = new AbortController();
+      const controlador = (ex.controlador = new AbortController());
       publicarEstado(campanhaId);
+      // o turno registra um instantâneo antes de chamar o mestre: se ele mudou, "Tentar de novo" reenfileira as mesmas ações
+      const instantaneoAntes = ultimoInstantaneo(campanhaId)?.id ?? null;
       try {
-        await jogarTurno(campanhaId, acoes, ex.controlador.signal);
+        await jogarTurno(campanhaId, acoes, controlador.signal);
       } catch (e) {
-        console.error("[taverna] turno falhou:", e);
-        publicar(campanhaId, { e: "erro", erro: e instanceof Error ? e.message : String(e) });
+        const t = traduzirErro(e, { sinal: controlador.signal });
+        if (t.cancelado) {
+          // interromper não é erro: a mesa não mostra banner
+          console.info(`[taverna] turno interrompido (mesa ${campanhaId}).`);
+        } else {
+          console.error("[taverna] turno falhou:", e);
+          const refazer = (ultimoInstantaneo(campanhaId)?.id ?? null) !== instantaneoAntes;
+          publicar(campanhaId, { e: "erro", erro: t.mensagem, ...(t.acao ? { acao: t.acao } : {}), ...(refazer ? { refazer: true } : {}) });
+        }
       } finally {
         ex.controlador = null;
       }
@@ -232,9 +329,17 @@ async function processar(campanhaId: number, forcar: boolean) {
     ex.ocupado = false;
     publicarEstado(campanhaId);
   }
-  // Resumo em segundo plano; o próximo turno espera por ele.
+  // Resumo em segundo plano; o próximo turno espera por ele. Falha vira aviso na mesa (a memória do mestre cresce até resolver).
+  // Com o mestre indisponível não há resumo a tentar: o aviso do porquê já foi dado acima, não se repete a cada passada.
+  if (mestreIndisponivel()) return;
   ex.resumo = atualizarResumo(campanhaId)
-    .catch((e) => console.error("[taverna] resumo falhou:", e))
+    .catch((e) => {
+      console.error("[taverna] resumo falhou:", e);
+      const t = traduzirErro(e);
+      if (!t.cancelado) {
+        publicar(campanhaId, { e: "erro", aviso: true, erro: `O resumo da campanha falhou: ${t.mensagem} Até resolver, a memória do mestre vai crescendo a cada jogada.` });
+      }
+    })
     .finally(() => (ex.resumo = null));
   // ações que chegaram durante o resumo
   ex.resumo.then(() => agendar(campanhaId));
@@ -329,7 +434,11 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
     }
   };
   const token = registrarTurno({ ferramentas, executar });
-  const sistemaPrompt = promptDoSistema(campanha, sistema, personagens);
+  // dois blocos: o estável (em cache, igual entre jogadas) e o do turno (fichas, fatos, resumo, diário, cena)
+  const blocos = promptEmBlocos(campanha, sistema, personagens);
+  // avisos de fim anormal (limite de ações, resposta cortada, recusa) esperam a narração fechar e entram depois dela
+  const avisos: string[] = [];
+  const uso = { rodadas: 0, entrada: 0, saida: 0, cacheLido: 0, cacheEscrito: 0 };
   const aoEmitir = (ev: EventoMestre) => {
     if (ev.tipo === "texto") {
       trecho += ev.texto;
@@ -338,16 +447,43 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
       publicar(campanhaId, { e: "texto", texto: ev.texto });
     } else if (ev.tipo === "limite") {
       publicar(campanhaId, { e: "limite", janela: ev.janela, uso: ev.uso, renovaEm: ev.renovaEm });
+    } else if (ev.tipo === "aviso") {
+      if (!avisos.includes(ev.texto)) avisos.push(ev.texto);
+    } else if (ev.tipo === "aguardando") {
+      publicarEstado(campanhaId, ev.segundos);
+    } else if (ev.tipo === "uso") {
+      uso.rodadas = Math.max(uso.rodadas, ev.rodada);
+      uso.entrada += ev.entrada;
+      uso.saida += ev.saida;
+      uso.cacheLido += ev.cacheLido;
+      uso.cacheEscrito += ev.cacheEscrito;
+      console.info(
+        `[taverna] ${provedor.id}: rodada ${ev.rodada}/${ev.maxRodadas} (mesa ${campanhaId}) · entrada ${ev.entrada} · cache_read_input_tokens ${ev.cacheLido} · cache escrito ${ev.cacheEscrito} · saída ${ev.saida}`,
+      );
     }
   };
 
   // pedido do turno: abertura, fim de sessão (com as regras de XP do sistema e os passos próprios dele) ou as ações
   const pedidoFim: FimDeSessao | null = fim ? fimDeSessao(sistema, sessaoAtual(campanhaId), personagens.map((p) => p.ficha)) : null;
 
+  const especial = (inicio && !doTurno.length) || Boolean(pedidoFim && !doTurno.length);
   const pedido = promptDoTurno(recentes, personagens, inicio && !doTurno.length ? "inicio" : pedidoFim && !doTurno.length ? pedidoFim : doTurno, { recapitular });
+  const { medida, linha: linhaMedida } = medirPrompt(blocos, pedido, transcricao(recentes, personagens));
+  console.info(`${linhaMedida} (mesa ${campanhaId}, ${provedor.id})`);
+  medidas.set(campanhaId, medida);
   let concluido = false;
   try {
-    await provedor.turno({ sistema: sistemaPrompt, prompt: pedido, ferramentas, executar, ponte: { url: enderecoInterno(), token }, sinal, emitir: aoEmitir });
+    await provedor.turno({
+      sistema: blocos.estavel,
+      contexto: blocos.turno,
+      prompt: pedido,
+      ferramentas,
+      executar,
+      ponte: { url: enderecoInterno(), token },
+      sinal,
+      emitir: aoEmitir,
+      especial,
+    });
     concluido = !sinal.aborted;
   } finally {
     // rede de segurança: o texto depois da última ferramenta que só repete a vez ou resume a mecânica não é gravado
@@ -386,7 +522,8 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
     let falha: string | null = null;
     try {
       await provedor.turno({
-        sistema: sistemaPrompt,
+        sistema: blocos.estavel,
+        contexto: blocos.turno,
         prompt: promptDeContinuacao(pedido, nomesUsados, lido),
         ferramentas: soNarrar,
         executar: executarNarrar,
@@ -395,7 +532,8 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
         emitir: aoEmitir,
       });
     } catch (e) {
-      falha = e instanceof Error ? e.message : String(e);
+      const t = traduzirErro(e, { sinal });
+      falha = t.cancelado ? null : t.mensagem;
       console.error("[taverna] continuação do turno falhou:", e);
     } finally {
       fecharTrecho();
@@ -403,8 +541,23 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
     }
     if (!sinal.aborted && narrado <= antesDaContinuacao) {
       console.error(`[taverna] o mestre não narrou nada neste turno, nem na continuação (mesa ${campanhaId}).`);
-      publicar(campanhaId, { e: "erro", erro: `O mestre não narrou nada neste turno${falha ? ` (${falha})` : ""}. Use "Outra resposta" para ele tentar de novo.` });
+      publicar(campanhaId, {
+        e: "erro",
+        erro: `O mestre não narrou nada neste turno${falha ? ` (${falha})` : ""}. Use "Outra resposta" para ele tentar de novo.`,
+        acao: "tentar",
+        refazer: true,
+      });
     }
+  }
+
+  // fim anormal do turno (limite de ações, resposta cortada, recusa): recado de sistema, fora da transcrição e do resumo
+  for (const aviso of avisos) recadoDeSistema(campanhaId, aviso, "aviso");
+  if (uso.rodadas) {
+    const m = medidas.get(campanhaId);
+    if (m) medidas.set(campanhaId, { ...m, cacheLido: uso.cacheLido, entrada: uso.entrada, rodadas: uso.rodadas });
+    console.info(
+      `[taverna] ${provedor.id}: turno em ${uso.rodadas} rodada${uso.rodadas === 1 ? "" : "s"} (mesa ${campanhaId}) · entrada ${uso.entrada} · cache lido ${uso.cacheLido} · cache escrito ${uso.cacheEscrito} · saída ${uso.saida}`,
+    );
   }
 
   // turno só de conversa fora do jogo (nenhuma ferramenta): as sugestões da cena continuam valendo
@@ -626,6 +779,13 @@ async function atualizarResumo(campanhaId: number) {
   if (pendentes.length <= LIMITE_SEM_RESUMO) return;
   const saindo = pendentes.slice(0, pendentes.length - MANTER_LITERAIS);
   const personagens = listarPersonagens(campanhaId);
-  const novo = await provedorAtual().texto({ sistema: SISTEMA_RESUMO, prompt: promptDoResumo(campanha.resumo, saindo, personagens) });
-  if (novo.trim()) salvarResumo(campanhaId, novo.trim(), saindo[saindo.length - 1].id);
+  // o resumidor recebe o diário compacto: NPCs, lugares e status já estão lá e não se repetem no resumo (P174)
+  const novo = await provedorAtual().texto({ sistema: SISTEMA_RESUMO, prompt: promptDoResumo(campanha.resumo, saindo, personagens, diarioParaResumo(campanhaId)) });
+  if (!novo.trim()) return;
+  // "Divergências" não fica no resumo: cada uma vira um recado discreto na mesa, para o jogador fixar o fato certo
+  const { resumo, divergencias } = separarDivergencias(novo.trim());
+  salvarResumo(campanhaId, resumo, saindo[saindo.length - 1].id);
+  if (divergencias.length) {
+    recadoDeSistema(campanhaId, `O diário e o resumo discordam: ${divergencias.slice(0, 3).join(" · ")}. Se for o caso, fixe o fato certo ou corrija o diário.`, "divergencia");
+  }
 }

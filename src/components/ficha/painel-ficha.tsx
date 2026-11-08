@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import type { PersonagemVisivel } from "@/lib/mesa";
-import type { BlocoFicha, Ficha, SistemaPublico } from "@/lib/sistemas/tipos";
+import type { BlocoFicha, CondicaoDef, Ficha, SistemaPublico } from "@/lib/sistemas/tipos";
 import {
   AdicionarNaLista,
   AvisoAjuste,
@@ -10,6 +10,8 @@ import {
   BotoesMarcador,
   LinhaMarcador,
   NotasJogador,
+  PassoCondicao,
+  SeletorCondicao,
   blocoVazio,
   useAjusteFicha,
   type AjusteFicha,
@@ -158,12 +160,13 @@ function Lista({ itens, ajuste }: { itens: string[]; ajuste?: AjusteFicha }) {
   );
 }
 
-function Etiquetas({ itens, ajuste }: { itens: string[]; ajuste?: AjusteFicha }) {
+function Etiquetas({ itens, ajuste, condicoes }: { itens: string[]; ajuste?: AjusteFicha; condicoes?: CondicaoDef[] }) {
   return (
     <div className="flex flex-wrap gap-1">
       {itens.map((i, n) => (
         <span key={`${i}-${n}`} className="group/item inline-flex items-center gap-1 rounded-full border border-border bg-surface-2/60 px-2 py-0.5 text-xs">
           {i}
+          {ajuste && condicoes && <PassoCondicao ajuste={ajuste} texto={i} condicoes={condicoes} />}
           {ajuste && <BotaoRemover ajuste={ajuste} lista="condicoes" texto={i} />}
         </span>
       ))}
@@ -175,7 +178,7 @@ const ehCondicoes = (b: BlocoFicha) => b.tipo === "etiquetas" && /^condi[çc][õ
 const ehInventario = (b: BlocoFicha) => b.tipo === "lista" && /^invent[áa]rio$/i.test(b.titulo.trim());
 
 /** Conteúdo de um bloco, sem o título (quem desenha o título é a seção). */
-export function BlocoVisual({ bloco, ajuste }: { bloco: BlocoFicha; ajuste?: AjusteFicha }) {
+export function BlocoVisual({ bloco, ajuste, condicoes }: { bloco: BlocoFicha; ajuste?: AjusteFicha; condicoes?: CondicaoDef[] }) {
   switch (bloco.tipo) {
     case "barras":
       return <Barras {...bloco} ajuste={ajuste} />;
@@ -183,10 +186,15 @@ export function BlocoVisual({ bloco, ajuste }: { bloco: BlocoFicha; ajuste?: Aju
       return <Grade {...bloco} ajuste={ajuste} />;
     case "etiquetas":
       if (ajuste && ehCondicoes(bloco)) {
+        // sistema com lista fechada de condições (PF2e): seletor com o valor no −/+; sem ela, texto livre
         return (
           <div>
-            <Etiquetas itens={ajuste.condicoes} ajuste={ajuste} />
-            <AdicionarNaLista ajuste={ajuste} lista="condicoes" dica="ex.: faminto, ferido 2, agravado 1" />
+            <Etiquetas itens={ajuste.condicoes} ajuste={ajuste} condicoes={condicoes} />
+            {condicoes?.length ? (
+              <SeletorCondicao ajuste={ajuste} condicoes={condicoes} dica="ex.: amedrontado 2, desprevenido" />
+            ) : (
+              <AdicionarNaLista ajuste={ajuste} lista="condicoes" dica="ex.: faminto, ferido 2, agravado 1" />
+            )}
           </div>
         );
       }
@@ -346,7 +354,7 @@ export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste
         if (!titulo) {
           return (
             <div key={chave} className={i > 0 ? "pt-1" : ""}>
-              <BlocoVisual bloco={b} ajuste={ajuste} />
+              <BlocoVisual bloco={b} ajuste={ajuste} condicoes={sistema.condicoes} />
             </div>
           );
         }
@@ -355,7 +363,7 @@ export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste
         const aberta = !(b.tipo === "texto" && b.texto.length > 360);
         return (
           <Secao key={chave} titulo={titulo} contagem={contagem} aberta={aberta}>
-            <BlocoVisual bloco={b} ajuste={ajuste} />
+            <BlocoVisual bloco={b} ajuste={ajuste} condicoes={sistema.condicoes} />
           </Secao>
         );
       })}

@@ -102,6 +102,25 @@ só é lida do ambiente; a página de configurações nunca pede nem guarda chav
 e rotear o plano de alguém para outros usuários. Não publique a taverna na internet nem distribua o app configurado nesse
 modo. Se for instalar para outra pessoa, ela faz o próprio login; se for servir para muita gente, use o modo `api`.
 
+### Modo `api`: para quem não tem plano (ou para o amigo)
+
+1. Crie uma chave no console da Anthropic e ponha no `.env.local`: `ANTHROPIC_API_KEY=sk-ant-...` e `TAVERNA_PROVEDOR=api`
+   (ou escolha **API da Anthropic** em `/config`). Reinicie a taverna: o `.env.local` só é lido na partida.
+2. Sem a chave, `/config` recusa salvar a API e a mesa recusa a ação (ela volta para o campo de texto) com a explicação, em
+   vez de perder o turno. A taverna passa a chave ao SDK explicitamente: nunca cai num perfil de outra conta do computador.
+   `/config` mostra de onde a chave veio e os 4 últimos caracteres dela, e a lista de modelos que essa chave enxerga.
+3. **Esforço do mestre** (`/config`): rápido (`low`), padrão (`medium`, recomendado para um mestre que usa várias ferramentas
+   por turno) ou caprichado (`high`). Abertura e fim de noite sobem um degrau; o resumo da campanha usa sempre o rápido. O
+   esforço muda a saída e o raciocínio (do rápido para o padrão, ~1,5 a 2× de saída); a entrada, o grosso da conta, não muda.
+4. Custo, do mais barato ao mais caro (preço por milhão de tokens, entrada/saída): Haiku (US$ 0,10/0,50), Sonnet (US$ 2/10,
+   o padrão), Opus (US$ 4/20), Fable (US$ 10/50). Uma jogada medida numa campanha de Vampiro mandava ~17 mil tokens de entrada;
+   as ferramentas e o bloco estável do prompt (regras e roteiro, ~15 a 28 mil caracteres) vão em cache e, entre uma jogada e
+   outra (até 5 min), são cobrados a 10%. O resto (fichas, resumo, diário, cena, transcrição) muda e paga inteiro. O log do
+   servidor mostra por turno `[taverna] prompt: estável … c (cache) · turno … c · transcrição … c` e, na API,
+   `cache_read_input_tokens` de cada rodada.
+5. Erros chegam em português na mesa e no **Testar conexão** (chave recusada, sem créditos, modelo inexistente, limite de uso
+   com o tempo de espera, API sobrecarregada, sem rede). Interromper o mestre não mostra erro.
+
 ## Sistemas incluídos
 
 Veja todos em **Sistemas** (`/sistemas`): descrição, mecânica, classes e ancestralidades pesquisáveis e status. Cada sistema

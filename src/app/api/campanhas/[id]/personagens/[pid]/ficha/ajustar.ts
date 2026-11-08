@@ -53,9 +53,22 @@ export function aplicarAjuste(ficha: Ficha, p: PedidoAjuste, rotulos: RotulosSis
   if (p.pv) ficha.pv = limitar(ficha.pv + p.pv, 0, ficha.pvMax);
 
   const recursosMudados = new Set<string>();
+  const sistema = obterSistema(ficha.sistema);
   for (const [id, delta] of Object.entries(p.recursos ?? {})) {
     const r = ficha.recursos[id];
     if (!r || !delta) continue;
+    // regra própria do sistema (Vampiro: Mancha sem caixa livre vira degeneração de Humanidade, nunca some)
+    const fotos = Object.fromEntries(Object.entries(ficha.recursos).map(([k, x]) => [k, x.atual]));
+    const proprio = sistema.mudarRecurso?.(ficha, id, delta) ?? null;
+    if (proprio) {
+      for (const [k, x] of Object.entries(ficha.recursos)) {
+        if (fotos[k] === undefined || fotos[k] === x.atual) continue;
+        recursosMudados.add(k);
+        mudancas.push(`${x.rotulo} ${fotos[k]} → ${x.atual}`);
+      }
+      if (proprio.alerta) mudancas.push(proprio.alerta);
+      continue;
+    }
     const antes = r.atual;
     r.atual = limitar(r.atual + delta, 0, r.max);
     if (r.atual !== antes) {
@@ -116,7 +129,7 @@ export function aplicarAjuste(ficha: Ficha, p: PedidoAjuste, rotulos: RotulosSis
   // o que a regra do sistema diz quando o PV muda (PF2e: moribundo e ferido), como no alterar_ficha do mestre
   if (ficha.pv !== pvAntes) {
     const antes = [...ficha.condicoes];
-    obterSistema(ficha.sistema).aposMudancaDePv?.(ficha, pvAntes, "ajuste");
+    sistema.aposMudancaDePv?.(ficha, pvAntes, "ajuste");
     for (const c of ficha.condicoes) if (!antes.includes(c)) mudancas.push(`+ ${c}`);
     for (const c of antes) if (!ficha.condicoes.includes(c)) mudancas.push(`− ${c}`);
   }

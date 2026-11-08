@@ -11,7 +11,20 @@ export type PadroesEnv = {
   binCli: string;
   modeloApi: string;
   temChaveApi: boolean;
+  /** os 4 últimos caracteres da chave (nunca a chave) */
+  finalChaveApi: string | null;
+  /** de onde veio a chave: o .env.local da taverna ou o ambiente do sistema */
+  origemChaveApi: "env-local" | "ambiente" | null;
+  /** modelos que a chave enxerga (null: não deu para perguntar à API) */
+  modelosApi: string[] | null;
 };
+
+// Esforço do mestre pela API (output_config.effort). A entrada, que domina a conta, não muda; saída e raciocínio sim.
+const ESFORCOS_API = [
+  { id: "low", rotulo: "Rápido e barato", texto: "responde rápido; tende a pular registros (ficha, diário) em turnos cheios" },
+  { id: "medium", rotulo: "Padrão", texto: "o recomendado para um mestre com várias ferramentas por turno; saída ~1,5 a 2× a do rápido" },
+  { id: "high", rotulo: "Caprichado", texto: "pensa mais antes de narrar; saída e demora maiores" },
+];
 
 type Escolha = "" | IdProvedor;
 
@@ -153,21 +166,53 @@ export function FormularioConfig({ ajustes, padroes }: { ajustes: AjustesMestre;
             spellCheck={false}
           />
           <datalist id="modelos-api">
-            {MODELOS_API.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.rotulo}
+            {MODELOS_API.map((m) => {
+              // com a lista da conta em mãos, marca o que a chave não enxerga
+              const falta = padroes.modelosApi && !padroes.modelosApi.includes(m.id);
+              return (
+                <option key={m.id} value={m.id}>
+                  {falta ? `${m.rotulo} (não disponível nesta conta)` : m.rotulo}
+                </option>
+              );
+            })}
+            {(padroes.modelosApi ?? [])
+              .filter((id) => !MODELOS_API.some((m) => m.id === id))
+              .map((id) => (
+                <option key={id} value={id}>
+                  disponível nesta conta
+                </option>
+              ))}
+          </datalist>
+          <span className="mt-1 block text-xs text-muted">
+            Preço por milhão de tokens (entrada / saída) aparece na lista. Um turno típico gasta uns poucos milhares.
+            {padroes.modelosApi ? " A lista inclui os modelos que esta chave enxerga." : ""}
+          </span>
+        </label>
+        <label className="block text-sm sm:max-w-md">
+          <span className="text-muted">Esforço do mestre</span>
+          <select name="esforcoApi" defaultValue={ajustes.esforcoApi ?? ""} className="campo mt-1">
+            <option value="">Padrão (médio)</option>
+            {ESFORCOS_API.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.rotulo} ({e.id}) — {e.texto}
               </option>
             ))}
-          </datalist>
-          <span className="mt-1 block text-xs text-muted">Preço por milhão de tokens (entrada / saída) aparece na lista. Um turno típico gasta uns poucos milhares.</span>
+          </select>
+          <span className="mt-1 block text-xs text-muted">
+            Vale para os turnos; abertura e fim de noite sobem um degrau, e o resumo da campanha usa sempre o rápido. A entrada (o grosso da conta)
+            não muda com o esforço: muda a saída e o raciocínio.
+          </span>
         </label>
         <p className={`cartao p-4 text-sm ${padroes.temChaveApi ? "text-musgo" : "text-sangue"}`}>
           {padroes.temChaveApi ? (
-            "Chave de API encontrada no ambiente (ANTHROPIC_API_KEY)."
+            <>
+              Chave de API {padroes.origemChaveApi === "env-local" ? "do .env.local" : "do ambiente do sistema"}
+              {padroes.finalChaveApi ? <> terminada em …{padroes.finalChaveApi}</> : null}. É ela que paga cada turno.
+            </>
           ) : (
             <>
-              Nenhuma ANTHROPIC_API_KEY no ambiente. Ponha a chave no <code>.env.local</code> e reinicie o app; por segurança ela não é
-              digitada nem guardada por esta página.
+              Nenhuma ANTHROPIC_API_KEY no ambiente: a API não pode ser escolhida. Ponha a chave no <code>.env.local</code> e reinicie o app; por
+              segurança ela não é digitada nem guardada por esta página.
             </>
           )}
         </p>

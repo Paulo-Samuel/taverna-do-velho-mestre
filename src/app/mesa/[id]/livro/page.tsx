@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CeuEstrelado } from "@/components/historia/ceu-estrelado";
 import { fonteGotica } from "@/components/historia/fonte-gotica";
-import { Retrato } from "@/components/historia/retrato";
+import { Retrato, RetratoSVG } from "@/components/historia/retrato";
+import { retratoDaEntrada } from "@/components/historia/retrato/dados";
 import { TemaPagina } from "@/components/tema-pagina";
 import { obterCampanha } from "@/lib/db";
 import { acessoNaPagina } from "@/lib/rede/acesso";
@@ -76,7 +77,18 @@ function DesenharBloco({ b, ornamento, capitular }: { b: Bloco; ornamento: strin
   );
 }
 
-function ListaDiario({ titulo, itens, rotulo }: { titulo: string; itens: EntradaDiario[]; rotulo?: (e: EntradaDiario) => string | null }) {
+function ListaDiario({
+  titulo,
+  itens,
+  rotulo,
+  rosto,
+}: {
+  titulo: string;
+  itens: EntradaDiario[];
+  rotulo?: (e: EntradaDiario) => string | null;
+  /** pessoas: o rosto do NPC (22 px) antes do nome */
+  rosto?: (e: EntradaDiario) => boolean;
+}) {
   if (!itens.length) return null;
   return (
     <div className="livro-diario-secao">
@@ -86,6 +98,14 @@ function ListaDiario({ titulo, itens, rotulo }: { titulo: string; itens: Entrada
           const r = rotulo?.(e);
           return (
             <li key={e.id} className="text-[0.98rem] leading-relaxed">
+              {rosto?.(e) && (
+                <RetratoSVG
+                  dados={retratoDaEntrada(e)}
+                  tamanho={22}
+                  className={`mr-1.5 inline-block -translate-y-px rounded-full align-middle ${e.status === "morto" ? "grayscale" : ""}`}
+                  titulo={`Retrato de ${e.titulo}`}
+                />
+              )}
               <span className="font-semibold text-pergaminho">{e.titulo}</span>
               {r && <span className="livro-etiqueta"> {r}</span>}
               {e.texto && <span className="text-foreground/85"> — {e.texto}</span>}
@@ -256,7 +276,12 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
             </h2>
             <div className="mt-8 space-y-8">
               <ListaDiario titulo="Missões" itens={livro.missoes} rotulo={(e) => `(${statusDaMissao(e.status)})`} />
-              <ListaDiario titulo="Pessoas" itens={livro.pessoas} rotulo={(e) => (e.status ? `(${e.status})` : null)} />
+              <ListaDiario
+                titulo="Pessoas"
+                itens={livro.pessoas}
+                rotulo={(e) => (e.status ? `(${e.status})` : null)}
+                rosto={(e) => historia || Boolean(e.dados?.retrato)}
+              />
               <ListaDiario titulo="Lugares" itens={livro.lugares} />
               <ListaDiario titulo="Notas e itens" itens={livro.outros} />
               {livro.fatos.length > 0 && (

@@ -11,7 +11,7 @@ import type { EntradaCriacao, Ficha, Sistema } from "./sistemas/tipos";
 // Só no modo campanha (lidos por app/nova/acoes.ts, não por fichaDoFormulario):
 //   campanha, cenario, tom, modo_mesa ("livre" | "rodada"), pin, adicionar_mais ("1" = não começar ainda)
 
-export type ResultadoFormulario = { ok: true; sistema: Sistema; ficha: Ficha; jogador: string } | { ok: false; erro: string };
+export type ResultadoFormulario = { ok: true; sistema: Sistema; ficha: Ficha; jogador: string; entrada: EntradaCriacao } | { ok: false; erro: string };
 
 const texto = (form: FormData, campo: string, max: number) => String(form.get(campo) ?? "").trim().slice(0, max);
 
@@ -57,7 +57,8 @@ export function fichaDoFormulario(form: FormData, sistemaFixo?: string): Resulta
   // perícias da classe já vêm de graça: não contam no limite
   const daClasse = new Set(sistema.classes.find((c) => c.id === classe)?.pericias ?? []);
   const validas = new Set(sistema.pericias.map((p) => p.id));
-  const limitePericias = sistema.periciasEscolhiveis ?? 0;
+  // com `limitePericias` o teto depende de INT final, antecedente e subclasse: aqui só um teto folgado, quem corta é o criarFicha
+  const limitePericias = sistema.limitePericias ? sistema.pericias.length : (sistema.periciasEscolhiveis ?? 0);
   const pericias =
     limitePericias > 0
       ? [...new Set(form.getAll("pericias").map(String))].filter((p) => validas.has(p) && !daClasse.has(p)).slice(0, limitePericias)
@@ -93,7 +94,9 @@ export function fichaDoFormulario(form: FormData, sistemaFixo?: string): Resulta
   };
   try {
     const ficha = sistema.criarFicha(entrada);
-    return { ok: true, sistema, ficha, jogador: texto(form, "jogador", 40) };
+    // "fora do livro de propósito" (checkbox do Resumo): o mestre respeita os números em vez de corrigir
+    if (form.get("fora_do_livro") === "1") ficha.extras.foraDoLivro = true;
+    return { ok: true, sistema, ficha, jogador: texto(form, "jogador", 40), entrada };
   } catch (e) {
     return { ok: false, erro: e instanceof Error ? e.message : String(e) };
   }

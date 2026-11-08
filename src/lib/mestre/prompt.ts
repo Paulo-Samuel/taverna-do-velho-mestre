@@ -7,8 +7,35 @@ import { jogadorRolaOsDados } from "./ferramentas";
 import { JANELA_RECENTE } from "./memoria";
 import { aventuraDoSistema, roteiroParaMestre } from "../aventuras";
 import { sementesDe } from "../sistemas/sementes";
+import { TITULO_ESTADO } from "./tipos";
 
 export { JANELA_RECENTE };
+
+// ---------- orçamento do prompt (P172) ----------
+//
+// O prompt de sistema vai em DOIS blocos:
+//   - ESTÁVEL (blocoEstavel): regras gerais + extras (modo história, quem rola, sugestões, rerrolagem) + regras do sistema +
+//     cabeçalho da campanha (nome, cenário, tom, modo, estilo da mesa, regras da casa) + roteiro da aventura. Idêntico entre
+//     jogadas: na API vai com cache_control (leitura a 10%), no Claude Code é o --system-prompt-file. Nada que muda por turno
+//     pode entrar aqui; a única exceção aceita é o roteiro da aventura, que perde a cena de abertura quando nasce o resumo.
+//   - DO TURNO (blocoDoTurno): linha do grupo (quantos, nível), fichas, fatos fixados, resumo, diário compacto e cena atual.
+//     Na API é o segundo bloco de sistema, sem cache; no Claude Code entra no começo do stdin, sob "## Estado da mesa agora".
+// Tetos conferidos por teste (tests/prompt-orcamento.test.ts): estável <= TETO_ESTAVEL e turno <= TETO_TURNO, por sistema e
+// por aventura. medirPrompt() loga os tamanhos a cada jogada.
+//
+// Onde entram as propostas que somam texto (decidido no plano da auditoria):
+//   - P96 cidade/corte → estável (config.cidade escolhido na criação, até 1.200 caracteres, junto do cenário);
+//   - P50, P06, P26, P27, P29 → estável, dentro de regrasParaMestre do Vampiro, que tem teto de 12.000 caracteres;
+//   - P98 bestiário e P99 tabelas → NUNCA como texto: viram ferramentas (consultar_bestiario, rolar_tabela) com descrição
+//     curta (~400 caracteres) e retorno sob demanda (até 600);
+//   - P108 música atual → uma linha "Trilha: ..." em cenaEmTexto (bloco do turno);
+//   - P24 → resolvido pelo resumo só de enredo (P174): o resumo encolhe em vez de crescer, o diário é dono de NPCs e lugares;
+//   - P16 (janela maior) → não é "mais mensagens": a janela literal nunca fica abaixo do limite do resumo (memoria.ts).
+
+/** Teto do bloco estável, em caracteres, por sistema e por aventura. */
+export const TETO_ESTAVEL = 36_000;
+/** Teto do bloco do turno, em caracteres (fichas, fatos, resumo, diário e cena de uma mesa cheia). */
+export const TETO_TURNO = 30_000;
 
 /**
  * O que as regras gerais dizem sobre combate, pelo modelo do sistema (campo `combate` do contrato): "rodadas" tem
@@ -214,29 +241,24 @@ function turnosDeTrilha(c: Campanha): number | null {
   }
 }
 
-export function promptDoSistema(c: Campanha, sistema: Sistema, personagens: Personagem[]) {
-  const fichas = personagens.length
-    ? personagens.map((p) => `### ${p.ficha.nome}${p.jogador ? ` (jogador: ${p.jogador})` : ""}\n${sistema.descreverParaMestre(p.ficha)}`).join("\n\n")
-    : "(nenhum personagem ainda)";
-  const niveis = personagens.map((p) => p.ficha.nivel);
-  const grupo = personagens.length
-    ? `${personagens.length} ${personagens.length > 1 ? "personagens" : "personagem"}, nível ${Math.min(...niveis) === Math.max(...niveis) ? niveis[0] : `${Math.min(...niveis)} a ${Math.max(...niveis)}`}`
-    : "sem personagens";
-  const cena = cenaEmTexto(c.cena, sistema.rotulos.defesa, turnosDeTrilha(c));
-  let diario = "";
+/** Diário compacto da campanha (lido do banco), ou "" quando não deu para ler. */
+function diarioDaCampanha(campanhaId: number): string {
   try {
-    diario = diarioCompacto(listarDiario(c.id));
+    return diarioCompacto(listarDiario(campanhaId));
   } catch (e) {
     console.warn("[taverna] diário indisponível para o prompt:", e);
+    return "";
   }
-  // fatos fixados pelo jogador: em todo turno, com prioridade sobre o resumo (só os que cabem no limite)
-  let fatos = "";
-  try {
-    const textos = listarFatos(c.id).map((f) => f.texto);
-    fatos = textos.slice(0, quantosEntram(textos)).map((t) => `- ${t}`).join("\n");
-  } catch (e) {
-    console.warn("[taverna] fatos fixados indisponíveis para o prompt:", e);
-  }
+}
+
+/** Linha fixa do bloco estável: o diário é dono dos fatos de status; o resumo, do enredo (P174). */
+export const DIARIO_X_RESUMO = "- Diário x Resumo: para status de NPC, missão e lugar, o status vale o Diário; o Resumo guarda só o enredo e as pendências.";
+
+/**
+ * Bloco ESTÁVEL do prompt de sistema: o que não muda de uma jogada para a outra (vai em cache). Não lê nada do turno:
+ * fichas, fatos, resumo, diário e cena ficam em blocoDoTurno.
+ */
+export function blocoEstavel(c: Campanha, sistema: Sistema): string {
   const extras = [
     c.config?.modoJogo === "historia" ? MODO_HISTORIA : "",
     jogadorRolaOsDados(c) ? DADOS_DO_JOGADOR : DADOS_DO_MESTRE,
@@ -258,13 +280,40 @@ ${sistema.regrasParaMestre}
 ## Campanha: ${c.nome}
 - Cenário pedido: ${c.cenario || sementesDe(sistema.id).cenarioVazio}
 - Tom: ${c.tom}
-- Grupo: ${grupo}
-- ${MODOS[c.config?.modo ?? "livre"]}${estiloDaMesa(c)}${aventura}
+- ${MODOS[c.config?.modo ?? "livre"]}
+${DIARIO_X_RESUMO}${estiloDaMesa(c)}${aventura}
 
-## Grupo
+(O estado da mesa — grupo, fichas, fatos fixados, resumo, diário e cena — vem logo depois, em "Estado da mesa agora", e muda a cada jogada.)`;
+}
+
+/** Linha do grupo: quantos personagens e de que nível (muda ao subir de nível: fica no bloco do turno). */
+function linhaDoGrupo(personagens: Personagem[]): string {
+  if (!personagens.length) return "sem personagens";
+  const niveis = personagens.map((p) => p.ficha.nivel);
+  const min = Math.min(...niveis);
+  const max = Math.max(...niveis);
+  return `${personagens.length} ${personagens.length > 1 ? "personagens" : "personagem"}, nível ${min === max ? niveis[0] : `${min} a ${max}`}`;
+}
+
+/** Bloco DO TURNO: grupo, fichas, fatos fixados, resumo, diário compacto e cena atual (lidos do banco a cada jogada). */
+export function blocoDoTurno(c: Campanha, sistema: Sistema, personagens: Personagem[]): string {
+  const fichas = personagens.length
+    ? personagens.map((p) => `### ${p.ficha.nome}${p.jogador ? ` (jogador: ${p.jogador})` : ""}\n${sistema.descreverParaMestre(p.ficha)}`).join("\n\n")
+    : "(nenhum personagem ainda)";
+  const cena = cenaEmTexto(c.cena, sistema.rotulos.defesa, turnosDeTrilha(c));
+  const diario = diarioDaCampanha(c.id);
+  // fatos fixados pelo jogador: em todo turno, com prioridade sobre o resumo (só os que cabem no limite)
+  let fatos = "";
+  try {
+    const textos = listarFatos(c.id).map((f) => f.texto);
+    fatos = textos.slice(0, quantosEntram(textos)).map((t) => `- ${t}`).join("\n");
+  } catch (e) {
+    console.warn("[taverna] fatos fixados indisponíveis para o prompt:", e);
+  }
+  return `## Grupo: ${linhaDoGrupo(personagens)}
 ${fichas}
 ${fatos ? `\n## FATOS FIXADOS (o jogador marcou: valem acima do resumo e nunca podem ser contrariados)\n${fatos}\n` : ""}
-## Resumo do que já aconteceu
+## Resumo do que já aconteceu (só enredo e pendências; status de NPC, missão e lugar: veja o Diário)
 ${c.resumo || "(nada ainda: a campanha está começando)"}
 
 ## Diário da campanha
@@ -272,6 +321,44 @@ ${diario || "(vazio)"}
 
 ## Cena atual
 ${cena || "(não definida: use atualizar_cena)"}`;
+}
+
+/** Os dois blocos do prompt de sistema de uma jogada. */
+export function promptEmBlocos(c: Campanha, sistema: Sistema, personagens: Personagem[]): { estavel: string; turno: string } {
+  return { estavel: blocoEstavel(c, sistema), turno: blocoDoTurno(c, sistema, personagens) };
+}
+
+export { TITULO_ESTADO };
+
+/**
+ * O prompt de sistema inteiro num texto só (estável + turno), para quem só quer ler (testes, golden, diagnóstico).
+ * Os provedores recebem os dois blocos separados: veja promptEmBlocos.
+ */
+export function promptDoSistema(c: Campanha, sistema: Sistema, personagens: Personagem[]) {
+  const { estavel, turno } = promptEmBlocos(c, sistema, personagens);
+  return `${estavel}\n\n${TITULO_ESTADO}\n\n${turno}`;
+}
+
+export type MedidaPrompt = { estavel: number; turno: number; transcricao: number; pedido: number; em: number };
+
+const milhar = (n: number) => n.toLocaleString("pt-BR");
+
+/**
+ * Mede os blocos de uma jogada e devolve a linha do log ("[taverna] prompt: estável 33.912 c (cache) · turno 27.480 c ·
+ * transcrição 17.560 c"). Avisa no console quando um bloco passa do teto.
+ */
+export function medirPrompt(blocos: { estavel: string; turno: string }, pedido: string, transcricaoTexto: string): { medida: MedidaPrompt; linha: string } {
+  const medida: MedidaPrompt = {
+    estavel: blocos.estavel.length,
+    turno: blocos.turno.length,
+    transcricao: transcricaoTexto.length,
+    pedido: pedido.length,
+    em: Date.now(),
+  };
+  const linha = `[taverna] prompt: estável ${milhar(medida.estavel)} c (cache) · turno ${milhar(medida.turno)} c · transcrição ${milhar(medida.transcricao)} c · pedido ${milhar(medida.pedido)} c`;
+  if (medida.estavel > TETO_ESTAVEL) console.warn(`[taverna] bloco estável acima do teto (${milhar(medida.estavel)} > ${milhar(TETO_ESTAVEL)} c)`);
+  if (medida.turno > TETO_TURNO) console.warn(`[taverna] bloco do turno acima do teto (${milhar(medida.turno)} > ${milhar(TETO_TURNO)} c)`);
+  return { medida, linha };
 }
 
 export function nomeDoPersonagem(personagens: Personagem[], id: number | null) {
@@ -291,9 +378,25 @@ function linha(m: Mensagem, personagens: Personagem[]) {
   return `[sistema] ${m.texto}`;
 }
 
+/**
+ * Mensagens de sistema que são recado para a mesa, não ficção: avisos de fim anormal do turno (limite de ações, resposta
+ * cortada, recusa) e divergências entre resumo e diário. Ficam fora da transcrição do mestre e do resumo.
+ */
+export const TIPOS_RECADO_SISTEMA = ["aviso", "divergencia"] as const;
+
+export function foraDaTranscricao(m: Mensagem): boolean {
+  if (m.tipo !== "sistema") return false;
+  const tipo = (m.dados as { tipo?: unknown } | null)?.tipo;
+  return (TIPOS_RECADO_SISTEMA as readonly unknown[]).includes(tipo);
+}
+
 /** Transcrição recente em texto (o mestre não guarda estado entre turnos). */
 export function transcricao(mensagens: Mensagem[], personagens: Personagem[]) {
-  return mensagens.slice(-JANELA_RECENTE).map((m) => linha(m, personagens)).join("\n\n");
+  return mensagens
+    .filter((m) => !foraDaTranscricao(m))
+    .slice(-JANELA_RECENTE)
+    .map((m) => linha(m, personagens))
+    .join("\n\n");
 }
 
 export type AcaoDoTurno = { personagem: string | null; autor: string; acao: string };
@@ -382,15 +485,56 @@ export function promptDoTurno(
   return `${historico ? `Cena até aqui (mais recente por último):\n\n${historico}\n\n---\n\n` : ""}${pedido}${especial ? "" : `\n\n${LEMBRETE}`}${holofote}`;
 }
 
-export const SISTEMA_RESUMO = `Você mantém o diário de uma campanha de RPG. Reescreva o resumo incorporando os acontecimentos novos.
-Formato, em português, no máximo ~400 palavras:
-- Enredo até agora (parágrafo curto)
-- NPCs importantes (nome: quem é, relação com o grupo, vivo ou morto)
-- Lugares visitados
-- Ganchos, promessas e pendências em aberto
-- Estado do grupo (ferimentos graves, recursos esgotados, itens marcantes), se relevante
+/** Teto do resumo, em palavras (o diário guarda NPCs, lugares e status; o resumo, só o enredo). */
+export const MAX_PALAVRAS_RESUMO = 320;
+
+/** Títulos das seções do resumo, na ordem (P174). "Divergências" sai do resumo gravado e vira recado na mesa. */
+export const SECOES_RESUMO = ["Enredo até agora", "Pendências e promessas", "Estado do grupo", "Divergências"] as const;
+
+export const SISTEMA_RESUMO = `Você mantém a memória de uma campanha de RPG. Reescreva o resumo incorporando os acontecimentos novos.
+O DIÁRIO da campanha já guarda NPCs, lugares, itens, missões e o status de cada um: o resumo NÃO repete nem reescreve nada disso.
+Formato, em português, no máximo ${MAX_PALAVRAS_RESUMO} palavras no total, exatamente com estas quatro seções:
+## Enredo até agora
+(até 220 palavras: o que aconteceu e por quê, em ordem; cite NPCs só pelo nome, sem descrevê-los)
+## Pendências e promessas
+(lista curta: ganchos, dívidas, promessas e perguntas em aberto)
+## Estado do grupo
+(só o que a ficha não mostra: ferimentos narrativos, dívidas, onde o grupo está; "—" se nada)
+## Divergências
+(frases dos acontecimentos novos que contradizem o diário, ex.: "o diário diz Vera aliada, mas ela atacou o grupo"; "—" se nenhuma)
 Seja factual; não invente nada que não esteja no texto. Responda só com o resumo.`;
 
-export function promptDoResumo(resumoAtual: string, novas: Mensagem[], personagens: Personagem[]) {
-  return `Resumo atual:\n${resumoAtual || "(vazio)"}\n\nAcontecimentos novos:\n\n${novas.map((m) => linha(m, personagens)).join("\n\n")}`;
+export function promptDoResumo(resumoAtual: string, novas: Mensagem[], personagens: Personagem[], diario = "") {
+  const doDiario = diario.trim()
+    ? `Diário da campanha (isto já está no diário: não repita nem reescreva; se os acontecimentos mudarem um status, registre em Divergências):\n${diario.trim()}\n\n`
+    : "";
+  return `${doDiario}Resumo atual:\n${resumoAtual || "(vazio)"}\n\nAcontecimentos novos:\n\n${novas
+    .filter((m) => !foraDaTranscricao(m))
+    .map((m) => linha(m, personagens))
+    .join("\n\n")}`;
+}
+
+/** Diário compacto de uma campanha, para o resumidor (vazio quando não dá para ler). */
+export function diarioParaResumo(campanhaId: number): string {
+  return diarioDaCampanha(campanhaId);
+}
+
+/**
+ * Separa a seção "Divergências" do resumo devolvido pelo modelo: o resumo gravado fica sem ela (o mestre lê o diário para
+ * status) e cada divergência real vira um recado de sistema na mesa. "—", "nenhuma" e afins contam como vazio.
+ */
+export function separarDivergencias(resumo: string): { resumo: string; divergencias: string[] } {
+  const linhas = resumo.split(/\r?\n/);
+  const titulo = (l: string) => /^\s*(?:#{1,4}\s+|\*\*)/.test(l);
+  const inicio = linhas.findIndex((l) => /^\s*(?:#{1,4}\s*|\*\*)?\s*Diverg[êe]ncias\b/i.test(l));
+  if (inicio < 0) return { resumo: resumo.trim(), divergencias: [] };
+  let fim = inicio + 1;
+  while (fim < linhas.length && !titulo(linhas[fim])) fim++;
+  // texto na mesma linha do título ("Divergências: o diário diz...")
+  const naLinha = linhas[inicio].replace(/^\s*(?:#{1,4}\s*|\*\*)?\s*Diverg[êe]ncias\b\**\s*:?\**\s*/i, "");
+  const divergencias = [naLinha, ...linhas.slice(inicio + 1, fim)]
+    .map((l) => l.replace(/^\s*[-*•]\s*/, "").replace(/^\((.*)\)$/, "$1").trim())
+    .filter((l) => l && !/^(—|-|–|nenhuma\.?|nada\.?|sem diverg[êe]ncias\.?|n\/a)$/i.test(l));
+  const sem = [...linhas.slice(0, inicio), ...linhas.slice(fim)].join("\n").trim();
+  return { resumo: sem, divergencias };
 }

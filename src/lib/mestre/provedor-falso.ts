@@ -1,10 +1,12 @@
 import "server-only";
+import { AVISO_LIMITE_RODADAS } from "./provedor-api";
 import type { OpcoesTurno, Provedor } from "./tipos";
 
 // Mestre de mentira, para testar a interface e as regras sem gastar o plano nem créditos.
 // Escreve um texto pré-montado aos poucos e chama as ferramentas de verdade: cena, diário,
-// combate com iniciativa, testes, dano, XP e descanso. Lê o estado da cena do prompt de sistema
-// (formato de cenaEmTexto em prompt.ts) porque não guarda nada entre turnos.
+// combate com iniciativa, testes, dano, XP e descanso. Lê o estado da cena do bloco do turno (`contexto`,
+// formato de cenaEmTexto em prompt.ts) porque não guarda nada entre turnos.
+// Ensaios: "[limite]" na ação simula o fim anormal do turno (aviso de limite de ações gravado como mensagem de sistema).
 
 const pausa = (ms: number, sinal?: AbortSignal) =>
   new Promise<void>((ok, falha) => {
@@ -72,7 +74,7 @@ export const provedorFalso: Provedor = {
   id: "falso",
   nome: "Mestre de teste (sem IA)",
 
-  async turno({ sistema, prompt, ferramentas, executar, emitir, sinal }: OpcoesTurno) {
+  async turno({ sistema, contexto, prompt, ferramentas, executar, emitir, sinal }: OpcoesTurno) {
     const tem = (nome: string) => ferramentas.some((f) => f.name === nome);
     const diga = (texto: string) => escrever(texto, emitir, sinal);
     /** Chama a ferramenta; se falhar, conta na narração em vez de derrubar o turno. */
@@ -89,7 +91,8 @@ export const provedorFalso: Provedor = {
     const inicio = prompt.includes("[início da campanha]");
     const personagem = personagemDoPrompt(prompt);
     const acao = acaoDoPrompt(prompt);
-    const combate = combateDoSistema(sistema);
+    // a cena (e o COMBATE ATIVO) vem no bloco do turno; o estável não muda de jogada para jogada
+    const combate = combateDoSistema(contexto || sistema);
     const escala = escalaDe(ferramentas);
 
     // Continuação pedida por index.ts (o turno acabou sem narração): só a ferramenta narrar está disponível.
@@ -105,6 +108,12 @@ export const provedorFalso: Provedor = {
     }
     // Ensaio da rede de segurança: "[mudo]" na ação faz o mestre de teste registrar a cena e terminar SEM narrar
     // (como o modelo que narra só no raciocínio); index.ts então pede a continuação acima. Nada de texto, nem de erro de ferramenta.
+    // Ensaio do fim anormal do turno (P130): narra um pouco e avisa que passou do limite de ações, como a API faria
+    if (/\[limite\]/.test(acao)) {
+      await diga("Você começa a agir, mas a noite tem mais pressa que o mestre.");
+      emitir({ tipo: "aviso", texto: AVISO_LIMITE_RODADAS });
+      return;
+    }
     if (/\[mudo/.test(acao)) {
       if (tem("atualizar_cena")) await executar("atualizar_cena", { situacao: "O mestre de teste ficou mudo de propósito." }).catch(() => undefined);
       return;
@@ -137,7 +146,20 @@ export const provedorFalso: Provedor = {
           desejo: "pagar a dívida com o cartel sem sujar as mãos",
           temperamento: "desconfiado",
           relacao: "neutro",
+          sexo: "homem",
+          oficio: "taverneiro, ex-soldado",
         });
+        // diário vivo: pessoa (mulher), lugar e item novos também viram chip em "o que mudou"
+        await usar("anotar_diario", {
+          tipo: "npc",
+          titulo: "Irmã Celeste",
+          texto: "Sacerdotisa da capela do sino; reza alto e escuta mais alto ainda.",
+          sexo: "mulher",
+          oficio: "sacerdotisa",
+          status: "neutro",
+        });
+        await usar("anotar_diario", { tipo: "local", titulo: "Taverna do Javali Torto", texto: "Salão baixo, fumaça de sebo, um balcão que já viu facas." });
+        await usar("anotar_diario", { tipo: "item", titulo: "Envelope com lacre de serpente", texto: "Deixado para você antes do sol nascer." });
         await usar("anotar_diario", {
           tipo: "missao",
           titulo: "A carta do cartel",
@@ -159,6 +181,8 @@ export const provedorFalso: Provedor = {
             : "Bruno nem pisca. \"Sai do meu balcão antes que eu te sirva de petisco pros ratos.\" Metade da taverna agora olha para você.",
         );
         await usar("anotar_diario", { tipo: "missao", titulo: "A carta do cartel", pistas: [sucesso ? "O mensageiro tinha lábio cortado e cheirava a cravo" : "Bruno se recusou a falar"] });
+        // NPC sem sexo informado: o retrato sai do nome (inferência ou sorteio pela semente)
+        if (sucesso) await usar("anotar_diario", { tipo: "npc", titulo: "Hesper Vanko", texto: "O mensageiro magro de lábio cortado. Cheira a cravo.", oficio: "mensageiro" });
         await sugerir();
         return;
       }

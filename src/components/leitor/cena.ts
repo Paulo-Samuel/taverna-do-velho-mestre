@@ -1,4 +1,5 @@
 import type { Mensagem } from "@/lib/db";
+import { retratoDaEntrada, type DadosRetrato } from "../historia/retrato/dados";
 import { dividirParagrafos, type Turno } from "./turnos";
 
 // Montagem de uma cena para exibição (leitor cena a cena, modo 📜 Rolagem e Livro da campanha). Sem React: roda no servidor também.
@@ -20,7 +21,19 @@ export type Peca =
 
 export type TomChip = "bom" | "ruim" | "neutro";
 
-export type Chip = { chave: string; icone: string; rotulo: string; detalhe: string; tom: TomChip; riscado?: boolean };
+/** `retrato`: rosto do NPC (chip de pessoa do diário), desenhado no lugar do ícone. */
+export type Chip = { chave: string; icone: string; rotulo: string; detalhe: string; tom: TomChip; riscado?: boolean; retrato?: DadosRetrato };
+
+/** Novidades do diário (anotar_diario): cada uma com o seu ícone no chip. */
+export type SubtipoDiario = "missao" | "pessoa" | "lugar" | "item" | "pista";
+
+export const ICONE_DIARIO: Record<SubtipoDiario, string> = { missao: "❡", pessoa: "👤", lugar: "⌂", item: "◆", pista: "⁂" };
+
+/** Subtipo do aviso; mensagens antigas (só missão) não traziam o campo: sai do tipo da entrada. */
+function subtipoDiario(subtipo: unknown, tipoEntrada: string | undefined): SubtipoDiario {
+  if (typeof subtipo === "string" && Object.hasOwn(ICONE_DIARIO, subtipo)) return subtipo as SubtipoDiario;
+  return tipoEntrada === "npc" ? "pessoa" : tipoEntrada === "local" ? "lugar" : tipoEntrada === "item" ? "item" : tipoEntrada === "nota" ? "pista" : "missao";
+}
 
 export type GrupoChips = { quem: string; tipo: "personagem" | "mundo" | "mestre"; chips: Chip[] };
 
@@ -257,12 +270,24 @@ function brutosDe(m: Mensagem, estado: Map<string, EstadoPersonagem>): Bruto[] {
       return saida;
     }
     case "diario": {
-      const e = (d.entrada ?? {}) as { titulo?: string; texto?: string; tipo?: string; status?: string };
+      const e = (d.entrada ?? {}) as { titulo?: string; texto?: string; tipo?: string; status?: string; dados?: Record<string, unknown> };
       const rot = typeof d.rotulo === "string" ? d.rotulo : "Diário";
       const titulo = e.titulo ?? (typeof d.resumo === "string" ? d.resumo : m.texto);
-      const tom: TomChip = /conclu/i.test(rot) ? "bom" : /fracass|falh/i.test(rot) ? "ruim" : "neutro";
-      const rotulo = e.tipo === "npc" && e.status ? `${titulo}: ${e.status}` : `${rot}: ${titulo}`;
-      return [{ tipo: "chip", quem: "Diário", grupo: "mundo", chip: { icone: "❡", rotulo: curto(rotulo, 48), detalhe: e.texto ? `${rotulo} — ${e.texto}` : rotulo, tom } }];
+      const sub = subtipoDiario(d.subtipo, e.tipo);
+      const pista = typeof d.pista === "string" && d.pista.trim() ? d.pista.trim() : null;
+      // missão: concluída é boa notícia, fracassada é ruim; pessoa, lugar, item e pista são só novidade (tom neutro)
+      const tom: TomChip = sub !== "missao" ? "neutro" : /conclu/i.test(rot) ? "bom" : /fracass|falh/i.test(rot) ? "ruim" : "neutro";
+      const rotulo = pista ? `Pista: ${pista}` : sub === "pessoa" && rot === "Pessoa" && e.status ? `${titulo}: ${e.status}` : `${rot}: ${titulo}`;
+      const detalhe = pista ? (e.titulo ? `${rotulo} (${e.titulo})` : rotulo) : e.texto ? `${rotulo} — ${e.texto}` : rotulo;
+      const retrato = sub === "pessoa" && e.titulo ? retratoDaEntrada({ titulo: e.titulo, texto: e.texto, dados: e.dados }) : undefined;
+      return [
+        {
+          tipo: "chip",
+          quem: "Diário",
+          grupo: "mundo",
+          chip: { icone: ICONE_DIARIO[sub], rotulo: curto(rotulo, 48), detalhe, tom, ...(retrato ? { retrato, riscado: e.status === "morto" } : {}) },
+        },
+      ];
     }
     case "descanso":
     case "curto":

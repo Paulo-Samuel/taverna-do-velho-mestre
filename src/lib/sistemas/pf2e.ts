@@ -1,8 +1,21 @@
 import "server-only";
-import { somar } from "../dados";
+import { descreverRolagem, rolar, somar } from "../dados";
 import { acharPorNome, clonar, fichaBase, limitar, normalizar, sinal, testeD20 } from "./comum";
 import { ANCESTRALIDADES, HERANCAS, type AncestralidadePf2 } from "./pf2e/ancestralidades";
+import { acharArma, armasDoInventario, type ArmaCatalogo } from "./pf2e/armas";
 import { CLASSES, type ArmaPf2, type ArmaduraPf2, type ClassePf2, type Tradicao } from "./pf2e/classes";
+import { CONDICOES_PF2E, condicoesNoFimDoTurno, lerCondicao, semCondicoes, temCondicao, valorDaCondicao } from "./pf2e/condicoes";
+import {
+  aplicarAncestralidadeEAntecedente,
+  atributosIniciaisPf2,
+  chaveDe,
+  listaTexto,
+  ordemDe,
+  ordemDeCompletar,
+  periciasCriacaoPf2,
+  periciasDeSubclasse,
+  texto,
+} from "./pf2e/criacao";
 import { ANTECEDENTES, OPCOES_CRIACAO, TRADICAO_POR_SUBCLASSE, type AntecedentePf2 } from "./pf2e/opcoes";
 import { ATRIBUTOS, PERICIAS, nomePericia } from "./pf2e/pericias";
 import { REGRAS_PF2E } from "./pf2e/regras";
@@ -23,21 +36,18 @@ function grauEm(prog: string, nivel: number): number {
   return grau;
 }
 
-/** Valor N de uma condição "nome N" ("ferido 2" → 2); 0 quando ausente, 1 quando sem número. */
-function valorCondicao(condicoes: string[], prefixo: string): number {
-  const c = condicoes.find((x) => normalizar(x).startsWith(prefixo));
-  return c ? Number(c.match(/(\d+)/)?.[1] ?? 1) : 0;
-}
-
-/** Caiu a 0 PV → moribundo 1 + ferido; voltou a ter PV → sai do moribundo e ganha (ou sobe) ferido. Muta a ficha. */
+/**
+ * Caiu a 0 PV → inconsciente e moribundo 1 (+ ferido); voltou a ter PV → sai do moribundo e ganha (ou sobe) ferido. Continua
+ * inconsciente até acordar (o mestre tira, ou o descanso). Muta a ficha.
+ */
 function condicoesMoribundo(ficha: Ficha, pvAntes: number) {
-  const ferido = valorCondicao(ficha.condicoes, "ferid");
-  const moribundo = valorCondicao(ficha.condicoes, "moribund");
-  const sem = (prefixo: string) => ficha.condicoes.filter((x) => !normalizar(x).startsWith(prefixo));
+  const ferido = valorDaCondicao(ficha.condicoes, "ferido");
+  const moribundo = valorDaCondicao(ficha.condicoes, "moribundo");
   if (ficha.pv === 0 && pvAntes > 0 && !moribundo) {
-    ficha.condicoes = [...ficha.condicoes, `moribundo ${Math.min(4, 1 + ferido)}`];
+    const inconsciente = temCondicao(ficha.condicoes, "inconsciente") ? [] : ["inconsciente"];
+    ficha.condicoes = [...ficha.condicoes, ...inconsciente, `moribundo ${Math.min(4, 1 + ferido)}`];
   } else if (ficha.pv > 0 && moribundo) {
-    ficha.condicoes = [...sem("moribund").filter((x) => !normalizar(x).startsWith("ferid")), `ferido ${ferido + 1}`];
+    ficha.condicoes = [...semCondicoes(ficha.condicoes, ["moribundo", "ferido"]), `ferido ${ferido + 1}`];
   }
 }
 
@@ -59,28 +69,6 @@ function ancestralidadeDe(ficha: Ficha): AncestralidadePf2 {
 
 function antecedenteDe(id: string | undefined): AntecedentePf2 | undefined {
   return id ? ANTECEDENTES.find((b) => b.id === id) : undefined;
-}
-
-function texto(v: unknown): string {
-  return typeof v === "string" ? v : Array.isArray(v) && typeof v[0] === "string" ? v[0] : "";
-}
-
-function listaTexto(v: unknown): string[] {
-  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : typeof v === "string" && v ? [v] : [];
-}
-
-// A malandragem do ladino troca o atributo-chave quando o jogador não escolheu um explicitamente.
-const CHAVE_POR_MALANDRAGEM: Record<string, string> = { rufiao: "for", trapaceiro: "car", "mente-brilhante": "int" };
-
-function chaveDe(classe: ClassePf2, extras: Record<string, unknown>): string {
-  const escolhida = texto(extras.chave);
-  if (classe.chaves.includes(escolhida)) return escolhida;
-  if (classe.id === "ladino") return CHAVE_POR_MALANDRAGEM[texto(extras.malandragem)] ?? "des";
-  return classe.chaves[0];
-}
-
-function ordemDe(classe: ClassePf2, chave: string): string[] {
-  return [chave, ...classe.ordem.filter((a) => a !== chave)];
 }
 
 function tradicaoDe(ficha: Ficha): Tradicao | null {
@@ -187,38 +175,80 @@ function recalcularRecursos(ficha: Ficha): Record<string, Recurso> {
 
 type Penalidade = { valor: number; detalhe: string };
 
-const CONDICOES_STATUS: { re: RegExp; nome: string; afeta: (alvo: string) => boolean }[] = [
-  { re: /^(amedrontad|assustad|frightened)/, nome: "amedrontado", afeta: () => true },
-  { re: /^(enjoad|nausead|sickened)/, nome: "enjoado", afeta: () => true },
-  { re: /^(desajeitad|clumsy)/, nome: "desajeitado", afeta: (a) => a === "des" },
-  { re: /^(enfraquecid|debilitad|enfeebled)/, nome: "enfraquecido", afeta: (a) => a === "for" },
-  { re: /^(drenad|drained)/, nome: "drenado", afeta: (a) => a === "con" },
-  { re: /^(estupefat|stupefied)/, nome: "estupefato", afeta: (a) => a === "int" || a === "sab" || a === "car" },
-];
+/** Condições de status com valor e quem elas afetam (pelo atributo do teste). */
+const CONDICOES_STATUS: Record<string, (alvo: string) => boolean> = {
+  amedrontado: () => true,
+  enjoado: () => true,
+  desajeitado: (a) => a === "des",
+  enfraquecido: (a) => a === "for",
+  drenado: (a) => a === "con",
+  estupefato: (a) => a === "int" || a === "sab" || a === "car",
+};
 
-/** Penalidades de condição: as de status não se somam (vale a pior); "caído" dá −2 circunstancial em ataques. */
+/**
+ * Penalidades de condição: as de status não se somam (vale a pior); "caído" dá −2 circunstancial em ataques. Lê qualquer
+ * grafia da lista fechada ("medo 2", "Amedrontado II", "assustada").
+ */
 function penalidadeCondicoes(ficha: Ficha, atributo: string | null, tipo: Calculo["tipo"]): Penalidade {
   if (tipo === "simples") return { valor: 0, detalhe: "" };
   let status = 0;
   let origem = "";
   let circunstancia = 0;
   for (const bruto of ficha.condicoes) {
-    const c = normalizar(bruto);
-    const valor = Number(c.match(/(\d+)/)?.[1] ?? 1);
-    for (const cond of CONDICOES_STATUS) {
-      if (cond.re.test(c) && cond.afeta(atributo ?? "") && valor > status) {
-        status = valor;
-        origem = `${cond.nome} ${valor}`;
-      }
+    const lida = lerCondicao(bruto, CONDICOES_PF2E);
+    if (!lida) continue;
+    const id = lida.def.id;
+    const valor = lida.valor ?? 1;
+    const afeta = CONDICOES_STATUS[id];
+    if (afeta && afeta(atributo ?? "") && valor > status) {
+      status = valor;
+      origem = `${lida.def.nome} ${valor}`;
     }
-    if (/^fatigad/.test(c) && tipo === "salvamento" && 1 > status) {
+    if (id === "fatigado" && tipo === "salvamento" && 1 > status) {
       status = 1;
       origem = "fatigado";
     }
-    if (/^(caid|prone)/.test(c) && tipo === "ataque") circunstancia = 2;
+    if (id === "inconsciente" && (tipo === "percepcao" || (tipo === "salvamento" && atributo === "des")) && 4 > status) {
+      status = 4;
+      origem = "inconsciente";
+    }
+    if (id === "caido" && tipo === "ataque") circunstancia = 2;
   }
   const partes = [status ? `${origem}: −${status}` : "", circunstancia ? `caído: −${circunstancia}` : ""].filter(Boolean);
   return { valor: -(status + circunstancia), detalhe: partes.join(", ") };
+}
+
+/** Condições que deixam desprevenido (−2 circunstancial na CA). */
+const DESPREVENIDO_POR = ["desprevenido", "caido", "agarrado", "contido", "paralisado", "inconsciente", "confuso"];
+
+/**
+ * CA (ou CD) com as condições: a pior penalidade de status que vale para defesas (amedrontado, enjoado, desajeitado; na CA,
+ * fatigado −1 e inconsciente −4) mais −2 circunstancial de desprevenido (ou do que o causa). `atributoCd` limita as de atributo (CD de classe de INT não sofre
+ * desajeitado).
+ */
+function defesaComCondicoes(defesa: number, condicoes: string[], atributoCd: string | null = "des", ehCA = true): { valor: number; detalhe: string } {
+  let status = 0;
+  let origem = "";
+  let desprevenido = "";
+  for (const bruto of condicoes) {
+    const lida = lerCondicao(bruto, CONDICOES_PF2E);
+    if (!lida) continue;
+    const id = lida.def.id;
+    const valor = id === "inconsciente" ? 4 : (lida.valor ?? 1);
+    const vale =
+      id === "amedrontado" ||
+      id === "enjoado" ||
+      (ehCA && (id === "inconsciente" || id === "fatigado")) ||
+      (CONDICOES_STATUS[id]?.(atributoCd ?? "") ?? false);
+    if (vale && valor > status) {
+      status = valor;
+      origem = id === "inconsciente" || id === "fatigado" ? lida.def.nome : `${lida.def.nome} ${valor}`;
+    }
+    if (ehCA && !desprevenido && DESPREVENIDO_POR.includes(id)) desprevenido = lida.def.nome;
+  }
+  const circ = desprevenido ? 2 : 0;
+  const partes = [status ? `${origem} −${status}` : "", circ ? (desprevenido === "desprevenido" ? "desprevenido −2" : `desprevenido (${desprevenido}) −2`) : ""].filter(Boolean);
+  return { valor: defesa - status - circ, detalhe: partes.join(", ") };
 }
 
 // ---------- Interpretação dos testes ----------
@@ -230,7 +260,14 @@ type Calculo = {
   tipo: "pericia" | "salvamento" | "ataque" | "percepcao" | "atributo" | "simples";
   detalhes: string[];
   alvoPadrao?: number;
+  /** ataque contado no turno: qual (1º, 2º, 3º...) e se a arma é ágil */
+  ataque?: { numero: number; agil?: boolean };
+  /** ataque com arma: o dano a rolar no acerto ("1d6+2"), o tipo e o dado mortal */
+  dano?: { expressao: string; tipo?: string; mortal?: string };
 };
+
+/** O que vem de fora do texto: quantos ataques já houve no turno (rastreador) ou o número fixado no pedido do teste. */
+export type OpcoesCalculo = { numeroAtaque?: number; ataquesNoTurno?: number };
 
 function bonusPericia(ficha: Ficha, id: string): { bonus: number; atributo: string; grau: number } {
   const pericia = PERICIAS.find((p) => p.id === id)!;
@@ -260,9 +297,43 @@ function bonusSalvamento(ficha: Ficha, id: "fort" | "ref" | "von"): number {
   return mod(ficha, s.atributo) + proficiencia(grauEm(classeDe(ficha).prog[id], ficha.nivel), ficha.nivel);
 }
 
-function bonusAtaque(ficha: Ficha): number {
-  const arma = armaDe(ficha);
-  return mod(ficha, arma.atributo) + proficiencia(grauEm(classeDe(ficha).prog.ataque, ficha.nivel), ficha.nivel);
+/** Arma em uso: a do catálogo quando o nome casa (traços completos), senão a da classe como está. */
+type ArmaEmUso = ArmaPf2 & Partial<Omit<ArmaCatalogo, keyof ArmaPf2>>;
+
+function armaCompleta(arma: ArmaPf2): ArmaEmUso {
+  const doCatalogo = acharArma(arma.nome);
+  return doCatalogo ? { ...doCatalogo, ...arma, atributo: arma.atributo } : arma;
+}
+
+/** Ataque à distância pedido sem dizer a arma ("atirar no orc", "ataque à distância"). */
+const DISTANCIA_NO_TEXTO = /distancia|atir|dispar|arremess|flecha|virote/;
+
+/**
+ * A arma de um ataque: a citada no pedido ("Ataque com arco curto"), ou a de distância do inventário quando o pedido fala em
+ * atirar/arremessar, ou a da classe. `arremessada` = arma corpo a corpo de arremesso usada à distância.
+ */
+function armaDoAtaque(ficha: Ficha, n: string): { arma: ArmaEmUso; arremessada: boolean } {
+  const citada = acharArma(n);
+  const daClasse = armaCompleta(armaDe(ficha));
+  const querDistancia = DISTANCIA_NO_TEXTO.test(n);
+  let arma: ArmaEmUso = citada ?? daClasse;
+  if (!citada && querDistancia && !daClasse.distancia) {
+    const doInventario = armasDoInventario(ficha.inventario);
+    arma = doInventario.find((a) => a.distancia) ?? doInventario.find((a) => a.arremesso) ?? daClasse;
+  }
+  const arremessada = Boolean(arma.arremesso && (arma.distancia || /arremess|atir/.test(n)));
+  return { arma, arremessada };
+}
+
+/** Atributo do ataque: distância e arremesso usam DES; acuidade usa o melhor entre FOR e DES. */
+function atributoDoAtaque(ficha: Ficha, arma: ArmaEmUso, arremessada = false): string {
+  if (arma.distancia || arremessada) return "des";
+  if (arma.acuidade) return mod(ficha, "des") > mod(ficha, "for") ? "des" : "for";
+  return arma.atributo;
+}
+
+function bonusAtaque(ficha: Ficha, arma: ArmaEmUso = armaCompleta(armaDe(ficha)), arremessada = false): number {
+  return mod(ficha, atributoDoAtaque(ficha, arma, arremessada)) + proficiencia(grauEm(classeDe(ficha).prog.ataque, ficha.nivel), ficha.nivel);
 }
 
 function bonusMagia(ficha: Ficha): number | null {
@@ -280,11 +351,30 @@ function saberesDe(ficha: Ficha): string[] {
   return listaTexto(ficha.extras.saberes);
 }
 
-/** 2º/3º ataque do turno, pelo texto do pedido. */
-function numeroAtaque(n: string): number {
-  if (/terceir|ultimo|(^|\D)3(o|a|º)?(\D|$)/.test(n)) return 3;
-  if (/segund|(^|\D)2(o|a|º)?(\D|$)/.test(n)) return 2;
+/** 1º/2º/3º ataque citado no texto do pedido ("Ataque 2", "segundo golpe"); null quando o texto não diz. */
+function numeroNoTexto(n: string): number | null {
+  // o número solto ("Ataque 2", "2º ataque"), sem pegar "+2", "2d6" ou "1,5 m"
+  const solto = (d: number) => new RegExp(`(^|[^\\d+\\-,.])${d}(o|a|º|ª)?(?=\\s|\\)|$)`).test(n);
+  if (/terceir|ultimo/.test(n) || solto(3)) return 3;
+  if (/segund/.test(n) || solto(2)) return 2;
+  if (/primeir/.test(n) || solto(1)) return 1;
+  return null;
+}
+
+/**
+ * Qual ataque do turno é este: o número fixado no pedido (pedir_teste guarda), senão o citado no texto ("Ataque 1" zera a
+ * conta), senão o rastreador do combate (ataques já feitos + 1), senão o 1º.
+ */
+function numeroAtaque(n: string, opcoes: OpcoesCalculo = {}): number {
+  if (opcoes.numeroAtaque && opcoes.numeroAtaque > 0) return Math.min(3, Math.floor(opcoes.numeroAtaque));
+  const doTexto = numeroNoTexto(n);
+  if (doTexto) return doTexto;
+  if (opcoes.ataquesNoTurno && opcoes.ataquesNoTurno > 0) return Math.min(3, opcoes.ataquesNoTurno + 1);
   return 1;
+}
+
+function textoMultipla(numero: number, multipla: number, agil?: boolean): string[] {
+  return multipla ? [`${numero}º ataque: ${multipla}${agil ? " (ágil)" : ""}`] : [];
 }
 
 function penalidadeMultipla(numero: number, agil: boolean): number {
@@ -306,7 +396,7 @@ function acharPericia(n: string, exato: boolean) {
 // Atalhos por palavra: todos exigem começo de palavra ("natação" tem "atac" dentro e não é ataque; "pulo" não é "impulso").
 const INICIO = "(^|[^a-z])";
 const MANOBRAS = new RegExp(`${INICIO}(agarr|empurr|derrub|reposicion|desarm(?!.*armadilh)|grapple|shove|trip)`);
-const ATAQUE = new RegExp(`${INICIO}(ataq|atac|golpe|strike)`);
+const ATAQUE = new RegExp(`${INICIO}(ataq|atac|golpe|strike|atir|dispar)`);
 const MAGIA = new RegExp(`${INICIO}(magi|feiti|conjur|truque|spell)`);
 const IMPULSO = new RegExp(`${INICIO}(impulso|impulse|explosao elemental)`);
 const PERCEPCAO = /percep|buscar|procurar|senso de motivo|notar|perceb|vigiar|observar|perception/;
@@ -362,12 +452,12 @@ function periciaEntreParenteses(ficha: Ficha, teste: string, profundidade: numbe
 }
 
 /** Interpreta o nome do teste pedido pelo mestre e devolve rótulo, bônus e tipo. Exportado para os testes unitários. */
-export function calcular(ficha: Ficha, teste: string, profundidade = 0): Calculo {
+export function calcular(ficha: Ficha, teste: string, profundidade = 0, opcoes: OpcoesCalculo = {}): Calculo {
   const n = normalizar(teste).replace(/explorar vulnerabilidade/, "saber esoterico");
   const classe = classeDe(ficha);
 
   if (/recupera/.test(n)) {
-    const moribundo = Number(ficha.condicoes.map(normalizar).find((c) => c.startsWith("moribund"))?.match(/(\d+)/)?.[1] ?? 1);
+    const moribundo = valorDaCondicao(ficha.condicoes, "moribundo") || 1;
     return { rotulo: "Recuperação", bonus: 0, atributo: null, tipo: "simples", detalhes: [`moribundo ${moribundo}`], alvoPadrao: 10 + moribundo };
   }
   if (/^(teste )?simples|^flat/.test(n)) return { rotulo: "Teste simples", bonus: 0, atributo: null, tipo: "simples", detalhes: [] };
@@ -427,16 +517,17 @@ export function calcular(ficha: Ficha, teste: string, profundidade = 0): Calculo
   }
 
   if (MAGIA.test(n)) {
-    const numero = numeroAtaque(n);
+    const numero = numeroAtaque(n, opcoes);
     const bonus = bonusMagia(ficha);
     const multipla = penalidadeMultipla(numero, false);
-    const detalhes = multipla ? [`${numero}º ataque: ${multipla}`] : [];
-    if (bonus === null) return { rotulo: "Ataque mágico (sem conjuração)", bonus: mod(ficha, chaveDaFicha(ficha)) + multipla, atributo: chaveDaFicha(ficha), tipo: "ataque", detalhes: [...detalhes, "classe não conjura"] };
-    return { rotulo: `Ataque de magia (${tradicaoDe(ficha) ?? "foco"})`, bonus: bonus + multipla, atributo: atributoMagia(ficha), tipo: "ataque", detalhes };
+    const detalhes = textoMultipla(numero, multipla);
+    const ataque = { numero };
+    if (bonus === null) return { rotulo: "Ataque mágico (sem conjuração)", bonus: mod(ficha, chaveDaFicha(ficha)) + multipla, atributo: chaveDaFicha(ficha), tipo: "ataque", detalhes: [...detalhes, "classe não conjura"], ataque };
+    return { rotulo: `Ataque de magia (${tradicaoDe(ficha) ?? "foco"})`, bonus: bonus + multipla, atributo: atributoMagia(ficha), tipo: "ataque", detalhes, ataque };
   }
 
   if (IMPULSO.test(n)) {
-    const numero = numeroAtaque(n);
+    const numero = numeroAtaque(n, opcoes);
     const multipla = penalidadeMultipla(numero, false);
     const prog = classe.id === "cinetico" ? classe.prog.cd : "";
     return {
@@ -444,27 +535,32 @@ export function calcular(ficha: Ficha, teste: string, profundidade = 0): Calculo
       bonus: mod(ficha, "con") + proficiencia(grauEm(prog, ficha.nivel), ficha.nivel) + multipla,
       atributo: "con",
       tipo: "ataque",
-      detalhes: multipla ? [`${numero}º ataque: ${multipla}`] : [],
+      detalhes: textoMultipla(numero, multipla),
+      ataque: { numero },
     };
   }
 
   if (MANOBRAS.test(n)) {
-    const numero = numeroAtaque(n);
+    const numero = numeroAtaque(n, opcoes);
     const multipla = penalidadeMultipla(numero, false);
     const base = calcPericia(ficha, "atletismo", "Manobra · ");
-    return { ...base, bonus: base.bonus + multipla, tipo: "ataque", detalhes: [...base.detalhes, ...(multipla ? [`${numero}º ataque: ${multipla}`] : [])] };
+    return { ...base, bonus: base.bonus + multipla, tipo: "ataque", detalhes: [...base.detalhes, ...textoMultipla(numero, multipla)], ataque: { numero } };
   }
 
   if (ATAQUE.test(n)) {
-    const arma = armaDe(ficha);
-    const numero = numeroAtaque(n);
-    const multipla = penalidadeMultipla(numero, Boolean(arma.agil));
-    const detalhes = multipla ? [`${numero}º ataque: ${multipla}${arma.agil ? " (ágil)" : ""}`] : [];
+    const { arma, arremessada } = armaDoAtaque(ficha, n);
+    const numero = numeroAtaque(n, opcoes);
+    const agil = Boolean(arma.agil);
+    const multipla = penalidadeMultipla(numero, agil);
+    const detalhes = textoMultipla(numero, multipla, agil);
+    const dano = { expressao: danoArma(ficha, arma, arremessada), tipo: arma.tipo, mortal: arma.mortal };
+    const ataque = { numero, agil };
     if (/estratag/.test(n) && classe.id === "investigador") {
       const bonus = mod(ficha, "int") + proficiencia(grauEm(classe.prog.ataque, ficha.nivel), ficha.nivel);
-      return { rotulo: `Ataque com estratagema (${arma.nome})`, bonus: bonus + multipla, atributo: "int", tipo: "ataque", detalhes };
+      return { rotulo: `Ataque com estratagema (${arma.nome})`, bonus: bonus + multipla, atributo: "int", tipo: "ataque", detalhes, ataque, dano };
     }
-    return { rotulo: `Ataque (${arma.nome})`, bonus: bonusAtaque(ficha) + multipla, atributo: arma.atributo, tipo: "ataque", detalhes };
+    const nomeArma = arremessada && !arma.distancia ? `${arma.nome} arremessada` : arma.nome;
+    return { rotulo: `Ataque (${nomeArma})`, bonus: bonusAtaque(ficha, arma, arremessada) + multipla, atributo: atributoDoAtaque(ficha, arma, arremessada), tipo: "ataque", detalhes, ataque, dano };
   }
 
   if (/escapar|escape/.test(n)) {
@@ -495,7 +591,7 @@ export function calcular(ficha: Ficha, teste: string, profundidade = 0): Calculo
   // "Ação (Perícia)": tenta o que está entre parênteses
   const dentro = teste.match(/\(([^)]+)\)/)?.[1];
   if (dentro && profundidade < 1) {
-    const interno = calcular(ficha, dentro, profundidade + 1);
+    const interno = calcular(ficha, dentro, profundidade + 1, opcoes);
     if (!interno.detalhes.includes(NAO_RECONHECIDO)) return { ...interno, rotulo: `${teste.replace(/\s*\(.*$/, "")} (${interno.rotulo})` };
   }
 
@@ -514,79 +610,6 @@ function aumentar(atributos: Record<string, number>, parciais: Record<string, bo
     atributos[id] += 1;
     delete parciais[id];
   } else parciais[id] = true;
-}
-
-function aplicarAncestralidadeEAntecedente(
-  base: Record<string, number>,
-  anc: AncestralidadePf2,
-  antecedente: AntecedentePf2 | undefined,
-  ordem: string[],
-  extras: Record<string, unknown>,
-): Record<string, number> {
-  const atributos = { ...base };
-  const fixos = Object.entries(anc.ajustes ?? {});
-  for (const [id, v] of fixos) atributos[id] = (atributos[id] ?? 0) + v;
-  const jaAumentados = new Set(fixos.filter(([, v]) => v > 0).map(([id]) => id));
-
-  // aumentos livres da ancestralidade: escolhas do jogador, depois a prioridade da classe
-  const validos = ATRIBUTOS.map((a) => a.id);
-  const escolhidos = listaTexto(extras.aumento_ancestral).filter((id) => validos.includes(id) && !jaAumentados.has(id));
-  const livres: string[] = [];
-  for (const id of [...escolhidos, ...ordem]) {
-    if (livres.length >= anc.livres) break;
-    if (!jaAumentados.has(id) && !livres.includes(id)) livres.push(id);
-  }
-  for (const id of livres) atributos[id] = (atributos[id] ?? 0) + 1;
-
-  if (antecedente) {
-    const pedidos = listaTexto(extras.aumento_antecedente).filter((id) => validos.includes(id));
-    const primeiro = pedidos.find((id) => antecedente.atributos.includes(id)) ?? ordem.find((id) => antecedente.atributos.includes(id)) ?? antecedente.atributos[0];
-    const segundo = pedidos.find((id) => id !== primeiro) ?? ordem.find((id) => id !== primeiro)!;
-    atributos[primeiro] = (atributos[primeiro] ?? 0) + 1;
-    atributos[segundo] = (atributos[segundo] ?? 0) + 1;
-  }
-
-  for (const id of validos) atributos[id] = limitar(atributos[id] ?? 0, -1, 4);
-  return atributos;
-}
-
-// ---------- Perícias concedidas por subclasse ----------
-
-const PERICIAS_SUBCLASSE: Record<string, string[]> = {
-  "estilo:bravateiro": ["intimidacao"], "estilo:esgrimista": ["dissimulacao"], "estilo:ginasta": ["atletismo"],
-  "estilo:galhofeiro": ["performance"], "estilo:patife": ["ladroagem"], "estilo:dancarino": ["performance"],
-  "ordem:animal": ["atletismo"], "ordem:folha": ["diplomacia"], "ordem:tempestade": ["acrobatismo"], "ordem:indomada": ["intimidacao"],
-  "ordem:chama": ["acrobatismo"], "ordem:pedra": ["atletismo"],
-  "metodologia:alquimica": ["manufatura"], "metodologia:forense": ["medicina"], "metodologia:interrogacao": ["diplomacia"],
-  "misterio:ancestrais": ["sociedade"], "misterio:batalha": ["atletismo"], "misterio:ossos": ["medicina"], "misterio:cosmos": ["natureza"],
-  "misterio:chamas": ["acrobatismo"], "misterio:vida": ["medicina"], "misterio:saber": ["ocultismo"], "misterio:tempestade": ["natureza"],
-  "malandragem:ladrao": ["ladroagem"], "malandragem:rufiao": ["intimidacao"], "malandragem:trapaceiro": ["dissimulacao", "diplomacia"],
-  "malandragem:mente-brilhante": ["sociedade"], "malandragem:vingador": ["religiao"], "malandragem:trapaceiro-mistico": ["arcanismo"],
-  "linhagem:aberrante": ["intimidacao", "ocultismo"], "linhagem:angelica": ["diplomacia", "religiao"], "linhagem:demoniaca": ["intimidacao", "religiao"],
-  "linhagem:diabolica": ["dissimulacao", "religiao"], "linhagem:draconica": ["arcanismo", "intimidacao"], "linhagem:elemental": ["intimidacao", "natureza"],
-  "linhagem:feerica": ["dissimulacao", "natureza"], "linhagem:bruxesca": ["dissimulacao", "ocultismo"], "linhagem:imperial": ["arcanismo", "sociedade"],
-  "linhagem:morta-viva": ["intimidacao", "religiao"], "linhagem:genio": ["arcanismo", "dissimulacao"], "linhagem:ninfa": ["diplomacia", "natureza"],
-  "linhagem:fenix": ["natureza", "diplomacia"], "linhagem:psicopompo": ["medicina", "religiao"], "linhagem:sombra": ["furtividade", "ocultismo"],
-  "patrono:chama-fe": ["religiao"], "patrono:inscrito": ["arcanismo"], "patrono:ressentimento": ["ocultismo"], "patrono:silencio-neve": ["natureza"],
-  "patrono:fiandeira": ["ocultismo"], "patrono:sombra-sem-estrelas": ["ocultismo"], "patrono:zelador-selvagem": ["natureza"],
-  "caminho:andarilho": ["acrobatismo"], "caminho:duelista": ["performance"], "caminho:atirador": ["furtividade"],
-  "caminho:gatilho": ["ladroagem"], "caminho:vanguarda": ["atletismo"],
-  "musa:enigma": [], "doutrina:guerra": [],
-};
-
-const PERICIA_TRADICAO: Record<Tradicao, string> = { arcana: "arcanismo", divina: "religiao", oculta: "ocultismo", primal: "natureza" };
-
-function periciasDeSubclasse(classe: ClassePf2, extras: Record<string, unknown>): string[] {
-  const out: string[] = [];
-  for (const opcao of OPCOES_CRIACAO) {
-    if (!opcao.classes?.includes(classe.id)) continue;
-    for (const valor of listaTexto(extras[opcao.id])) out.push(...(PERICIAS_SUBCLASSE[`${opcao.id}:${valor}`] ?? []));
-  }
-  const eidolon = texto(extras.eidolon);
-  if (classe.id === "invocador" && TRADICAO_POR_SUBCLASSE[eidolon]) out.push(PERICIA_TRADICAO[TRADICAO_POR_SUBCLASSE[eidolon]]);
-  // guerreiro de DES prefere Acrobatismo
-  if (classe.id === "guerreiro" && chaveDe(classe, extras) === "des") out.push("acrobatismo");
-  return out;
 }
 
 function capPericia(nivel: number): number {
@@ -611,15 +634,40 @@ function linhaPericias(ficha: Ficha): string[] {
   return PERICIAS.filter((p) => ficha.pericias[p.id]).map((p) => `${p.nome} ${sinal(bonusPericia(ficha, p.id).bonus)} (${LETRA_GRAU[ficha.pericias[p.id]] ?? "T"})`);
 }
 
-function danoArma(ficha: Ficha): string {
-  const arma = armaDe(ficha);
+/** Dano da arma: corpo a corpo e arremesso somam FOR; propulsiva soma metade da FOR (se positiva); mais especialização. */
+function danoArma(ficha: Ficha, arma: ArmaEmUso = armaCompleta(armaDe(ficha)), arremessada = false): string {
   const classe = classeDe(ficha);
   const grau = grauEm(classe.prog.ataque, ficha.nivel);
   const marcial = grauEm(classe.prog.ataque, 7) >= 2;
   const nivelEspecializacao = marcial ? 7 : 13;
-  let bonus = arma.distancia ? 0 : mod(ficha, "for");
+  const forca = mod(ficha, "for");
+  let bonus = arremessada || !arma.distancia ? forca : arma.propulsivo ? (forca > 0 ? Math.floor(forca / 2) : forca) : 0;
   if (ficha.nivel >= nivelEspecializacao && grau >= 2) bonus += (grau === 2 ? 2 : grau === 3 ? 3 : 4) * (marcial && ficha.nivel >= 15 ? 2 : 1);
   return `${arma.dano}${bonus ? sinal(bonus) : ""}`;
+}
+
+/** Armas da ficha: a da classe (já ajustada ao atributo-chave) e as do inventário que estão no catálogo, sem repetir. */
+function armasDaFicha(ficha: Ficha): ArmaEmUso[] {
+  const daClasse = armaCompleta(armaDe(ficha));
+  const out: ArmaEmUso[] = [daClasse];
+  for (const a of armasDoInventario(ficha.inventario)) if (!out.some((x) => normalizar(x.nome) === normalizar(a.nome))) out.push(a);
+  return out;
+}
+
+/** "Rapieira +7 (1d6+3 perfurante, ágil)". */
+function linhaArma(ficha: Ficha, arma: ArmaEmUso): { nome: string; bonus: number; dano: string; tracos: string } {
+  const tracos = [arma.distancia ? "distância" : "", arma.agil ? "ágil" : "", arma.acuidade ? "acuidade" : "", arma.mortal ? `mortal ${arma.mortal.replace(/^1/, "")}` : ""].filter(Boolean).join(", ");
+  return { nome: arma.nome, bonus: bonusAtaque(ficha, arma), dano: `${danoArma(ficha, arma)}${arma.tipo ? ` ${arma.tipo}` : ""}`, tracos };
+}
+
+/** CA com as condições da ficha (igual à CA quando nada pesa). */
+function caEfetiva(ficha: Ficha) {
+  return defesaComCondicoes(ficha.defesa, ficha.condicoes, "des", true);
+}
+
+/** CD de classe com as condições (amedrontado, enjoado e as de atributo do atributo-chave). */
+function cdClasseEfetiva(ficha: Ficha) {
+  return defesaComCondicoes(cdClasse(ficha), ficha.condicoes, chaveDaFicha(ficha), false);
 }
 
 function ataqueFurtivo(nivel: number): string {
@@ -682,20 +730,41 @@ export const pf2e: Sistema = {
   ],
   limitesAtributos: { min: -1, max: 4 },
   periciasEscolhiveis: 4,
+  // limite real: perícias da classe + INT (o passo de criação ainda soma +1 por perícia fixa repetida, via pf2e/criacao.ts)
+  limitePericias: { base: 3, porClasse: Object.fromEntries(CLASSES.map((c) => [c.id, c.maisPericias])), somaAtributo: "int" },
+  condicoes: CONDICOES_PF2E.map(({ id, nome, sinonimos, temValor, max, efeito }) => ({ id, nome, sinonimos, temValor, max, efeito })),
   nivelMaximo: 20,
-  combate: { modelo: "rodadas", iniciativaNpc: "1d20" },
+  combate: { modelo: "rodadas", iniciativaNpc: "1d20", acoes: 3 },
   progressao: "xp",
   testesSugeridos: ["Percepção", "Atletismo", "Acrobatismo", "Furtividade", "Diplomacia", "Dissimulação", "Intimidação", "Medicina", "Fortitude", "Reflexos", "Vontade", "Ataque", "Ataque 2", "Magia", "Iniciativa", "Recordar Conhecimento", "Teste simples", "Recuperação"],
   regrasParaMestre: REGRAS_PF2E,
 
   atributosIniciais(classeId, metodo) {
-    const classe = CLASSES.find((c) => c.id === classeId) ?? CLASSES[0];
-    const chave = classe.chaves[0];
-    const atributos: Record<string, number> = Object.fromEntries(ATRIBUTOS.map((a) => [a.id, 0]));
-    atributos[chave] += 1; // aumento da classe
-    const livres = metodo === "defensivo" ? [chave, ...["con", "des", "sab"].filter((a) => a !== chave)].slice(0, 4) : ordemDe(classe, chave).slice(0, 4);
-    for (const id of livres) atributos[id] += 1;
-    return atributos;
+    return atributosIniciaisPf2(classeId, metodo);
+  },
+
+  avisosCriacao(entrada) {
+    const { fixas, limite } = periciasCriacaoPf2(entrada);
+    const escolhidas = [...new Set(entrada.pericias ?? [])].filter((id) => PERICIAS.some((p) => p.id === id) && !fixas.some((f) => f.id === id));
+    const avisos: string[] = [];
+    if (escolhidas.length > limite) avisos.push(`Perícias: ${escolhidas.length} escolhidas, mas o limite é ${limite}; as que passarem ficam de fora.`);
+    if (escolhidas.length < limite) {
+      const faltam = limite - escolhidas.length;
+      const completar = ordemDeCompletar(entrada.classe, entrada.extras)
+        .filter((id) => !fixas.some((f) => f.id === id) && !escolhidas.includes(id))
+        .slice(0, faltam)
+        .map(nomePericia);
+      avisos.push(`Faltam ${faltam} perícia${faltam > 1 ? "s" : ""} (${escolhidas.length}/${limite}); a ficha completa com ${completar.join(", ")}.`);
+    }
+    return avisos;
+  },
+
+  fimDoTurno(condicoes) {
+    return condicoesNoFimDoTurno(condicoes);
+  },
+
+  defesaComCondicoes(defesa, condicoes) {
+    return defesaComCondicoes(defesa, condicoes);
   },
 
   criarFicha(entrada) {
@@ -724,14 +793,15 @@ export const pf2e: Sistema = {
     ficha.antecedente = antecedente.id;
     ficha.atributos = aplicarAncestralidadeEAntecedente(base, anc, antecedente, ordem, extras);
 
-    // perícias: fixas da classe, do antecedente e da subclasse; repetidas viram escolhas extras
+    // perícias: fixas da classe, do antecedente e da subclasse; repetidas viram escolhas extras. As escolhas que faltam são
+    // completadas pelas sugeridas da classe e pelas do atributo-chave (avisosCriacao avisa quais), nunca em ordem alfabética
     let extrasPericia = Math.max(0, classe.maisPericias + ficha.atributos.int);
     for (const id of [...(classe.pericias ?? []), antecedente.pericia, ...periciasDeSubclasse(classe, extras)]) {
       if (!PERICIAS.some((p) => p.id === id)) continue;
       if (ficha.pericias[id]) extrasPericia++;
       else ficha.pericias[id] = 1;
     }
-    const candidatas = [...(entrada.pericias ?? []), ...classe.sugeridas, ...PERICIAS.map((p) => p.id)];
+    const candidatas = [...(entrada.pericias ?? []), ...ordemDeCompletar(classe.id, extras), ...PERICIAS.map((p) => p.id)];
     for (const id of candidatas) {
       if (extrasPericia <= 0) break;
       if (!PERICIAS.some((p) => p.id === id) || ficha.pericias[id]) continue;
@@ -758,7 +828,9 @@ export const pf2e: Sistema = {
   },
 
   resolverTeste(ficha: Ficha, pedido: PedidoTeste): ResultadoTeste {
-    const calc = calcular(ficha, pedido.teste);
+    const op = pedido.opcoes ?? {};
+    const numeroOp = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+    const calc = calcular(ficha, pedido.teste, 0, { numeroAtaque: numeroOp(op.numeroAtaque), ataquesNoTurno: numeroOp(op.ataquesNoTurno) });
     const pen = penalidadeCondicoes(ficha, calc.atributo, calc.tipo);
     const detalhes = [...calc.detalhes, pen.detalhe].filter(Boolean).join(" · ");
     const resultado = testeD20({
@@ -772,6 +844,20 @@ export const pf2e: Sistema = {
     });
     // no PF2e não há vantagem/desvantagem: são efeitos de sorte e infortúnio
     if (resultado.detalhes) resultado.detalhes = resultado.detalhes.replace(/^vantagem:/, "sorte (maior de 2d20):").replace(/^desvantagem:/, "infortúnio (menor de 2d20):");
+    if (calc.ataque) resultado.ataque = calc.ataque;
+    // acerto com arma: o servidor rola o dano (crítico dobra e soma o dado mortal); a prévia não rola nada
+    // (sem CA não há como saber se acertou: o cartão só lembra o dano da arma)
+    if (calc.dano && !pedido.previa && resultado.alvo === null) resultado.detalhes = [resultado.detalhes, `dano se acertar: ${calc.dano.expressao}`].filter(Boolean).join(" · ");
+    if (calc.dano && !pedido.previa && resultado.alvo !== null && (resultado.grau === "sucesso" || resultado.grau === "sucesso_critico")) {
+      const critico = resultado.grau === "sucesso_critico";
+      const rolagem = rolar(calc.dano.expressao);
+      const mortal = critico && calc.dano.mortal ? rolar(calc.dano.mortal) : null;
+      const valor = Math.max(1, rolagem.total) * (critico ? 2 : 1) + (mortal?.total ?? 0);
+      const conta = `${descreverRolagem(rolagem)}${critico ? " ×2" : ""}${mortal ? ` + mortal ${descreverRolagem(mortal)}` : ""}`;
+      const textoDano = `${critico ? "crítico, " : ""}acertou: ${valor} de dano${calc.dano.tipo ? ` ${calc.dano.tipo}` : ""} (${conta})`;
+      resultado.dano = { valor, ...(calc.dano.tipo ? { tipo: calc.dano.tipo } : {}), texto: textoDano };
+      resultado.detalhes = [resultado.detalhes, textoDano].filter(Boolean).join(" · ");
+    }
     return resultado;
   },
 
@@ -784,13 +870,21 @@ export const pf2e: Sistema = {
     const magia = bonusMagia(ficha);
     const tradicao = tradicaoDe(ficha);
     const recursos = Object.values(ficha.recursos).map((r) => `${r.rotulo} ${r.atual}/${r.max}`).join(", ");
-    const arma = armaDe(ficha);
     const extrasClasse = classe.id === "ladino" ? ` · Ataque Furtivo +${ataqueFurtivo(ficha.nivel)}` : "";
+    const ataques = armasDaFicha(ficha)
+      .map((a) => {
+        const l = linhaArma(ficha, a);
+        return `${l.nome} ${sinal(l.bonus)} (${l.dano}${l.tracos ? `; ${l.tracos}` : ""})`;
+      })
+      .join(" · ");
+    const ca = caEfetiva(ficha);
+    const cd = cdClasseEfetiva(ficha);
+    const cdTexto = cd.detalhe ? `CD de classe ${cd.valor} (base ${cdClasse(ficha)}; ${cd.detalhe})` : `CD de classe ${cd.valor}`;
     const linhas = [
       `${ficha.nome} — ${anc.nome} ${classe.nome} nível ${ficha.nivel} (XP ${ficha.xp})${antecedente ? `, antecedente ${antecedente.nome}` : ""}`,
-      `PV ${ficha.pv}/${ficha.pvMax} · CA ${ficha.defesa} · Percepção ${sinal(bonusPercepcao(ficha))} · ${salv} · deslocamento ${anc.deslocamento} · ${ficha.dinheiro} po`,
+      `PV ${ficha.pv}/${ficha.pvMax} · CA ${ca.valor}${ca.detalhe ? ` (base ${ficha.defesa}; ${ca.detalhe})` : ""} · Percepção ${sinal(bonusPercepcao(ficha))} · ${salv} · deslocamento ${anc.deslocamento} · ${ficha.dinheiro} po`,
       `Atributos: ${atributos} (chave ${chaveDaFicha(ficha).toUpperCase()})`,
-      `Ataque (${arma.nome}) ${sinal(bonusAtaque(ficha))}${arma.agil ? " ágil" : ""}, dano ${danoArma(ficha)}${extrasClasse} · CD de classe ${cdClasse(ficha)}`,
+      `Ataques: ${ataques}${extrasClasse} · ${cdTexto} · 2º ataque −5 (ágil −4), 3º −10 (ágil −8): o servidor conta sozinho no combate`,
       magia !== null ? `Magia ${tradicao ?? ""} (${classe.magia?.tipo}): ataque ${sinal(magia)}, CD ${10 + magia}` : "",
       `Perícias: ${linhaPericias(ficha).join(", ") || "nenhuma"}`,
       `Saberes: ${saberesDe(ficha).join(", ") || "nenhum"}`,
@@ -808,7 +902,8 @@ export const pf2e: Sistema = {
     const classe = classeDe(ficha);
     const anc = ancestralidadeDe(ficha);
     const magia = bonusMagia(ficha);
-    const desprevenido = ficha.condicoes.some((c) => /desprevenid|off-guard|flanquead/.test(normalizar(c)));
+    const ca = caEfetiva(ficha);
+    const cd = cdClasseEfetiva(ficha);
     const corDe = (id: string) => (id === "heroi" ? ("outro" as const) : ("magia" as const));
     const blocos: BlocoFicha[] = [
       {
@@ -822,7 +917,9 @@ export const pf2e: Sistema = {
         tipo: "grade",
         titulo: "Defesas",
         itens: [
-          { rotulo: "CA", valor: String(ficha.defesa), detalhe: desprevenido ? `${ficha.defesa - 2} desprevenido` : armaduraDe(ficha).nome },
+          ca.detalhe
+            ? { rotulo: "CA", valor: String(ca.valor), detalhe: `base ${ficha.defesa} · ${ca.detalhe}` }
+            : { rotulo: "CA", valor: String(ficha.defesa), detalhe: armaduraDe(ficha).nome },
           ...SALVAMENTOS.map((s) => ({ rotulo: s.nome, valor: sinal(bonusSalvamento(ficha, s.id)), detalhe: GRAUS[grauEm(classe.prog[s.id], ficha.nivel)] })),
           { rotulo: "Percepção", valor: sinal(bonusPercepcao(ficha)), detalhe: GRAUS[grauEm(classe.prog.percepcao, ficha.nivel)] },
           { rotulo: "Deslocamento", valor: anc.deslocamento ?? "7,5 m" },
@@ -832,8 +929,11 @@ export const pf2e: Sistema = {
         tipo: "grade",
         titulo: "Ofensiva",
         itens: [
-          { rotulo: "Ataque", valor: sinal(bonusAtaque(ficha)), detalhe: `${armaDe(ficha).nome} ${danoArma(ficha)}` },
-          { rotulo: "CD de classe", valor: String(cdClasse(ficha)) },
+          ...armasDaFicha(ficha).map((a) => {
+            const l = linhaArma(ficha, a);
+            return { rotulo: l.nome.charAt(0).toUpperCase() + l.nome.slice(1), valor: sinal(l.bonus), detalhe: [l.dano, l.tracos].filter(Boolean).join(" · ") };
+          }),
+          { rotulo: "CD de classe", valor: String(cd.valor), ...(cd.detalhe ? { detalhe: `base ${cdClasse(ficha)} · ${cd.detalhe}` } : {}) },
           ...(magia !== null ? [{ rotulo: "Magia", valor: sinal(magia), detalhe: `CD ${10 + magia} · ${tradicaoDe(ficha) ?? ""}` }] : []),
           ...(classe.id === "ladino" ? [{ rotulo: "Ataque furtivo", valor: ataqueFurtivo(ficha.nivel) }] : []),
           { rotulo: "po", valor: String(ficha.dinheiro) },
@@ -935,7 +1035,7 @@ export const pf2e: Sistema = {
   aposMudancaDePv(ficha, pvAntes, origem) {
     condicoesMoribundo(ficha, pvAntes);
     // descanso que encheu o PV: o ferido sai junto (a regra do descanso vale também para quem saiu do moribundo agora)
-    if (origem.startsWith("descanso") && ficha.pv >= ficha.pvMax) ficha.condicoes = ficha.condicoes.filter((c) => !/^ferid/.test(normalizar(c)));
+    if (origem.startsWith("descanso") && ficha.pv >= ficha.pvMax) ficha.condicoes = semCondicoes(ficha.condicoes, ["ferido"]);
   },
 
   descansar(original, tipo) {
@@ -943,20 +1043,28 @@ export const pf2e: Sistema = {
     if (tipo === "longo") {
       // 8 horas: CON × nível (mínimo 1 × nível), preparação diária renova magia, foco e reagentes
       const cura = Math.max(1, mod(ficha, "con")) * ficha.nivel;
+      const pvAntes = ficha.pv;
       ficha.pv = Math.min(ficha.pvMax, ficha.pv + cura);
       for (const [id, r] of Object.entries(ficha.recursos)) if (id !== "heroi") r.atual = r.max;
-      ficha.condicoes = ficha.condicoes
-        .filter((c) => !/^fatigad/.test(normalizar(c)))
+      const antes = [...ficha.condicoes];
+      // quem estava moribundo e voltou a ter PV sai do moribundo (e o ferido sobe), como em qualquer cura
+      condicoesMoribundo(ficha, pvAntes);
+      ficha.condicoes = semCondicoes(ficha.condicoes, ["fatigado", ...(ficha.pv > 0 ? ["inconsciente", "moribundo"] : []), "amedrontado", "enjoado"])
         .map((c) => {
-          const m = normalizar(c).match(/^(drenad\w*|condenad\w*)\s*(\d+)?/);
-          if (!m) return c;
-          const valor = Number(m[2] ?? 1) - 1;
-          return valor > 0 ? `${m[1]} ${valor}` : "";
+          // drenado e condenado caem 1 por noite
+          const lida = lerCondicao(c, CONDICOES_PF2E);
+          if (!lida || (lida.def.id !== "drenado" && lida.def.id !== "condenado")) return c;
+          const valor = (lida.valor ?? 1) - 1;
+          return valor > 0 ? `${lida.def.nome} ${valor}` : "";
         })
         .filter(Boolean);
-      if (ficha.pv > 0) ficha.condicoes = ficha.condicoes.filter((c) => normalizar(c) !== "inconsciente");
-      if (ficha.pv === ficha.pvMax) ficha.condicoes = ficha.condicoes.filter((c) => !/^ferid/.test(normalizar(c)));
-      return { ficha, resumo: `${ficha.nome} dormiu 8 horas: +${cura} PV (${ficha.pv}/${ficha.pvMax}), magias, foco e recursos diários renovados. Pontos de Herói não voltam com descanso.` };
+      // o ferido só fica enquanto o PV não está cheio
+      if (ficha.pv >= ficha.pvMax) ficha.condicoes = semCondicoes(ficha.condicoes, ["ferido"]);
+      const saiu = antes.filter((c) => !ficha.condicoes.includes(c));
+      return {
+        ficha,
+        resumo: `${ficha.nome} dormiu 8 horas: +${cura} PV (${ficha.pv}/${ficha.pvMax}), magias, foco e recursos diários renovados${saiu.length ? `; condições que passaram ou baixaram: ${saiu.join(", ")}` : ""}. Pontos de Herói não voltam com descanso.`,
+      };
     }
 
     // 10 minutos: Reconcentrar (1 ponto de foco) e, se treinado, Tratar Ferimentos em si mesmo
@@ -980,15 +1088,20 @@ export const pf2e: Sistema = {
       const r = pf2e.resolverTeste(ficha, { teste: "Medicina", alvo: escolha.cd, motivo: "Tratar Ferimentos" });
       if (r.grau === "sucesso_critico" || r.grau === "sucesso") {
         const cura = somar(r.grau === "sucesso_critico" ? 4 : 2, 8).total + escolha.extra;
+        const pvAntes = ficha.pv;
         ficha.pv = Math.min(ficha.pvMax, ficha.pv + cura);
-        partes.push(`Tratar Ferimentos (Medicina ${r.total} vs CD ${escolha.cd}, ${r.rotuloGrau.toLowerCase()}) curou ${cura} PV`);
+        condicoesMoribundo(ficha, pvAntes);
+        // Tratar Ferimentos bem-sucedido também tira a condição ferido
+        const tinhaFerido = temCondicao(ficha.condicoes, "ferido");
+        ficha.condicoes = semCondicoes(ficha.condicoes, ["ferido"]);
+        partes.push(`Tratar Ferimentos (Medicina ${r.total} vs CD ${escolha.cd}, ${r.rotuloGrau.toLowerCase()}) curou ${cura} PV${tinhaFerido ? " e tirou o ferido" : ""}`);
       } else if (r.grau === "falha_critica") {
         const dano = somar(1, 8).total;
         ficha.pv = Math.max(0, ficha.pv - dano);
         partes.push(`Tratar Ferimentos deu muito errado (Medicina ${r.total} vs CD ${escolha.cd}): ${dano} de dano`);
       } else partes.push(`Tratar Ferimentos falhou (Medicina ${r.total} vs CD ${escolha.cd})`);
     }
-    if (ficha.pv === ficha.pvMax) ficha.condicoes = ficha.condicoes.filter((c) => !/^ferid/.test(normalizar(c)));
+    if (ficha.pv === ficha.pvMax) ficha.condicoes = semCondicoes(ficha.condicoes, ["ferido"]);
     return {
       ficha,
       resumo: `${ficha.nome} descansou 10 minutos${partes.length ? `: ${partes.join("; ")}` : ", mas não tinha o que recuperar sozinho (peça a um aliado treinado em Medicina para Tratar Ferimentos)"}. PV ${ficha.pv}/${ficha.pvMax}.`,

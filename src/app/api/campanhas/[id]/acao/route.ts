@@ -1,5 +1,5 @@
 import { listarPersonagens, obterCampanha } from "@/lib/db";
-import { enviarAcao } from "@/lib/mestre";
+import { enviarAcao, mestreIndisponivel } from "@/lib/mestre";
 import { lembrarEndereco } from "@/lib/mestre/ponte";
 import { acessoPermitido } from "@/lib/rede/acesso";
 
@@ -24,6 +24,10 @@ export async function POST(request: Request, ctx: RouteContext<"/api/campanhas/[
     return Response.json({ erro: "Escolha com qual personagem você está agindo." }, { status: 400 });
   }
   const autor = typeof corpo.autor === "string" ? corpo.autor.trim().slice(0, 40) : "";
+
+  // mestre que não consegue começar (ex.: API sem chave): recusa ANTES de enfileirar, a ação volta para o campo de texto
+  const indisponivel = mestreIndisponivel();
+  if (indisponivel) return Response.json({ erro: indisponivel }, { status: 409 });
 
   const pendente = enviarAcao(campanha.id, { personagemId, autor, acao });
   return Response.json({ pendente }, { status: 202 });

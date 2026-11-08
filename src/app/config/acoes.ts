@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { salvarAjuste } from "@/lib/db";
-import { criarProvedor, lerAjustesMestre, type AjustesMestre, type IdProvedor } from "@/lib/mestre";
+import { chaveDaApi, criarProvedor, idDoProvedor, lerAjustesMestre, type AjustesMestre, type IdProvedor } from "@/lib/mestre";
+import { traduzirErro } from "@/lib/mestre/erros-api";
 import { pastaClaudeCodeDe } from "@/lib/mestre/claude-bin";
 import { ehDestaMaquina } from "@/lib/rede/local";
 import { statusClaude, type StatusClaude } from "./claude-local";
@@ -20,6 +21,8 @@ const esquema = z.object({
   modeloCli: z.string().trim().max(80).regex(/^[\w.\-[\]]*$/, "Modelo do Claude Code com caracteres estranhos."),
   binCli: z.string().trim().max(400),
   modeloApi: z.string().trim().max(80).regex(/^[\w.-]*$/, "Modelo da API com caracteres estranhos."),
+  // "" = padrão (medium nos turnos)
+  esforcoApi: z.enum(["", "low", "medium", "high"]),
 });
 
 function lerFormulario(form: FormData) {
@@ -28,6 +31,7 @@ function lerFormulario(form: FormData) {
     modeloCli: String(form.get("modeloCli") ?? ""),
     binCli: String(form.get("binCli") ?? ""),
     modeloApi: String(form.get("modeloApi") ?? ""),
+    esforcoApi: String(form.get("esforcoApi") ?? ""),
   });
 }
 
@@ -38,6 +42,7 @@ function paraAjustes(d: z.infer<typeof esquema>): AjustesMestre {
   if (d.modeloCli) a.modeloCli = d.modeloCli;
   if (d.binCli) a.binCli = d.binCli;
   if (d.modeloApi) a.modeloApi = d.modeloApi;
+  if (d.esforcoApi) a.esforcoApi = d.esforcoApi;
   return a;
 }
 
@@ -52,6 +57,10 @@ export async function salvarAjustesAcao(_anterior: EstadoSalvar, form: FormData)
   await exigirMaquina();
   const r = lerFormulario(form);
   if (!r.success) return { ok: false, mensagem: r.error.issues[0]?.message ?? "Formulário inválido." };
+  // escolher a API sem chave deixaria todo turno morrer depois de a ação sair da fila: recusa aqui
+  if (r.data.provedor === "api" && !chaveDaApi()) {
+    return { ok: false, mensagem: "Antes de escolher a API, ponha ANTHROPIC_API_KEY no .env.local e reinicie a taverna. Nada foi salvo." };
+  }
   salvarAjuste("mestre", paraAjustes(r.data));
   revalidatePath("/", "layout");
   return { ok: true, mensagem: "Anotado no livro da taverna. O próximo turno já usa isto." };
@@ -68,7 +77,13 @@ export async function testarConexaoAcao(form: FormData): Promise<ResultadoTeste>
   const r = lerFormulario(form);
   if (!r.success) return { ok: false, provedor: "?", resposta: r.error.issues[0]?.message ?? "Formulário inválido.", ms: 0 };
   const a = paraAjustes(r.data);
-  const provedor = criarProvedor(a);
+  let provedor: ReturnType<typeof criarProvedor>;
+  try {
+    provedor = criarProvedor(a);
+  } catch (e) {
+    // ex.: API sem chave — a mesma frase que a mesa mostraria
+    return { ok: false, provedor: idDoProvedor(a) === "api" ? "API da Anthropic" : "?", resposta: traduzirErro(e).mensagem, ms: 0 };
+  }
 
   const inicio = performance.now();
   const sinal = AbortSignal.timeout(TEMPO_TESTE_MS);
@@ -76,7 +91,8 @@ export async function testarConexaoAcao(form: FormData): Promise<ResultadoTeste>
     const resposta = await provedor.texto({ sistema: "Responda só OK.", prompt: "ping", sinal });
     return { ok: true, provedor: provedor.nome, resposta: resposta.trim().slice(0, 300) || "(resposta vazia)", ms: Math.round(performance.now() - inicio) };
   } catch (e) {
-    const msg = sinal.aborted ? `Sem resposta em ${TEMPO_TESTE_MS / 1000} s.` : e instanceof Error ? e.message : String(e);
+    // o mesmo tradutor do banner da mesa (401, sem créditos, modelo inexistente, 429, 529, sem rede, limite do plano...)
+    const msg = sinal.aborted ? `Sem resposta em ${TEMPO_TESTE_MS / 1000} s.` : traduzirErro(e, { modelo: a.modeloApi }).mensagem;
     return { ok: false, provedor: provedor.nome, resposta: msg.slice(0, 600), ms: Math.round(performance.now() - inicio) };
   }
 }

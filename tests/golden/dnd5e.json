@@ -400,7 +400,7 @@
     },
     {
       "name": "anotar_diario",
-      "description": "Anota no diário da campanha que os jogadores consultam: missões (com status), NPCs com nome, lugares, itens importantes e pistas. Mesmo tipo + mesmo título atualiza a entrada existente (use para mudar status). Anote assim que algo novo e nomeado aparecer.",
+      "description": "Anota no diário da campanha que os jogadores consultam: missões (com status), NPCs com nome, lugares, itens importantes e pistas. Mesmo tipo + mesmo título atualiza a entrada existente (use para mudar status). Anote assim que algo novo e nomeado aparecer. NPC novo: mande também sexo e oficio.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -449,6 +449,19 @@
           "relacao": {
             "type": "string",
             "description": "npc: o que pensa do grupo agora."
+          },
+          "sexo": {
+            "type": "string",
+            "enum": [
+              "homem",
+              "mulher",
+              "outro"
+            ],
+            "description": "npc: mande sempre ao anotar alguém novo (o retrato do códex sai daqui)."
+          },
+          "oficio": {
+            "type": "string",
+            "description": "npc: ofício ou papel em poucas palavras (taverneira, guarda, padre, mercenário...); mande sempre ao anotar alguém novo."
           },
           "objetivo": {
             "type": "string",
@@ -618,10 +631,14 @@
     "## Campanha: Campanha-fixture dos golden tests",
     "- Cenário pedido: Uma cidade portuária afundando aos poucos, onde o farol apaga toda vez que alguém mente.",
     "- Tom: sombrio e debochado",
-    "- Grupo: 1 personagem, nível 1",
     "- Modo livre: cada ação chega quando o jogador manda (às vezes várias juntas). Responda só ao que foi declarado e devolva a palavra; não espere todos agirem para seguir a ficção.",
+    "- Diário x Resumo: para status de NPC, missão e lugar, o status vale o Diário; o Resumo guarda só o enredo e as pendências.",
     "",
-    "## Grupo",
+    "(O estado da mesa — grupo, fichas, fatos fixados, resumo, diário e cena — vem logo depois, em \"Estado da mesa agora\", e muda a cada jogada.)",
+    "",
+    "## Estado da mesa agora",
+    "",
+    "## Grupo: 1 personagem, nível 1",
     "### Teodora Fixture (jogador: Paulo)",
     "Teodora Fixture — Humano Guerreiro nível 1 (XP 0; próximo nível em 300)",
     "Antecedente: Acólito · Talentos: Iniciado em Magia (dois truques e uma magia de 1º círculo de uma lista); Habilidoso (+3 perícias ou ferramentas)",
@@ -639,7 +656,7 @@
     "Condições: nenhuma",
     "História: Chegou na cidade com um baú lacrado e nenhuma explicação.",
     "",
-    "## Resumo do que já aconteceu",
+    "## Resumo do que já aconteceu (só enredo e pendências; status de NPC, missão e lugar: veja o Diário)",
     "(nada ainda: a campanha está começando)",
     "",
     "## Diário da campanha",

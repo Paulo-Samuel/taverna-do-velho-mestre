@@ -19,12 +19,23 @@ import {
   PassoOpcoes,
   PassoPericias,
   PassoSistema,
+  periciasDoPasso,
   comAventura,
   semAventura,
   type Escolhas,
   type PersonagemParaTrazer,
 } from "./passos";
 import { PreviaLateral, Resumo } from "./previa";
+import { nomePericia, ordemDeCompletar } from "@/lib/sistemas/pf2e/criacao";
+
+/** PF2e: as perícias que a ficha vai pôr sozinha no lugar das que faltam (mesma ordem do criarFicha). */
+function periciasQueCompletam(e: Escolhas, fixas: Set<string>, faltam: number): string[] {
+  const ja = new Set([...fixas, ...e.pericias]);
+  return ordemDeCompletar(e.classe, e.extras)
+    .filter((id) => !ja.has(id))
+    .slice(0, faltam)
+    .map((id) => nomePericia(id));
+}
 import { gruposDasOpcoes, NOMES_GRUPOS, opcoesDoGrupo, opcoesValidas, personagemPronto, problemaOpcoes, sortearOpcoes as sortearExtras, type GrupoOpcao } from "./sugestoes";
 
 // Assistente de criação de personagem, guiado só pelos dados públicos do sistema (SistemaPublico).
@@ -228,8 +239,10 @@ export function FormularioPersonagem({
 
   const sistema = sistemas.find((s) => s.id === e.sistemaId);
   const opcoes = opcoesValidas(sistema, e.classe, e.ancestralidade, e.extras);
-  const limitePericias = sistema?.periciasEscolhiveis ?? 0;
-  const periciasDaClasse = new Set(sistema?.classes.find((c) => c.id === e.classe)?.pericias ?? []);
+  // limite real (PF2e: perícias da classe + INT final + repetidas) e as que já vêm de graça (classe, antecedente, subclasse)
+  const periciasPasso = sistema ? periciasDoPasso(sistema, e) : { fixas: [], limite: 0 };
+  const limitePericias = periciasPasso.limite;
+  const periciasDaClasse = new Set(periciasPasso.fixas.map((f) => f.id));
   const periciasEscolhidas = e.pericias.filter((p) => !periciasDaClasse.has(p)).slice(0, limitePericias);
   // personagem trazido de outra mesa: a ficha vem copiada do servidor, e os passos de regra e identidade saem do caminho
   const copia = e.copiaDe !== null ? copiaveis.find((p) => p.id === e.copiaDe && p.sistema === e.sistemaId) : undefined;
@@ -244,7 +257,7 @@ export function FormularioPersonagem({
     if (sistema.classes.length) passos.push("classe");
     if (sistema.antecedentes?.length) passos.push("antecedente");
     if (sistema.atributos.length) passos.push("atributos");
-    if (limitePericias > 0 && sistema.pericias.length) passos.push("pericias");
+    if ((limitePericias > 0 || sistema.limitePericias) && sistema.pericias.length) passos.push("pericias");
     // sistema que agrupa as opções (Vampiro: Perícias, Disciplinas, Quem você é) ganha um subpasso por grupo
     const grupos = gruposDasOpcoes(sistema.id, opcoes);
     if (grupos.length) passos.push(...grupos.map((g): Passo => `opcoes:${g}`));
@@ -452,7 +465,9 @@ export function FormularioPersonagem({
         return ruim ? `${ruim.nome} precisa ficar entre ${min} e ${max}.` : null;
       }
       case "pericias":
-        return periciasEscolhidas.length > limitePericias ? `No máximo ${limitePericias} perícias.` : null;
+        return e.pericias.filter((p) => !periciasDaClasse.has(p)).length > limitePericias
+          ? `No máximo ${limitePericias} perícias além das que já vêm de graça (tire alguma: classe, antecedente ou INT mudaram).`
+          : null;
       case "identidade":
         return e.nome.trim() ? null : "Seu personagem precisa de um nome.";
       default:
@@ -796,6 +811,17 @@ export function FormularioPersonagem({
               )}
               {atual === "identidade" && <PassoIdentidade e={e} atualizar={atualizar} />}
               {atual === "campanha" && <PassoCampanha e={e} atualizar={atualizar} aventuras={aventurasDoSistema} />}
+              {sistema && atual === "resumo" && !copia && passos.includes("pericias") && periciasEscolhidas.length < limitePericias && (
+                <p className="mb-3 rounded-md border border-ambar/50 bg-ambar/10 px-3 py-2 text-sm" role="status">
+                  Faltam {limitePericias - periciasEscolhidas.length} perícia{limitePericias - periciasEscolhidas.length > 1 ? "s" : ""} ({periciasEscolhidas.length}/
+                  {limitePericias}
+                  {periciasPasso.conta ? `: ${periciasPasso.conta}` : ""}). Se seguir assim, a ficha completa com as sugeridas
+                  {sistema.id === "pf2e" ? ` (${periciasQueCompletam(e, periciasDaClasse, limitePericias - periciasEscolhidas.length).join(", ")})` : ""}.{" "}
+                  <button type="button" className="underline decoration-dotted underline-offset-2 hover:text-ambar" onClick={() => irPara("pericias")}>
+                    Escolher agora
+                  </button>
+                </p>
+              )}
               {sistema && atual === "resumo" && (
                 <Resumo
                   sistema={sistema}

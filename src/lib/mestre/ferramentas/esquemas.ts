@@ -29,6 +29,7 @@ export const ENTRADAS = {
     motivo: z.string().default(""),
     custo_despertar: z.number().int().min(0).max(3).optional(),
     nivel_poder: z.number().int().min(1).max(5).optional(),
+    compulsao: z.enum(["serve", "contra", "sortear"]).optional(),
   }),
   rolar_dados: z.object({ expressao: z.string().min(1), motivo: z.string().default(""), secreta: z.boolean().optional() }),
   alterar_ficha: z.object({
@@ -55,6 +56,7 @@ export const ENTRADAS = {
     motivo: z.string().default(""),
     custo_despertar: z.number().int().min(0).max(3).optional(),
     nivel_poder: z.number().int().min(1).max(5).optional(),
+    compulsao: z.enum(["serve", "contra", "sortear"]).optional(),
   }),
   despertar_sangue: z.object({
     personagem: z.string().optional(),
@@ -78,9 +80,16 @@ export const ENTRADAS = {
     matar: z.boolean().optional(),
     manchas: z.number().int().min(0).max(5).optional(),
     parada: z.string().max(80).optional(),
+    presa: z.string().max(80).optional(),
     motivo: z.string().default(""),
   }),
   teste_de_remorso: z.object({ personagem: z.string().optional() }),
+  potencia_de_sangue: z.object({
+    personagem: z.string().optional(),
+    motivo: z.enum(["diablerie", "decadas"]),
+    potencia_vitima: z.number().int().min(0).max(10).optional(),
+    detalhe: z.string().max(200).default(""),
+  }),
   narrar: z.object({ texto: z.string().min(1) }),
   sugerir_acoes: z.object({
     acoes: z.array(z.object({ texto: z.string().trim().min(1).max(200), pericia: z.string().max(40).optional() })).max(6),
@@ -127,6 +136,8 @@ export const ENTRADAS = {
     desejo: z.string().max(300).optional(),
     temperamento: z.string().max(100).optional(),
     relacao: z.string().max(200).optional(),
+    sexo: z.string().max(20).optional(),
+    oficio: z.string().max(80).optional(),
     objetivo: z.string().max(300).optional(),
     recompensa: z.string().max(200).optional(),
     pistas: z.array(z.string().max(300)).optional(),

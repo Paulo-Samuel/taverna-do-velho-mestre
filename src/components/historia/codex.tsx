@@ -13,7 +13,8 @@ import type { BlocoFicha, EntradaDiario } from "@/lib/sistemas/tipos";
 import { AvisoAjuste, BotoesMarcador, NotasJogador, useAjusteFicha, type AjusteFicha } from "@/components/ficha/ajuste-ficha";
 import { corDoNome } from "./cores";
 import { fonteGotica } from "./fonte-gotica";
-import { Retrato } from "./retrato";
+import { Retrato, RetratoSVG } from "./retrato";
+import { retratoDaEntrada } from "./retrato/dados";
 
 // Códex do modo história: gaveta recolhível à esquerda (tela cheia no celular) com o personagem, as missões,
 // as pessoas e os lugares que o mestre anotou no diário, o grupo e os fatos fixados (📌). Tecla C abre e fecha; Esc fecha.
@@ -291,24 +292,36 @@ function AbaPessoas({ entradas, fatos }: { entradas: EntradaDiario[]; fatos: Con
   return (
     <ul className="space-y-3">
       {npcs.map((n) => (
-        <li key={n.id} className={`rounded-lg border border-border/80 bg-surface-2/60 p-3 ${n.status === "morto" ? "opacity-60" : ""}`}>
-          <div className="flex items-start justify-between gap-2">
-            <p className="font-semibold" style={{ color: corDoNome(n.titulo) }}>
-              {n.titulo}
-            </p>
-            <div className="-mr-1.5 -mt-1 flex shrink-0 items-center gap-1">
-              <Selo status={n.status} />
-              <BotaoFixar texto={resumoDaEntrada(n)} controle={fatos} rotulo={n.titulo} />
+        <li key={n.id} className={`flex gap-3 rounded-lg border border-border/80 bg-surface-2/60 p-3 ${n.status === "morto" ? "opacity-60" : ""}`}>
+          {/* rosto do NPC (salvo ao anotar; NPC antigo ganha o mesmo, gerado aqui pelo nome); morto fica em tons de cinza */}
+          <RetratoSVG
+            dados={retratoDaEntrada(n)}
+            tamanho={56}
+            className={`shrink-0 self-start ${n.status === "morto" ? "grayscale" : ""}`}
+            titulo={`Retrato de ${n.titulo}`}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="font-semibold" style={{ color: corDoNome(n.titulo) }}>
+                  {n.titulo}
+                </p>
+                {texto(n.dados?.oficio) && <p className="text-xs text-muted">{texto(n.dados?.oficio)}</p>}
+              </div>
+              <div className="-mr-1.5 -mt-1 flex shrink-0 items-center gap-1">
+                <Selo status={n.status} />
+                <BotaoFixar texto={resumoDaEntrada(n)} controle={fatos} rotulo={n.titulo} />
+              </div>
             </div>
-          </div>
-          {n.texto && <p className="mt-1 text-sm leading-relaxed text-foreground/85">{n.texto}</p>}
-          <div className="mt-2 space-y-0.5">
-            <Campo rotulo="Aparência" valor={n.dados?.aparencia} />
-            <Campo rotulo="Voz" valor={n.dados?.voz} />
-            <Campo rotulo="Jeito" valor={n.dados?.jeito} />
-            <Campo rotulo="Desejo" valor={n.dados?.desejo} />
-            <Campo rotulo="Temperamento" valor={n.dados?.temperamento} />
-            <Campo rotulo="Relação" valor={n.dados?.relacao} />
+            {n.texto && <p className="mt-1 text-sm leading-relaxed text-foreground/85">{n.texto}</p>}
+            <div className="mt-2 space-y-0.5">
+              <Campo rotulo="Aparência" valor={n.dados?.aparencia} />
+              <Campo rotulo="Voz" valor={n.dados?.voz} />
+              <Campo rotulo="Jeito" valor={n.dados?.jeito} />
+              <Campo rotulo="Desejo" valor={n.dados?.desejo} />
+              <Campo rotulo="Temperamento" valor={n.dados?.temperamento} />
+              <Campo rotulo="Relação" valor={n.dados?.relacao} />
+            </div>
           </div>
         </li>
       ))}

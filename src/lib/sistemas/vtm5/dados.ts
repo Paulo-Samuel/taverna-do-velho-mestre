@@ -308,6 +308,18 @@ export const CLAS: ClaVtm[] = [
   },
 ];
 
+/**
+ * Compulsões que qualquer vampiro pode ter quando a Besta escapa (Falha Bestial ou Crítico Sujo cobrado). Sorteio em 1d10:
+ * 1–3 Fome, 4–5 Dominância, 6–7 Dano, 8–9 Paranoia, 10 a do clã (sem compulsão de clã, sorteia de novo entre estas).
+ * Texto próprio: cada uma pede uma coisa e cobra −2 dados no que não for essa coisa, até ser satisfeita ou a cena virar.
+ */
+export const COMPULSOES_GENERICAS: { id: string; nome: string; efeito: string; faces: number[] }[] = [
+  { id: "fome", nome: "Fome", efeito: "Precisa beber agora, de quem estiver à mão; o resto sofre −2 dados até se alimentar.", faces: [1, 2, 3] },
+  { id: "dominancia", nome: "Dominância", efeito: "Precisa mostrar quem manda na cena; o que não for impor-se sofre −2 dados.", faces: [4, 5] },
+  { id: "dano", nome: "Dano", efeito: "Precisa machucar alguém ou alguma coisa; o resto sofre −2 dados até ferir.", faces: [6, 7] },
+  { id: "paranoia", nome: "Paranoia", efeito: "Tudo parece ameaça: precisa se proteger ou fugir; o resto sofre −2 dados.", faces: [8, 9] },
+];
+
 export type PredadorVtm = {
   id: string;
   nome: string;

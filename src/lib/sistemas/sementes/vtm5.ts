@@ -107,7 +107,8 @@ const SITUACAO_SENHOR = [
 ];
 
 /** Convicção ↔ Pedra de Toque: a pessoa mortal que mantém a convicção de pé. */
-const PARES: [string, string][] = [
+/** Pares Convicção + Pedra de Toque; vtm5.criarFicha usa um quando o jogador deixa os dois genéricos. */
+export const PARES: [string, string][] = [
   ["Nunca machucar uma criança", "Lucas, 9 anos, filho da vizinha que você ainda ajuda com o dever"],
   ["Não matar quem não pode se defender", "Dona Neide, a senhora do sebo que te empresta livros sem prazo"],
   ["Proteger minha família, custe o que custar", "Bia, minha irmã mais nova, que estuda enfermagem"],

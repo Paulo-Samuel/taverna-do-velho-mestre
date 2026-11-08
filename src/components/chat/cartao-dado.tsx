@@ -195,6 +195,22 @@ function LinhaTeste({ r }: { r: Dados }) {
   );
 }
 
+/** Dano sugerido pelo teste (campo genérico `dano` do resultado), em qualquer sistema. */
+function LinhaDano({ r }: { r: Dados }) {
+  const d = r.dano as { valor?: unknown; tipo?: unknown; texto?: unknown } | undefined;
+  const valor = d ? num(d.valor) : null;
+  if (!d || valor === null) return null;
+  return (
+    <p className="mt-1 text-xs">
+      <span className="font-semibold text-sangue">
+        ⚔ dano sugerido {valor}
+        {typeof d.tipo === "string" && d.tipo ? ` ${d.tipo}` : ""}
+      </span>
+      {typeof d.texto === "string" && d.texto && <span className="text-muted"> · {d.texto}</span>}
+    </p>
+  );
+}
+
 function Grau({ r, cor, novo }: { r: Dados; cor: string; novo: boolean }) {
   return <span className={`titulo max-w-[7.5rem] shrink-0 text-balance text-right text-base leading-tight sm:max-w-[10rem] sm:text-lg ${cor} ${novo ? "cd-pop" : ""}`}>{r.rotuloGrau}</span>;
 }
@@ -220,6 +236,7 @@ function TesteD20({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: b
             {natural === 1 && <span className="text-sangue">1 natural…</span>}
             {r.detalhes && <span className="min-w-0 truncate">{mostrarPar ? String(r.detalhes).replace(/^(vantagem|desvantagem): \d+ e \d+( · )?/, "$1 ") : r.detalhes}</span>}
           </div>
+          <LinhaDano r={r} />
         </div>
         <Grau r={r} cor={cor} novo={novo} />
       </div>
@@ -280,6 +297,7 @@ function TesteD100({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: 
           {r.detalhes && <p className="mt-1 truncate text-xs text-muted">{r.detalhes}</p>}
         </div>
       )}
+      <LinhaDano r={r} />
     </Moldura>
   );
 }
@@ -309,6 +327,7 @@ function TesteFate({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: 
           {r.detalhes && ` · ${r.detalhes}`}
         </span>
       </p>
+      <LinhaDano r={r} />
     </Moldura>
   );
 }
@@ -347,6 +366,7 @@ function TestePbta({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: 
         ))}
       </div>
       {r.detalhes && <p className="mt-1 truncate text-xs text-muted">{r.detalhes}</p>}
+      <LinhaDano r={r} />
     </Moldura>
   );
 }
@@ -490,6 +510,7 @@ function TesteVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: b
         </p>
       )}
       {r.detalhes && <p className={`mt-1.5 text-xs ${sujo || bestial ? "text-sangue/90" : "text-muted"}`}>{r.detalhes}</p>}
+      <LinhaDano r={r} />
     </Moldura>
   );
 }
@@ -742,6 +763,7 @@ function Ficha({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: bool
   const ganhou: string[] = Array.isArray(r.ganhou) ? r.ganhou : [];
   const perdeu: string[] = Array.isArray(r.perdeu) ? r.perdeu : [];
   const condicoes: string[] = Array.isArray(r.condicoes) ? r.condicoes : [];
+  const alertas: string[] = Array.isArray(r.alertas) ? r.alertas.filter((x: unknown) => typeof x === "string") : [];
   const pctAntes = pvMax ? Math.max(0, Math.min(100, ((pvAntes ?? 0) / pvMax) * 100)) : 0;
   const pctAgora = pvMax ? Math.max(0, Math.min(100, ((pv ?? 0) / pvMax) * 100)) : 0;
   return (
@@ -791,6 +813,15 @@ function Ficha({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: bool
           {condicoes.map((x) => (
             <span key={`c${x}`} className="rounded border border-border px-1.5 py-0.5 text-muted">
               {x}
+            </span>
+          ))}
+        </div>
+      )}
+      {alertas.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1 text-[11px]">
+          {alertas.map((x) => (
+            <span key={`a${x}`} className="rounded border border-sangue/50 bg-sangue/15 px-1.5 py-0.5 font-semibold text-sangue">
+              ⚠ {x}
             </span>
           ))}
         </div>

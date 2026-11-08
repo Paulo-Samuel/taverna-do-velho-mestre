@@ -2,7 +2,7 @@ import "server-only";
 import { d } from "../../dados";
 import { limitar, normalizar } from "../comum";
 import type { Ficha, GrauSucesso, PedidoTeste, ResultadoTeste } from "../tipos";
-import { ATRIBUTOS, CLAS, DISCIPLINAS, PAR_DE_ATRIBUTO, PERICIAS, POTENCIA, PREDADORES } from "./dados";
+import { ATRIBUTOS, CLAS, COMPULSOES_GENERICAS, DISCIPLINAS, PAR_DE_ATRIBUTO, PERICIAS, POTENCIA, PREDADORES } from "./dados";
 import {
   despertarPrevisto,
   FOME_MAX,
@@ -56,7 +56,18 @@ export type CacaVtm = {
   ressonancia: { tipo: TipoRessonancia; intensidade: IntensidadeRessonancia; disciplinas: string[]; sorteada: boolean } | null;
   /** Falha Bestial: compulsão marcada */
   compulsao: string | null;
+  /** quem foi a vítima, como o mestre disse ("mortal", "vampiro", "animal", "doador") */
+  presa?: string;
+  /** a presa casou com uma Exclusão de Presa da ficha: +1 Mancha (aposTeste aplica com degeneração) */
+  presaExcluida?: string;
+  /** Fazendeiro bebendo de gente: Força de Vontade gasta (aposTeste desconta) */
+  vontadeGasta?: number;
+  /** Sanguessuga bebendo de vampiro: sacia, sem Ressonância de bônus */
+  vampirica?: boolean;
 };
+
+/** Compulsão sorteada quando a Besta escapa (Falha Bestial, ou Crítico Sujo com compulsao "sortear"). */
+export type CompulsaoVtm = { nome: string; efeito: string; face: number; doCla: boolean };
 
 export type ResultadoVtm = ResultadoTeste & {
   /** quantos dados foram rolados (normais + Fome) */
@@ -78,6 +89,8 @@ export type ResultadoVtm = ResultadoTeste & {
   caca?: CacaVtm;
   remorso?: { humanidadeAntes: number; humanidadeDepois: number; manchas: number };
   efeitos?: EfeitoVtm[];
+  /** compulsão sorteada neste teste (aposTeste grava a condição "Compulsão: Nome") */
+  compulsao?: CompulsaoVtm;
   /** rerrolagem com Força de Vontade (vtm5/forca-de-vontade.ts): índices em `dados` (só normais) e a Força de Vontade gasta */
   rerrolado?: RerroladoVtm;
 };
@@ -119,6 +132,118 @@ export function listaExtra(ficha: Ficha, id: string): string[] {
 export function atormentado(ficha: Ficha): boolean {
   const mancha = manchaDe(ficha);
   return mancha > 0 && mancha >= 10 - humanidadeDe(ficha);
+}
+
+export const CONDICAO_PERDIDO = "Perdido para a Besta";
+
+/**
+ * Soma `n` Manchas na ficha (muta). Cada Mancha que não acha caixa vazia é degeneração: a Humanidade cai 1 e a caixa liberada
+ * recebe a Mancha. Humanidade 0 marca "Perdido para a Besta". Devolve o texto para o cartão e o retorno ao mestre.
+ */
+export function aplicarManchas(ficha: Ficha, n: number): { humanidadePerdida: number; texto: string; atormentado: boolean } {
+  let hum = humanidadeDe(ficha);
+  let mancha = Math.min(manchaDe(ficha), 10 - hum);
+  const humAntes = hum;
+  for (let i = 0; i < Math.max(0, Math.floor(n)); i++) {
+    if (mancha < 10 - hum) mancha++;
+    else if (hum > 0) {
+      hum--;
+      mancha = 10 - hum;
+    }
+  }
+  const r = ficha.recursos;
+  r.humanidade = { rotulo: r.humanidade?.rotulo ?? "Humanidade", atual: hum, max: 10 };
+  r.mancha = { rotulo: r.mancha?.rotulo ?? "Manchas", atual: mancha, max: 10 - hum };
+  ficha.extras.mancha = mancha;
+  if (hum === 0 && !ficha.condicoes.some((c) => normalizar(c) === normalizar(CONDICAO_PERDIDO))) ficha.condicoes.push(CONDICAO_PERDIDO);
+  const perdida = humAntes - hum;
+  const cheio = mancha > 0 && mancha >= 10 - hum;
+  const texto = perdida
+    ? `degeneração: Humanidade ${humAntes} → ${hum}${hum === 0 ? " · perdido para a Besta" : ""}`
+    : `Manchas ${mancha}/${10 - hum}${cheio ? " (atormentado)" : ""}`;
+  return { humanidadePerdida: perdida, texto, atormentado: cheio };
+}
+
+/** Nome da compulsão ativa ("Compulsão: Crueldade", ou o formato antigo "Compulsão (Crueldade)"), se houver. */
+export function compulsaoAtiva(ficha: Ficha): string | null {
+  const c = ficha.condicoes.find((x) => normalizar(x).startsWith("compuls"));
+  if (!c) return null;
+  const nome = c
+    .replace(/^compuls\S*\s*[:(]?\s*/i, "")
+    .replace(/\).*$/, "")
+    .split(/\s+[—(-]\s*/)[0]
+    .trim();
+  return nome || "compulsão";
+}
+
+/** Sorteio da compulsão em 1d10: 1–3 Fome, 4–5 Dominância, 6–7 Dano, 8–9 Paranoia, 10 a do clã (sem ela, sorteia entre as outras). */
+export function sortearCompulsao(ficha: Ficha): CompulsaoVtm {
+  const face = d(10);
+  const cla = CLAS.find((c) => c.id === ficha.classe)?.compulsao ?? null;
+  if (face === 10 && cla) return { nome: cla.nome, efeito: cla.efeito, face, doCla: true };
+  const valor = face === 10 ? d(9) : face;
+  const g = COMPULSOES_GENERICAS.find((x) => x.faces.includes(valor)) ?? COMPULSOES_GENERICAS[0];
+  return { nome: g.nome, efeito: g.efeito, face, doCla: false };
+}
+
+/** Efeito de uma compulsão pelo nome (clã ou genérica), para o aviso ao mestre. */
+function efeitoCompulsao(nome: string): string {
+  const n = normalizar(nome);
+  return (
+    COMPULSOES_GENERICAS.find((x) => normalizar(x.nome) === n)?.efeito ??
+    CLAS.find((c) => c.compulsao && normalizar(c.compulsao.nome) === n)?.compulsao?.efeito ??
+    ""
+  );
+}
+
+export type DefeitosAlimentacao = { exclusoes: string[]; fazendeiro: boolean };
+
+/** Defeitos de alimentação lidos da ficha: "Exclusão de Presa: mortais ●●", "Fazendeiro ●●" e o próprio Sanguessuga. */
+export function defeitosDeAlimentacao(ficha: Ficha): DefeitosAlimentacao {
+  const exclusoes: string[] = [];
+  let fazendeiro = ficha.ancestralidade === "fazendeiro";
+  for (const def of listaExtra(ficha, "defeitos")) {
+    if (/^\s*fazendeiro/i.test(def)) fazendeiro = true;
+    // "(ou Exclusão de Presa ...)" é a alternativa que o jogador não escolheu
+    const m = def.match(/(\(\s*ou\s+)?exclus[aã]o de presa:?\s*([^●(]+)/i);
+    if (m && !m[1] && m[2].trim()) exclusoes.push(m[2].trim());
+  }
+  if (ficha.ancestralidade === "sanguessuga" && !exclusoes.some((x) => /mortai/i.test(normalizar(x)))) exclusoes.push("mortais");
+  return { exclusoes, fazendeiro };
+}
+
+export const temDefeitoDeAlimentacao = (ficha: Ficha) => {
+  const x = defeitosDeAlimentacao(ficha);
+  return x.fazendeiro || x.exclusoes.length > 0;
+};
+
+// Palavras inteiras: "membro da gangue", "um ancião do bairro" e "cabra da peste" são gente, não vampiro nem bicho
+const presaAnimal = (p: string) =>
+  /\b(?:anima(?:l|is)|bichos?|ratos?|ratazanas?|cachorr[oa]s?|caes|cao|gat[oa]s?|cavalos?|bois?|vacas?|porcos?|pombos?|morcegos?|ovelhas?|bodes?|galinhas?|cabras?(?! da peste| macho))\b/.test(p);
+const presaVampiro = (p: string) =>
+  /\b(?:vampir[oa]s?|cainitas?|kindred|camarilla|sabbat|matusalem|caitiffs?|sangue[- ]ralo|brujah|gangrel|malkavian[oa]?s?|nosferatu|toreador|tremere|ventrue|lasombra|tzimisce|hecata|ravnos|salubri|banu haqim)\b/.test(p) ||
+  /\b(?:membro|anciao|ancila|neonato|neofito)s? (?:da camarilla|do sabbat|anarquista|vampir)/.test(p);
+
+/** Qual exclusão a presa quebra (null = nenhuma). `p` normalizado. */
+function exclusaoQuebrada(exclusoes: string[], p: string): string | null {
+  const humana = !presaAnimal(p) && !presaVampiro(p);
+  for (const ex of exclusoes) {
+    const e = normalizar(ex);
+    if (/mortai|humano|gente comum/.test(e)) {
+      if (humana) return ex;
+      continue;
+    }
+    if (/consent/.test(e)) {
+      if (humana && /(nao|sem) consent|a forca|forcad|contragosto|involunt|vitima|assalt|ataca|derrub|dopad|inconscien/.test(p)) return ex;
+      continue;
+    }
+    const raizes = e
+      .split(/\s+/)
+      .filter((w) => w.length >= 4 && !["gente", "pessoas", "quem", "outra", "outro", "cena"].includes(w))
+      .map((w) => w.slice(0, 5));
+    if (humana && raizes.some((r) => p.includes(r))) return ex;
+  }
+  return null;
 }
 
 /** Dados de Surto de Sangue guardados para o próximo teste (extras.surtoPendente). */
@@ -187,6 +312,10 @@ type OpcoesVtm = {
   ressonancia: TipoRessonancia | null;
   intensidade: IntensidadeRessonancia | null;
   frenesi: TipoFrenesi | null;
+  /** a ação serve à compulsão ativa (sem −2), vai contra ela (−2, o padrão) ou pede o sorteio num Crítico Sujo */
+  compulsao: "serve" | "contra" | "sortear" | null;
+  /** caça: quem é a vítima (normalizado) */
+  presa: string | null;
 };
 
 export function lerTipoFrenesi(v: unknown): TipoFrenesi | null {
@@ -210,6 +339,8 @@ function opcoesDe(pedido: PedidoTeste): OpcoesVtm {
     ressonancia: lerRessonancia(o.ressonancia),
     intensidade: lerIntensidade(o.intensidade),
     frenesi: lerTipoFrenesi(o.frenesi),
+    compulsao: o.compulsao === "serve" || o.compulsao === "contra" || o.compulsao === "sortear" ? o.compulsao : null,
+    presa: typeof o.presa === "string" && o.presa.trim() ? o.presa.trim() : null,
   };
 }
 
@@ -371,9 +502,20 @@ function base(ficha: Ficha, pedido: PedidoTeste, rotulo: string, expressao: stri
   };
 }
 
-/** Ajustes de modo e modificador: ±2 dados, mínimo 1. */
-function ajustar(parada: number, pedido: PedidoTeste, notas: string[]): number {
+/**
+ * Ajustes da parada: atormentado (−2 em qualquer parada: comum, Frenesi, Remorso, Força de Vontade), compulsão ativa (−2 no
+ * que não a serve), modo e modificador (±2 dados). Mínimo 1.
+ */
+function ajustar(parada: number, pedido: PedidoTeste, notas: string[], ficha: Ficha, compulsao: string | null = null): number {
   let n = parada;
+  if (atormentado(ficha)) {
+    n -= 2;
+    notas.push("−2 atormentado pelas Manchas");
+  }
+  if (compulsao) {
+    n -= 2;
+    notas.push(`−2 compulsão (${compulsao})`);
+  }
   if (pedido.modo === "vantagem") {
     n += 2;
     notas.push("+2 dados (vantagem)");
@@ -483,7 +625,7 @@ function testeSurto(ficha: Ficha, pedido: PedidoTeste, op: OpcoesVtm): Resultado
 }
 
 function testeSemFome(ficha: Ficha, pedido: PedidoTeste, rotulo: string, paradaBase: number, notas: string[], vtm: TipoTesteVtm, alvoFixo?: number): ResultadoVtm {
-  const parada = ajustar(paradaBase, pedido, notas);
+  const parada = ajustar(paradaBase, pedido, notas, ficha);
   const faces = rolarFaces(parada);
   const alvo = alvoFixo ?? Math.max(0, pedido.alvo ?? 1);
   const av = avaliar(faces, [], alvo);
@@ -566,13 +708,24 @@ function testeFrenesi(ficha: Ficha, pedido: PedidoTeste, op: OpcoesVtm): Resulta
 function desfechoCaca(ficha: Ficha, av: Avaliacao, alvo: number, fomeAntes: number, op: OpcoesVtm, notas: string[]): CacaVtm {
   const pred = PREDADORES.find((p) => p.id === ficha.ancestralidade);
   const bp = potenciaDe(ficha);
-  const animal = op.ressonancia === "animal" || (!op.ressonancia && pred?.id === "fazendeiro");
+  const p = op.presa ? normalizar(op.presa) : "";
+  const vampiro = presaVampiro(p) && !presaAnimal(p);
+  // Fazendeiro sem presa dita bebe de bicho (o costume dele); presa dita manda
+  const animal = op.ressonancia === "animal" || presaAnimal(p) || (!p && !op.ressonancia && pred?.id === "fazendeiro");
   const passou = av.grau === "sucesso" || av.grau === "sucesso_critico";
-  const vazio: CacaVtm = { passou, fomeAntes, fomeDepois: fomeAntes, matou: false, manchas: 0, animal, ressonancia: null, compulsao: null };
-  if (!passou) {
-    if (av.bestial) vazio.compulsao = CLAS.find((c) => c.id === ficha.classe)?.compulsao?.nome ?? "Fome";
-    return vazio;
-  }
+  const vazio: CacaVtm = { passou, fomeAntes, fomeDepois: fomeAntes, matou: false, manchas: 0, animal, ressonancia: null, compulsao: null, ...(op.presa ? { presa: op.presa } : {}) };
+  if (!passou) return vazio;
+  const defeitos = defeitosDeAlimentacao(ficha);
+  const excluida = p ? exclusaoQuebrada(defeitos.exclusoes, p) : null;
+  const humana = !animal && !vampiro;
+  const extra: Partial<CacaVtm> = {
+    ...(op.presa ? { presa: op.presa } : {}),
+    ...(excluida ? { presaExcluida: excluida } : {}),
+    ...(defeitos.fazendeiro && humana && p ? { vontadeGasta: 2 } : {}),
+    ...(vampiro ? { vampirica: true } : {}),
+  };
+  if (excluida) notas.push(`presa excluída (${excluida}): +1 Mancha`);
+  if (extra.vontadeGasta) notas.push("Fazendeiro bebendo de gente: −2 Força de Vontade");
   // bebida rápida sacia 1; com folga (margem 2+ ou crítico) sacia 2. Sem matar a Fome não desce de 1.
   const baseSacia = av.total - alvo >= 2 || av.pares > 0 ? 2 : 1;
   const s = saciadoPelaPotencia(baseSacia, bp, animal);
@@ -582,9 +735,14 @@ function desfechoCaca(ficha: Ficha, av: Avaliacao, alvo: number, fomeAntes: numb
   let manchas = 0;
   if (matou && !animal) {
     fomeDepois = Math.min(fomeAntes, fomeMinimaAoMatar(bp));
-    manchas = op.manchas ?? 2;
+    // drenar um vampiro é diablerie (Potência por potencia_de_sangue); as Manchas dela o mestre decide
+    manchas = vampiro ? (op.manchas ?? 0) : (op.manchas ?? 2);
   } else {
     fomeDepois = Math.max(Math.min(fomeAntes, 1), fomeAntes - s.valor);
+  }
+  if (vampiro) {
+    // sangue de vampiro sacia, mas não tem o humor de um mortal: nenhuma Ressonância de bônus
+    return { passou, fomeAntes, fomeDepois, matou, manchas, animal: false, ressonancia: null, compulsao: null, ...extra };
   }
   const sorteio = sortearRessonancia();
   const tipo: TipoRessonancia = animal ? "animal" : (op.ressonancia ?? sorteio.tipo);
@@ -598,6 +756,7 @@ function desfechoCaca(ficha: Ficha, av: Avaliacao, alvo: number, fomeAntes: numb
     animal,
     ressonancia: { tipo, intensidade, disciplinas: RESSONANCIAS[tipo].disciplinas, sorteada: !op.ressonancia || !op.intensidade },
     compulsao: null,
+    ...extra,
   };
 }
 
@@ -605,9 +764,10 @@ function avisoCaca(ficha: Ficha, c: CacaVtm, av: Avaliacao): { aviso: string; ef
   const nomeDisc = (id: string) => DISCIPLINAS.find((x) => x.id === id)?.nome ?? id;
   if (!c.passou) {
     if (c.compulsao) {
+      // a compulsão sorteada tem chip e aviso próprios (resolver)
       return {
-        aviso: `Falha Bestial na caça: a Besta toma conta — a vítima sai muito ferida ou morre (se morrer, alterar_ficha com Manchas), cena feia, Máscara em risco. Fome segue ${c.fomeAntes}. Condição "Compulsão (${c.compulsao})" marcada (já aplicado): tire quando satisfeita.`,
-        efeitos: [{ texto: `Compulsão (${c.compulsao})`, tom: "sangue" }, { texto: `Fome segue ${c.fomeAntes}`, tom: "muted" }],
+        aviso: `Falha Bestial na caça: a Besta toma conta — a vítima sai muito ferida ou morre (se morrer, alterar_ficha com Manchas), cena feia, Máscara em risco. Fome segue ${c.fomeAntes}.`,
+        efeitos: [{ texto: `Fome segue ${c.fomeAntes}`, tom: "muted" }],
       };
     }
     return {
@@ -615,15 +775,22 @@ function avisoCaca(ficha: Ficha, c: CacaVtm, av: Avaliacao): { aviso: string; ef
       efeitos: [{ texto: `sem sangue · Fome ${c.fomeAntes}`, tom: "muted" }],
     };
   }
-  const r = c.ressonancia!;
-  const ressTexto = `Ressonância ${textoRessonancia(r)} (${RESSONANCIAS[r.tipo].humor}): ${INTENSIDADES[r.intensidade].efeito}${INTENSIDADES[r.intensidade].bonus ? ` — ${r.disciplinas.map(nomeDisc).join(" e ")}` : ""}`;
+  const r = c.ressonancia;
+  const ressTexto = r
+    ? `Ressonância ${textoRessonancia(r)} (${RESSONANCIAS[r.tipo].humor}): ${INTENSIDADES[r.intensidade].efeito}${INTENSIDADES[r.intensidade].bonus ? ` — ${r.disciplinas.map(nomeDisc).join(" e ")}` : ""}`
+    : "Sangue vampírico: sacia, mas sem Ressonância de bônus";
   const efeitos: EfeitoVtm[] = [
     { texto: c.fomeDepois < c.fomeAntes ? `Fome ${c.fomeAntes} → ${c.fomeDepois}` : `Fome segue ${c.fomeAntes}`, tom: c.fomeDepois < c.fomeAntes ? "musgo" : "muted" },
-    { texto: textoRessonancia(r), tom: INTENSIDADES[r.intensidade].bonus ? "ambar" : "muted" },
+    r ? { texto: textoRessonancia(r), tom: INTENSIDADES[r.intensidade].bonus ? "ambar" : "muted" } : { texto: "sangue vampírico", tom: "muted" },
   ];
-  if (c.matou) efeitos.push({ texto: `matou · +${c.manchas} Mancha${c.manchas === 1 ? "" : "s"}`, tom: "sangue" });
+  if (c.matou && c.manchas) efeitos.push({ texto: `matou · +${c.manchas} Mancha${c.manchas === 1 ? "" : "s"}`, tom: "sangue" });
+  if (c.presaExcluida) efeitos.push({ texto: "presa excluída · +1 Mancha", tom: "sangue" });
+  if (c.vontadeGasta) efeitos.push({ texto: `−${c.vontadeGasta} Força de Vontade (Fazendeiro)`, tom: "sangue" });
   const partes = [
-    `Caçou: Fome ${c.fomeAntes} → ${c.fomeDepois} (já aplicado)${c.matou ? `; matou a vítima: +${c.manchas} Mancha(s)` : ""}.`,
+    `Caçou: Fome ${c.fomeAntes} → ${c.fomeDepois} (já aplicado)${c.matou && c.manchas ? `; matou a vítima: +${c.manchas} Mancha(s)` : ""}.`,
+    c.presaExcluida ? `A presa quebra a Exclusão de Presa (${c.presaExcluida}): +1 Mancha (já aplicado; sem caixa livre, vira degeneração). Narre o nojo de si mesmo.` : "",
+    c.vontadeGasta ? `Fazendeiro bebendo de gente: −${c.vontadeGasta} de Força de Vontade (já aplicado).` : "",
+    c.vampirica && c.matou ? "Drenou um vampiro: isso é diablerie. Se a vítima tinha Potência maior, chame potencia_de_sangue (motivo diablerie)." : "",
     !c.matou && c.fomeDepois === 1 && c.fomeAntes > 1 ? "Sem matar, a Fome não desce de 1." : "",
     `${ressTexto}. Narre a vítima e o gosto do sangue.`,
     av.sujo ? "Crítico Sujo: bebeu demais — a vítima quase morre ou alguém viu (escolha um preço)." : "",
@@ -672,6 +839,17 @@ export function resolver(ficha: Ficha, pedido: PedidoTeste): ResultadoVtm {
     }
     rotulo = `Caça (${pred?.nome ?? "livre"})`;
     vtm = "caca";
+    // defeito de alimentação: o servidor precisa saber quem é a vítima para cobrar o preço
+    const defeitos = defeitosDeAlimentacao(ficha);
+    if ((defeitos.fazendeiro || defeitos.exclusoes.length) && !op.presa) {
+      const quais = [...defeitos.exclusoes.map((x) => `Exclusão de Presa: ${x}`), ...(defeitos.fazendeiro ? ["Fazendeiro"] : [])].join(", ");
+      throw new Error(`${ficha.nome} tem defeito de alimentação (${quais}): diga a presa (ex.: "mortal", "doador que consente", "animal", "vampiro").`);
+    }
+    const presa = op.presa ? normalizar(op.presa) : "";
+    if (defeitos.fazendeiro && presa && !presaAnimal(presa) && !presaVampiro(presa) && op.ressonancia !== "animal" && vontadeDe(ficha) < 2) {
+      throw new Error(`${ficha.nome} é Fazendeiro: beber de gente custa 2 de Força de Vontade e só restam ${vontadeDe(ficha)}. Sem isso, a caça tem de ser de animal.`);
+    }
+    if (op.presa) notas.push(`presa: ${op.presa}`);
   } else if (/^(ataque|atacar|attack)/.test(t)) {
     pecas = pecasAtaque(ficha, `${texto} ${pedido.motivo ?? ""}`);
     rotulo = `Ataque (${pecas[1].nome})`;
@@ -751,11 +929,10 @@ export function resolver(ficha: Ficha, pedido: PedidoTeste): ResultadoVtm {
     notas.push("poder sem custo de Despertar");
   }
 
-  if (atormentado(ficha)) {
-    paradaBase -= 2;
-    notas.push("−2 atormentado pelas Manchas");
-  }
-  const parada = ajustar(paradaBase, pedido, notas);
+  // compulsão ativa: −2 no que não a serve (o mestre diz compulsao "serve"; caçar serve à compulsão de Fome)
+  const ativa = vtm === "iniciativa" ? null : compulsaoAtiva(ficha);
+  const serve = op.compulsao === "serve" || (vtm === "caca" && ativa !== null && normalizar(ativa) === "fome");
+  const parada = ajustar(paradaBase, pedido, notas, ficha, ativa && !serve ? ativa : null);
   const qtdFome = Math.min(fome, parada);
   const normais = rolarFaces(parada - qtdFome);
   const dadosFome = rolarFaces(qtdFome);
@@ -772,13 +949,29 @@ export function resolver(ficha: Ficha, pedido: PedidoTeste): ResultadoVtm {
     r.surtoConsumido = true;
     avisos.push(`O Surto de Sangue guardado (+${surto}) foi gasto neste teste.`);
   }
+  // a Besta escapa: Falha Bestial sorteia a compulsão; Crítico Sujo só quando o mestre pede (compulsao "sortear")
+  const sortear = !pedido.previa && vtm !== "iniciativa" && (av.bestial || (av.sujo && op.compulsao === "sortear"));
+  const compulsao = sortear ? sortearCompulsao(ficha) : null;
   if (vtm === "caca" && alvo !== null && !pedido.previa) {
     const caca = desfechoCaca(ficha, av, alvo, fome, op, notas);
+    if (compulsao) caca.compulsao = compulsao.nome;
     const { aviso, efeitos: ef } = avisoCaca(ficha, caca, av);
     r.caca = caca;
     efeitos.push(...ef);
     avisos.push(aviso);
     r.detalhes = [...notas, ...notasDoGrau(av, alvo, fome, qtdFome > 0)].filter(Boolean).join(" · ") || undefined;
+  }
+  if (compulsao) {
+    r.compulsao = compulsao;
+    const nota = `Compulsão sorteada (d10 ${compulsao.face}): ${compulsao.nome}${compulsao.doCla ? " (do clã)" : ""}`;
+    r.detalhes = [r.detalhes, nota].filter(Boolean).join(" · ");
+    efeitos.push({ texto: `Compulsão: ${compulsao.nome}`, tom: "sangue" });
+    avisos.push(
+      `Compulsão "${compulsao.nome}" marcada (já aplicado): ${compulsao.efeito} O servidor tira 2 dados dos testes que não a servem (compulsao "serve" quando servir). Sai quando satisfeita (alterar_ficha remover_condicoes) ou quando a cena muda.`,
+    );
+  } else if (ativa && !pedido.previa) {
+    const efeito = efeitoCompulsao(ativa);
+    if (!serve) avisos.push(`${ficha.nome} segue sob a compulsão ${ativa} (−2 já descontado)${efeito ? `: ${efeito}` : ""}. Se a ação a servia, peça o próximo teste com compulsao "serve".`);
   }
   if (efeitos.length) r.efeitos = efeitos;
   const aviso = juntarAvisos(...avisos);

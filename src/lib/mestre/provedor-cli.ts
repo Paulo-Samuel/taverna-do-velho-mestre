@@ -15,7 +15,8 @@ import {
   raizClaudeDesktop,
   resolverShimNpm,
 } from "./claude-bin";
-import type { EventoMestre, OpcoesTurno, Provedor } from "./tipos";
+import { TURNO_CANCELADO, traduzirErroCli } from "./erros-api";
+import { TITULO_ESTADO, type EventoMestre, type OpcoesTurno, type Provedor } from "./tipos";
 
 export { CLAUDE_VERSAO_MINIMA, CLAUDE_VERSAO_TESTADA };
 
@@ -316,7 +317,13 @@ async function executar({ sistema, prompt, ferramentas, ponte, aoEvento, sinal }
 
   const encerrar = () => encerrarArvore(filho);
   sinal?.addEventListener("abort", encerrar, { once: true });
-  const relogio = setTimeout(encerrar, TEMPO_MAXIMO_MS);
+  let estourouTempo = false;
+  const relogio = setTimeout(() => {
+    estourouTempo = true;
+    encerrar();
+  }, TEMPO_MAXIMO_MS);
+  // último aviso de limite do plano: o erro "bateu no limite" diz a hora em que renova
+  let renovaEm: number | null = null;
 
   let stderr = "";
   filho.stderr.on("data", (c) => (stderr += c.toString()));
@@ -348,6 +355,7 @@ async function executar({ sistema, prompt, ferramentas, ponte, aoEvento, sinal }
         jaEscreveu = true;
       } else if (ev.type === "rate_limit_event") {
         const info = ev.rate_limit_info ?? {};
+        if (typeof info.resetsAt === "number") renovaEm = info.resetsAt;
         aoEvento?.({
           tipo: "limite",
           janela: String(info.rateLimitType ?? ""),
@@ -356,6 +364,20 @@ async function executar({ sistema, prompt, ferramentas, ponte, aoEvento, sinal }
         });
       } else if (ev.type === "result") {
         const falhou = ev.is_error || ev.subtype !== "success";
+        // o resultado traz o uso somado do turno inteiro (o mesmo log por turno da API: cache lido e escrito)
+        const u = ev.usage;
+        if (u && typeof u === "object") {
+          const n = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : 0);
+          aoEvento?.({
+            tipo: "uso",
+            rodada: Math.max(1, n(ev.num_turns)),
+            maxRodadas: Math.max(1, n(ev.num_turns)),
+            entrada: n(u.input_tokens),
+            saida: n(u.output_tokens),
+            cacheLido: n(u.cache_read_input_tokens),
+            cacheEscrito: n(u.cache_creation_input_tokens),
+          });
+        }
         resultado = {
           texto: typeof ev.result === "string" ? ev.result : "",
           erro: falhou ? (typeof ev.result === "string" && ev.result) || (ev.errors ?? []).join("; ") || ev.subtype : null,
@@ -363,14 +385,21 @@ async function executar({ sistema, prompt, ferramentas, ponte, aoEvento, sinal }
       }
     }
     const codigo: number | null = await new Promise((ok) => (filho.exitCode !== null ? ok(filho.exitCode) : filho.once("close", ok)));
-    if (sinal?.aborted) throw new Error("Turno cancelado.");
+    if (sinal?.aborted) throw new Error(TURNO_CANCELADO);
+    if (estourouTempo) throw new Error(traduzirErroCli("", { estourouTempo, tempoMaximoMs: TEMPO_MAXIMO_MS })!.mensagem);
     if (!resultado) {
       // flag ou comando que esta versão do Claude Code não conhece: a frase que resolve, em vez de "código 1"
       const compat = codigo !== 0 ? erroDeCompatibilidade(stderr, await versaoDoExecutavel(exe)) : null;
       if (compat) throw new Error(compat);
+      // limite do plano ou login caído também podem vir só no stderr
+      const conhecido = traduzirErroCli(stderr, { renovaEm });
+      if (conhecido) throw new Error(conhecido.mensagem);
       throw new Error(`O Claude Code terminou sem resposta (código ${codigo}). ${stderr.trim().slice(0, 500)}`);
     }
-    if (resultado.erro) throw new Error(`O Claude Code respondeu com erro: ${resultado.erro}`);
+    if (resultado.erro) {
+      const conhecido = traduzirErroCli(resultado.erro, { renovaEm });
+      throw new Error(conhecido ? conhecido.mensagem : `O Claude Code respondeu com erro: ${resultado.erro}`);
+    }
     return resultado.texto;
   } finally {
     clearTimeout(relogio);
@@ -388,8 +417,10 @@ export function criarProvedorCli(opcoes: OpcoesCli = {}): Provedor {
   return {
     id: "cli",
     nome: `Claude Code (plano da conta logada${opcoes.modelo || process.env.CLAUDE_CLI_MODELO ? `, ${opcoes.modelo || process.env.CLAUDE_CLI_MODELO}` : ""})`,
-    async turno({ sistema, prompt, ferramentas, ponte, emitir, sinal }: OpcoesTurno) {
-      await executar({ sistema, prompt, ferramentas: ferramentas.map((f) => f.name), ponte, aoEvento: emitir, sinal }, opcoes);
+    async turno({ sistema, contexto, prompt, ferramentas, ponte, emitir, sinal }: OpcoesTurno) {
+      // sistema.md leva só o bloco estável (igual entre jogadas); o estado da mesa entra no começo do stdin
+      const entrada = contexto?.trim() ? `${TITULO_ESTADO}\n\n${contexto}\n\n---\n\n${prompt}` : prompt;
+      await executar({ sistema, prompt: entrada, ferramentas: ferramentas.map((f) => f.name), ponte, aoEvento: emitir, sinal }, opcoes);
     },
     texto({ sistema, prompt, sinal }) {
       return executar({ sistema, prompt, sinal }, opcoes);

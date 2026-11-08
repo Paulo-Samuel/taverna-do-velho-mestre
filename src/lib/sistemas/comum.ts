@@ -179,6 +179,7 @@ export function publico(s: Sistema): SistemaPublico {
     limitesAtributos: s.limitesAtributos,
     periciasEscolhiveis: s.periciasEscolhiveis,
     ...(s.limitePericias ? { limitePericias: structuredClone(s.limitePericias) } : {}),
+    ...(s.condicoes ? { condicoes: structuredClone(s.condicoes) } : {}),
     nivelMaximo: s.nivelMaximo,
     testesSugeridos: s.testesSugeridos,
     regrasParaMestre: s.regrasParaMestre,

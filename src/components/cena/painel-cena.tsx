@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { Cena, Combatente, SistemaPublico } from "@/lib/sistemas/tipos";
+import { valorDaCondicao } from "@/lib/sistemas/pf2e/condicoes";
+import type { Cena, CondicaoDef, Combatente, SistemaPublico } from "@/lib/sistemas/tipos";
 
 // Painel da cena: onde o grupo está, quando, com que tempo e o que está acontecendo,
 // mais o rastreador de combate (rodada, ordem de iniciativa, quem age, PV e condições).
@@ -43,11 +44,65 @@ function BarraPv({ c, numeros }: { c: Combatente; numeros: boolean }) {
   );
 }
 
-function LinhaCombatente({ c, vez, indice, mostrarNumeros, rotuloDefesa }: { c: Combatente; vez: boolean; indice: number; mostrarNumeros: boolean; rotuloDefesa: string }) {
+/**
+ * Ações do turno (sistemas que contam, como o PF2e): pontinhos das ações que sobram (menos o lento N), quantas já foram e o
+ * aviso da penalidade do próximo ataque.
+ */
+function AcoesDoTurno({ c, total, condicoesDef, vez }: { c: Combatente; total: number; condicoesDef?: CondicaoDef[]; vez: boolean }) {
+  const lento = condicoesDef ? valorDaCondicao(c.condicoes ?? [], "lento", condicoesDef) : 0;
+  const disponiveis = Math.max(0, total - lento);
+  const gastas = vez ? Math.min(disponiveis, c.acoes ?? 0) : 0;
+  const ataques = vez ? (c.ataques ?? 0) : 0;
+  const proximo = ataques >= 2 ? "−10 (ágil −8)" : ataques === 1 ? "−5 (ágil −4)" : "";
+  if (!vez && !lento) return null;
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted">
+      {vez && (
+        <span className="flex items-center gap-0.5" role="img" aria-label={`${disponiveis - gastas} de ${disponiveis} ações sobrando`} title="Ações do turno">
+          {Array.from({ length: total }, (_, i) => (
+            <span
+              key={i}
+              className={`inline-block h-2 w-2 rounded-full border ${
+                i >= disponiveis ? "border-border bg-transparent opacity-40" : i < gastas ? "border-border bg-transparent" : "border-ambar bg-ambar"
+              }`}
+              aria-hidden
+            />
+          ))}
+        </span>
+      )}
+      {lento > 0 && <span className="rounded border border-sangue/50 px-1 text-sangue">lento {lento}</span>}
+      {ataques > 0 && (
+        <span>
+          {ataques} ataque{ataques > 1 ? "s" : ""} no turno · próximo ataque <span className="text-sangue">{proximo}</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function LinhaCombatente({
+  c,
+  vez,
+  indice,
+  mostrarNumeros,
+  rotuloDefesa,
+  acoesTurno,
+  condicoesDef,
+}: {
+  c: Combatente;
+  vez: boolean;
+  indice: number;
+  mostrarNumeros: boolean;
+  rotuloDefesa: string;
+  acoesTurno?: number;
+  condicoesDef?: CondicaoDef[];
+}) {
   const caido = (c.pv ?? 1) <= 0;
   // aliados (personagens e NPCs do grupo) sempre mostram números; inimigos só se o jogador pedir
   const numeros = Boolean(c.aliado) || mostrarNumeros;
   const condicoes = (c.condicoes ?? []).filter((x) => x.toLowerCase() !== "caído" || !caido);
+  // defesa com as condições (amedrontado, desprevenido...) quando o sistema calcula
+  const efetiva = typeof c.defesaEfetiva === "number" && c.defesaEfetiva !== c.defesa ? c.defesaEfetiva : null;
   return (
     <li
       aria-current={vez ? "step" : undefined}
@@ -67,12 +122,20 @@ function LinhaCombatente({ c, vez, indice, mostrarNumeros, rotuloDefesa }: { c: 
           </p>
           <p className="text-[11px] text-muted">
             {c.aliado ? "grupo" : "inimigo"}
-            {numeros && c.defesa ? ` · ${rotuloDefesa} ${c.defesa}` : ""}
+            {numeros && c.defesa && efetiva === null ? ` · ${rotuloDefesa} ${c.defesa}` : ""}
+            {numeros && c.defesa && efetiva !== null ? (
+              <span title={c.defesaNota}>
+                {" · "}
+                {rotuloDefesa} <span className="text-sangue">{efetiva}</span> <span className="line-through opacity-70">{c.defesa}</span>
+                {c.defesaNota ? ` (${c.defesaNota})` : ""}
+              </span>
+            ) : null}
             {caido ? " · caído" : ""}
           </p>
         </div>
         {vez && <span className="shrink-0 rounded-full bg-botao px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-botao-texto">age agora</span>}
       </div>
+      {acoesTurno ? <AcoesDoTurno c={c} total={acoesTurno} condicoesDef={condicoesDef} vez={vez} /> : null}
       <BarraPv c={c} numeros={numeros} />
       {condicoes.length > 0 && (
         <ul className="mt-1.5 flex flex-wrap gap-1">
@@ -117,7 +180,7 @@ function Rastreador({ combate, sistema }: { combate: NonNullable<Cena["combate"]
       </p>
       <ol className="space-y-1.5">
         {combate.ordem.map((c, i) => (
-          <LinhaCombatente key={`${c.nome}-${i}`} c={c} vez={i === combate.vez} indice={i} mostrarNumeros={mostrarNumeros} rotuloDefesa={sistema.rotulos.defesa} />
+          <LinhaCombatente key={`${c.nome}-${i}`} c={c} vez={i === combate.vez} indice={i} mostrarNumeros={mostrarNumeros} rotuloDefesa={sistema.rotulos.defesa} acoesTurno={sistema.combate?.acoes} condicoesDef={sistema.condicoes} />
         ))}
       </ol>
       {inimigos.some((c) => c.pv !== null && c.pv !== undefined) && (

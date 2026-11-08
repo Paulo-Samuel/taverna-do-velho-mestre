@@ -1,8 +1,9 @@
 import "server-only";
 import { listarMensagens } from "../../db";
+import { normalizar } from "../../sistemas/comum";
 import type { DefFerramenta } from "../tipos";
-import { acharCombatente, atualizarCombate, cenaAtual, gravarCena, iniciarCombate, passarVez, podeAgir, sincronizarPersonagens } from "./combate";
-import { cobrarNarracao, registrarDado, type ContextoFerramentas, type Executor } from "./contexto";
+import { acharCombatente, atualizarCombate, cenaAtual, darVez, gravarCena, iniciarCombate, passarVez, podeAgir, sincronizarPersonagens } from "./combate";
+import { cobrarNarracao, persistirPersonagem, registrarDado, type ContextoFerramentas, type Executor } from "./contexto";
 import { ENTRADAS, HUMORES, type EntradaCena } from "./esquemas";
 
 // Cena: o painel que os jogadores veem (lugar, hora, música, rastreador de combate), a narração e as ações sugeridas.
@@ -128,6 +129,7 @@ export const DEF_SUGERIR_ACOES: DefFerramenta = {
 function executarCena(ctx: ContextoFerramentas, e: EntradaCena) {
   const cena = cenaAtual(ctx);
   const tituloAntes = `${cena.titulo ?? ""}|${cena.local ?? ""}`;
+  const soTituloAntes = cena.titulo ?? "";
   if (e.musica) {
     // marca desde quando este humor toca (o prompt diz ao mestre "há N turnos"); só a energia mudar não reinicia a contagem
     if (e.musica.humor !== cena.musica?.humor || cena.musicaDesde === undefined) {
@@ -169,7 +171,7 @@ function executarCena(ctx: ContextoFerramentas, e: EntradaCena) {
       atualizarCombate(ctx, ativo, c, avisos);
       if (c.vez) {
         const i = acharCombatente(ativo.ordem, c.vez);
-        if (i >= 0) ativo.vez = i;
+        if (i >= 0) darVez(ativo, i);
         else avisos.push(`"${c.vez}" não está no combate.`);
       } else if (c.acao === "proximo") {
         passarVez(ativo);
@@ -190,6 +192,16 @@ function executarCena(ctx: ContextoFerramentas, e: EntradaCena) {
       local: cena.local ?? null,
       momento: cena.momento ?? null,
     });
+  }
+  // cena nova (título novo, não só outro local): compulsões ("Compulsão: Crueldade") duram até o fim da cena
+  if (e.titulo !== undefined && cena.titulo && (cena.titulo ?? "") !== soTituloAntes) {
+    for (const p of ctx.personagens) {
+      const sairam = p.ficha.condicoes.filter((c) => normalizar(c).startsWith("compuls"));
+      if (!sairam.length) continue;
+      p.ficha.condicoes = p.ficha.condicoes.filter((c) => !sairam.includes(c));
+      persistirPersonagem(ctx, p);
+      avisos.push(`Cena nova: ${p.ficha.nome} saiu da ${sairam.join(", ")}.`);
+    }
   }
   gravarCena(ctx, cena);
   const combate = cena.combate?.ativo ? cena.combate : null;

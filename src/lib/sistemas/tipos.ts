@@ -90,6 +90,21 @@ export type ResultadoTeste = {
   oposicao?: { nome: string; expressao: string; dados: number[]; total: number };
   /** opcional: dano sugerido pelo teste (margem + arma), para o mestre aplicar */
   dano?: { valor: number; tipo?: string; texto?: string };
+  /** opcional: o teste foi um ataque contado no turno (PF2e: penalidade de ataques múltiplos); `numero` é o 1º, 2º, 3º... */
+  ataque?: { numero: number; agil?: boolean };
+};
+
+/** Condição de uma lista fechada do sistema (seletor no ajuste da ficha; sinônimos contam como ela). */
+export type CondicaoDef = {
+  id: string;
+  nome: string;
+  sinonimos?: string[];
+  /** tem número ("amedrontado 2") */
+  temValor?: boolean;
+  /** valor máximo, quando há (moribundo 4) */
+  max?: number;
+  /** efeito em poucas palavras, mostrado no seletor */
+  efeito?: string;
 };
 
 /** Como o sistema joga a luta: "rodadas" (iniciativa, vez, rodada) ou "leve" (a ordem é a da ficção; o rastreador é opcional). */
@@ -97,6 +112,8 @@ export type CombateSistema = {
   modelo: "rodadas" | "leve";
   /** dado de iniciativa de quem não tem ficha ("1d20", "1d100", "4dF"...); ausente = o servidor deduz pelo dado principal */
   iniciativaNpc?: string;
+  /** ações por turno quando o sistema conta (PF2e: 3); o rastreador mostra os pontinhos e conta os ataques do turno */
+  acoes?: number;
 };
 
 /**
@@ -269,6 +286,8 @@ export interface Sistema {
   periciasEscolhiveis?: number;
   /** limite real de perícias da criação (classe + atributo); ausente = `periciasEscolhiveis` */
   limitePericias?: LimitePericias;
+  /** lista fechada de condições (seletor com valor no ajuste da ficha); ausente = só texto livre */
+  condicoes?: CondicaoDef[];
   nivelMaximo: number;
   /** nomes curtos de testes comuns, mostrados ao mestre e no rolador */
   testesSugeridos: string[];
@@ -325,6 +344,18 @@ export interface Sistema {
   aposMudancaDePv?(ficha: Ficha, pvAntes: number, origem: "alterar_ficha" | "ajuste" | "descanso_curto" | "descanso_longo"): void;
   /** Opcional: avisos (não bloqueiam) sobre uma ficha fora das regras de criação do livro. */
   avisosCriacao?(entrada: EntradaCriacao): string[];
+  /**
+   * Opcional: o sistema aplica ele mesmo a variação de um recurso (Vampiro: Mancha além das caixas vira degeneração).
+   * Muta a ficha e devolve o texto do recurso e um alerta ("degeneração: Humanidade 6 → 5"); null = regra comum (somar e limitar).
+   */
+  mudarRecurso?(ficha: Ficha, id: string, delta: number): { texto: string; alerta?: string } | null;
+  /**
+   * Opcional: o que acontece com as condições no fim do turno de quem as tem (PF2e: amedrontado cai 1 e some em 0).
+   * Devolve a lista nova e as mudanças em texto ("amedrontado 2 → 1"); lista vazia = nada mudou.
+   */
+  fimDoTurno?(condicoes: string[]): { condicoes: string[]; mudancas: string[] };
+  /** Opcional: defesa efetiva com as condições (PF2e: amedrontado e desprevenido baixam a CA). `detalhe` = o que pesou. */
+  defesaComCondicoes?(defesa: number, condicoes: string[]): { valor: number; detalhe: string };
 }
 
 /** Campos do Sistema que nunca vão ao navegador: funções e textos que só o prompt usa. */
@@ -345,7 +376,10 @@ type SoServidor =
   | "aplicarDecisao"
   | "opcoesAntesDeRolar"
   | "aposMudancaDePv"
-  | "avisosCriacao";
+  | "avisosCriacao"
+  | "mudarRecurso"
+  | "fimDoTurno"
+  | "defesaComCondicoes";
 
 /** Só dados, sem funções: o que vai para os componentes de cliente. */
 export type SistemaPublico = Omit<Sistema, SoServidor>;
@@ -360,6 +394,14 @@ export type Combatente = {
   condicoes?: string[];
   /** true para personagens dos jogadores e aliados */
   aliado?: boolean;
+  /** sistemas que contam ações (CombateSistema.acoes): ações gastas no turno e ataques feitos (penalidade de ataques múltiplos) */
+  acoes?: number;
+  ataques?: number;
+  /** reação ainda disponível nesta rodada */
+  reacao?: boolean;
+  /** defesa com as condições pesando ("16" com amedrontado 2), quando o sistema calcula; `defesaNota` diz o porquê */
+  defesaEfetiva?: number | null;
+  defesaNota?: string;
 };
 
 /** Humores da trilha sonora gerada no navegador (modo história). */

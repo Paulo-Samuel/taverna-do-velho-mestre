@@ -19,6 +19,8 @@ import {
   type PredadorVtm,
 } from "./vtm5/dados";
 import {
+  aplicarManchas,
+  defeitosDeAlimentacao,
   disciplinasDe,
   efeitosPotencia,
   fomeDe,
@@ -37,7 +39,10 @@ import {
 import { CONDICAO_FAMINTO, INTENSIDADES, RESSONANCIAS } from "./vtm5/sangue";
 import { aplicarDecisao, decisoesAposTeste, opcoesAntesDeRolar } from "./vtm5/decisoes";
 import { FIM_DE_SESSAO_VTM } from "./vtm5/fim";
-import type { BlocoFicha, Ficha, OpcaoCriacao, Sistema } from "./tipos";
+import { PARES } from "./sementes/vtm5";
+import type { BlocoFicha, EntradaCriacao, Ficha, OpcaoCriacao, Sistema } from "./tipos";
+
+export { aplicarManchas } from "./vtm5/testes";
 
 // Vampiro: A Máscara 5ª edição — fã-conteúdo gratuito e não oficial sob a política Dark Pack da Paradox.
 // Tabelas em vtm5/dados.ts e testes (parada de d10, Fome, críticos) em vtm5/testes.ts.
@@ -49,7 +54,8 @@ import type { BlocoFicha, Ficha, OpcaoCriacao, Sistema } from "./tipos";
 //   A Mancha também fica espelhada em extras.mancha. Disciplinas em extras.disciplinas ({ id: pontos }).
 // XP: V5 gasta XP em características, não em níveis. xpParaNivel devolve null; o jogador gasta o XP na própria ficha
 // (vtm5/xp.ts, rota /personagens/[pid]/xp) e o histórico fica em extras.gastosXp. Rituais e fórmulas em extras.rituais / extras.formulas
-// ([{nome, nivel}]). subirNivel aumenta a Potência de Sangue sem cobrar (o que no livro vem com a idade e a diablerie).
+// ([{nome, nivel}]). progressao "compra": conceder_xp só soma o XP que o jogador gasta; subirNivel aumenta a Potência de Sangue
+// sem cobrar e só é chamado pela ferramenta potencia_de_sangue (motivo diablerie de alguém mais potente, ou décadas).
 
 const MATRIZ_ATRIBUTOS = [4, 3, 3, 3, 2, 2, 2, 2, 1];
 
@@ -198,6 +204,56 @@ function paradaCaca(ficha: Ficha): string {
   return `${pred.paradaTexto} = ${valor} dado(s)`;
 }
 
+/** Defeitos de alimentação em uma linha ("Exclusão de Presa: mortais · Fazendeiro"), para a linha de Caça do mestre. */
+function textoAlimentacao(ficha: Ficha): string {
+  const x = defeitosDeAlimentacao(ficha);
+  return [...x.exclusoes.map((e) => `Exclusão de Presa: ${e}`), ...(x.fazendeiro ? ["Fazendeiro (gente custa 2 de Força de Vontade)"] : [])].join(" · ");
+}
+
+/**
+ * Convicção ou Pedra de Toque que não diz nada: o texto INTEIRO é um "deixa para depois" ("Livre", "Livre para o mestre",
+ * "a escolher", "nenhuma", "qualquer uma", "sei lá") ou tem menos de 8 letras. Uma frase de verdade que só contém essas
+ * palavras ("Nunca obedecer a um mestre", "Ser livre acima de tudo") fica como o jogador escreveu.
+ */
+const VAZIA =
+  /^(?:(?:livre|a escolher|a definir|em aberto|nenhum|nenhuma|nada|qualquer|qualquer uma|qualquer um|sei la|nao sei|depois|definir depois|ver depois|escolho depois|tbd|todo)(?: (?:pelo|para o|pro|com o|a criterio do) (?:mestre|narrador))?|(?:o |a )?(?:mestre|narrador) (?:escolhe|decide|define))$/;
+function generica(texto: string): boolean {
+  const t = normalizar(texto).replace(/[^a-z ]+/g, " ").replace(/\s+/g, " ").trim();
+  return t.replace(/[^a-z]/g, "").length < 8 || VAZIA.test(t);
+}
+
+/** Par de sementes escolhido pelo nome e clã (mesma ficha, mesmo par: a prévia e a criação concordam). */
+function parSugerido(nome: string, classe: string): [string, string] {
+  let h = 0;
+  for (const ch of `${nome}|${classe}`) h = (Math.imul(h, 31) + ch.charCodeAt(0)) >>> 0;
+  return PARES[h % PARES.length];
+}
+
+const NOTA_PAR_SUGERIDO = "a taverna sugeriu uma Convicção e uma Pedra de Toque; troque na ficha";
+
+/** Avisos (não bloqueiam) de ficha fora da criação do livro: atributos fora de 4/3/3/3/2/2/2/2/1 e perícias acima das cotas. */
+export function avisosDaCriacao(entrada: EntradaCriacao): string[] {
+  const avisos: string[] = [];
+  if (entrada.atributos) {
+    const valores = ATRIBUTOS.map((a) => limitar(Math.round(Number(entrada.atributos?.[a.id]) || 1), 1, 5)).sort((a, b) => b - a);
+    const livro = [...MATRIZ_ATRIBUTOS].sort((a, b) => b - a);
+    if (valores.join() !== livro.join()) {
+      const soma = valores.reduce((s, v) => s + v, 0);
+      const padrao = livro.reduce((s, v) => s + v, 0);
+      avisos.push(`Atributos fora do livro: soma ${soma}, o padrão é ${padrao} (${MATRIZ_ATRIBUTOS.join("/")})${soma !== padrao ? "" : `; a distribuição é ${valores.join("/")}`}.`);
+    }
+  }
+  const ex = entrada.extras ?? {};
+  const estilo = ESTILOS_PERICIAS.find((e) => e.id === ex.estilo) ?? ESTILOS_PERICIAS[1];
+  const lista = (v: unknown) => (Array.isArray(v) ? v.map(String).filter(Boolean) : typeof v === "string" && v ? [v] : []);
+  const acima = [4, 3, 2, 1]
+    .map((n) => ({ n, qtd: new Set(lista(ex[`pericias_${n}`])).size, cota: estilo.cotas[n] ?? 0 }))
+    .filter((x) => x.qtd > x.cota)
+    .map((x) => `${x.qtd} em ${"●".repeat(x.n)} (cota ${x.cota})`);
+  if (acima.length) avisos.push(`Perícias acima das cotas do estilo ${estilo.nome}: ${acima.join(", ")}; as que sobram descem um ponto.`);
+  return avisos;
+}
+
 function textoPotencia(ficha: Ficha): string {
   const ef = efeitosPotencia(ficha);
   return `Surto +${ef.surto} dados · cura ${ef.cura} superficial por Despertar · +${ef.bonusPoder} em disciplinas · rerrola Despertar de disciplinas nível ≤${ef.rerrolagem} · gravidade da perdição ${ef.gravidade} · ${ef.alimento}`;
@@ -318,17 +374,17 @@ export const SECOES_REGRAS: SecaoRegras[] = [
   {
     id: "ALIMENTAÇÃO",
     teto: 900,
-    texto: `ALIMENTAÇÃO — cacar com dificuldade 2 (lugar fácil), 3 (comum) ou 4 (vigiado, alvo atento), na parada do Tipo de Predador. Sucesso baixa a Fome em 1 (2 com folga); sem matar não desce de 1; Potência alta sacia menos. A Ressonância (colérica, melancólica, fleumática, sanguínea, vazia: sorteada ou a que você der) intensa ou aguda dá +1 dado nas disciplinas ligadas até a próxima caça. matar: true zera a Fome e dá Manchas (padrão 2). Falha: complicação (vítima foge, testemunha, briga, Máscara em risco). Caça é cena, não teste solto: o Tipo de Predador diz onde e como, e a vítima tem rosto.`,
+    texto: `ALIMENTAÇÃO — cacar com dificuldade 2 (lugar fácil), 3 (comum) ou 4 (vigiado, alvo atento), na parada do Tipo de Predador. Sucesso baixa a Fome em 1 (2 com folga); sem matar não desce de 1; Potência alta sacia menos. A Ressonância (colérica, melancólica, fleumática, sanguínea, vazia: sorteada ou a que você der) intensa ou aguda dá +1 dado nas disciplinas ligadas até a próxima caça. matar: true zera a Fome e dá Manchas (padrão 2). Com Exclusão de Presa ou Fazendeiro, diga a presa ("mortal", "animal", "vampiro", "doador que consente"): presa excluída custa 1 Mancha e gente custa 2 de Força de Vontade ao Fazendeiro (o servidor cobra). Falha: complicação (vítima foge, testemunha, briga, Máscara em risco). Caça é cena, não teste solto: o Tipo de Predador diz onde e como, e a vítima tem rosto.`,
   },
   {
     id: "HUMANIDADE",
     teto: 1200,
-    texto: `HUMANIDADE (recurso "humanidade", 0–10), MANCHAS (recurso "mancha") E REMORSO — ato monstruoso ou contra as Convicções dá Manchas: alterar_ficha recursos {"mancha": 1 a 3} (matar inocente vale 3+). Manchas que enchem as caixas livres deixam o personagem atormentado (−2 dados, o servidor aplica). Ao fechar a noite ou o arco, quem tem Manchas faz teste_de_remorso: 10 − Humanidade − Manchas dados (mínimo 1); um sucesso limpa as Manchas, nenhum tira 1 de Humanidade e limpa as Manchas. Humanidade baixa = mais monstro (parece menos humano, dorme mais, entra em frenesi mais fácil); 0 = perdido para a Besta (vira NPC). Pedra de Toque ferida ou morta por culpa dele = Manchas, e a Convicção perde o freio.`,
+    texto: `HUMANIDADE (recurso "humanidade", 0–10), MANCHAS (recurso "mancha") E REMORSO — ato monstruoso ou contra as Convicções dá Manchas: alterar_ficha recursos {"mancha": 1 a 3} (matar inocente vale 3+). Manchas que enchem as caixas livres deixam o personagem atormentado (−2 dados em toda parada, o servidor aplica); Mancha sem caixa livre é degeneração: o servidor tira 1 de Humanidade na hora. Ao fechar a noite ou o arco, quem tem Manchas faz teste_de_remorso: 10 − Humanidade − Manchas dados (mínimo 1); um sucesso limpa as Manchas, nenhum tira 1 de Humanidade e limpa as Manchas. Humanidade baixa = mais monstro (parece menos humano, dorme mais, entra em frenesi mais fácil); 0 = perdido para a Besta (vira NPC). Pedra de Toque ferida ou morta por culpa dele = Manchas, e a Convicção perde o freio.`,
   },
   {
     id: "FRENESI",
     teto: 900,
-    texto: `FRENESI E COMPULSÕES — testar_frenesi rola Força de Vontade atual + Humanidade/3 (Brujah perde dados na fúria): fúria (provocação, humilhação), fome (sangue à vista com Fome alta), terror (fogo, sol). Dificuldade 2 leve, 3 sério, 4–5 extremo (fogo na cara, Fome 5 diante de sangue). Falha: a Besta age até o fim da cena (o servidor marca "Frenesi (tipo)"; tire com alterar_ficha quando a cena acabar); gastar 1 de Força de Vontade adia um turno. Depois de Crítico Sujo ou Falha Bestial, marque a compulsão do clã (ou Fome, Dominação, Agressão, Arrogância) como condição: −2 dados em tudo que não a sirva; sai quando satisfeita ou quando a cena muda.`,
+    texto: `FRENESI E COMPULSÕES — testar_frenesi rola Força de Vontade atual + Humanidade/3 (Brujah perde dados na fúria): fúria (provocação, humilhação), fome (sangue à vista com Fome alta), terror (fogo, sol). Dificuldade 2 leve, 3 sério, 4–5 extremo (fogo na cara, Fome 5 diante de sangue). Falha: a Besta age até o fim da cena (o servidor marca "Frenesi (tipo)"; tire com alterar_ficha quando a cena acabar); gastar 1 de Força de Vontade adia um turno. Na Falha Bestial o servidor sorteia a compulsão (Fome, Dominância, Dano, Paranoia; a do clã no 10) e marca "Compulsão: X"; num Crítico Sujo que cobre preço, peça o teste com compulsao "sortear". Ela tira 2 dados de tudo que não a sirva (o servidor desconta; compulsao "serve" quando a ação a satisfaz) e sai quando satisfeita (alterar_ficha) ou quando a cena muda de título.`,
   },
   {
     id: "FORÇA DE VONTADE",
@@ -349,8 +405,8 @@ TORPOR E MORTE FINAL — Saúde 0 por dano superficial = torpor (o servidor marc
   {
     id: "POTÊNCIA E XP",
     teto: 1000,
-    texto: `POTÊNCIA DE SANGUE (nível da ficha) — dá os dados de Surto, a cura por Despertar, bônus em disciplinas e o peso da Perdição (veja a ficha). Sobe com o tempo e a diablerie (subir_nivel, sem custo) ou com XP que o jogador gasta.
-XP — você só CONCEDE (conceder_xp; no meio da sessão, no máximo 1 por marco grande, o resto no fim da noite). O jogador GASTA sozinho na ficha (botão "Gastar XP"): atributo nível novo ×5, perícia ×3, especialidade 3, disciplina do clã ×5, de fora ×7 (Caitiff ×6), ritual ou fórmula nível ×3, vantagem 3 por ponto, Potência ×10. A compra vira uma linha no chat e a ficha nova chega no próximo turno: não altere a ficha para "aplicar" XP. Disciplina de fora do clã pede motivo na história (o sangue de quem a tem, um mentor): cobre em cena.`,
+    texto: `POTÊNCIA DE SANGUE (nível da ficha) — dá os dados de Surto, a cura por Despertar, bônus em disciplinas e o peso da Perdição (veja a ficha). Só sobe com décadas de não-vida ou com a diablerie de alguém mais potente: potencia_de_sangue (motivo "diablerie" ou "decadas"), nunca como prêmio de missão.
+XP — você só CONCEDE (conceder_xp: 1 a 3 por personagem no fim da noite, +1 numa grande virada; motivo concreto: Ambição, Convicções, missão concluída). O jogador GASTA sozinho na ficha (botão "Gastar XP"): atributo nível novo ×5, perícia ×3, especialidade 3, disciplina do clã ×5, de fora ×7 (Caitiff ×6), ritual ou fórmula nível ×3, vantagem 3 por ponto, Potência ×10. A compra vira uma linha no chat e a ficha nova chega no próximo turno: não altere a ficha para "aplicar" XP. Disciplina de fora do clã pede motivo na história (o sangue de quem a tem, um mentor): cobre em cena.`,
   },
   {
     id: "MASCARADA",
@@ -362,7 +418,7 @@ XP — você só CONCEDE (conceder_xp; no meio da sessão, no máximo 1 por marc
     teto: 1500,
     texto: `COMO MESTRAR V5
 - Horror pessoal: o monstro é o personagem. Cada noite traz uma tentação e um preço; deixe-o escolher e cobre depois. O caminho humano custa caro; o fácil é monstruoso.
-- Convicções e Pedras de Toque no centro: ponha as Pedras em risco (doença, polícia, um Membro curioso) e confronte as Convicções com dilemas sem saída limpa. A Ambição move o arco; o Desejo da noite gera cenas; a Perdição do clã entra em cena.
+- Convicções e Pedras de Toque no centro: a cada sessão, uma cena com uma das Pedras de Toque ou uma Convicção em risco (doença, polícia, um Membro curioso); confronte as Convicções com dilemas sem saída limpa. A Ambição move o arco; o Desejo da noite gera cenas; a Perdição do clã entra em cena.
 - Anciões mentem, aliados cobram, ninguém é só vilão.
 - Relógio: o sol nasce. Marque a hora com atualizar_cena e aperte quando a noite acaba; o refúgio é a única segurança e pode cair.
 - Tom: íntimo, urbano, sensual e sujo; violência rápida e feia; o horror vem do que o personagem faz e do que perde, não de sustos. A cidade é personagem: bairros, transporte, polícia e imprensa locais. Anote todo NPC relevante (Príncipe, Xerife, Barão, senhor, Pedras de Toque, rivais).`,
@@ -429,7 +485,7 @@ export const vtm5: Sistema = {
   regrasParaMestre: REGRAS,
   // sem rodadas rígidas: a ordem é a da ficção (CONFLITO no REGRAS). Iniciativa de NPC sem ficha: ainda o padrão do servidor.
   combate: { modelo: "leve" },
-  // XP é moeda que o jogador gasta na ficha (vtm5/xp.ts); a Potência de Sangue sobe por subir_nivel
+  // XP é moeda que o jogador gasta na ficha (vtm5/xp.ts); a Potência de Sangue sobe só por potencia_de_sangue (diablerie ou décadas)
   progressao: "compra",
   fimDeSessao: FIM_DE_SESSAO_VTM,
   textosDoMestre: { rerrolagem: TEXTO_REROLAGEM },
@@ -486,7 +542,22 @@ export const vtm5: Sistema = {
     ficha.dinheiro = limitar((Number.isFinite(recursosEscolhidos) ? recursosEscolhidos : 1) + (predador.recursos ?? 0), 0, 5);
     ficha.extras.vantagens = [...predador.vantagens, ...listaExtra(ficha, "vantagens")];
     ficha.extras.defeitos = [...predador.defeitos, ...listaExtra(ficha, "defeitos")];
-    ficha.extras.notasCriacao = [notaDisciplina, completadas.length ? `perícias completadas: ${completadas.join(", ")}` : ""].filter(Boolean);
+    // Convicção e Pedra de Toque genéricas ("Livre para o mestre") somem; sem nenhuma, entra um par das sementes
+    const conviccoesEscritas = listaExtra(ficha, "conviccoes");
+    const pedrasEscritas = listaExtra(ficha, "pedrasToque");
+    const conviccoes = conviccoesEscritas.filter((x) => !generica(x));
+    const pedras = pedrasEscritas.filter((x) => !generica(x));
+    const tiradas = [...conviccoesEscritas, ...pedrasEscritas].filter(generica);
+    let notaPar = tiradas.length ? `sem conteúdo, saiu da ficha: ${tiradas.map((x) => `"${x}"`).join(", ")}` : "";
+    if (!conviccoes.length || !pedras.length) {
+      const [conv, pedra] = parSugerido(entrada.nome, cla.id);
+      if (!conviccoes.length) conviccoes.push(conv);
+      if (!pedras.length) pedras.push(`${pedra} (${conviccoes[0]})`);
+      notaPar = [NOTA_PAR_SUGERIDO, notaPar].filter(Boolean).join("; ");
+    }
+    ficha.extras.conviccoes = conviccoes;
+    ficha.extras.pedrasToque = pedras;
+    ficha.extras.notasCriacao = [notaDisciplina, completadas.length ? `perícias completadas: ${completadas.join(", ")}` : "", notaPar].filter(Boolean);
     ficha.inventario = ["celular", "chaves do refúgio", "documentos (talvez falsos)", "roupas escuras", ...predador.equipamento];
     return ficha;
   },
@@ -527,7 +598,7 @@ export const vtm5: Sistema = {
       `Potência de Sangue ${potenciaDe(ficha)}: ${textoPotencia(ficha)}`,
       `Perdição (gravidade ${ef.gravidade}): ${cla.perdicao}`,
       `Compulsão do clã: ${cla.compulsao ? `${cla.compulsao.nome} — ${cla.compulsao.efeito}` : "nenhuma (use as genéricas)"}`,
-      `Caça: ${paradaCaca(ficha)}`,
+      `Caça: ${paradaCaca(ficha)}${textoAlimentacao(ficha) ? ` · ${textoAlimentacao(ficha)} (cacar pede presa)` : ""}`,
       textoSangue(ficha),
       textoExtra(ficha, "ambicao") || textoExtra(ficha, "desejo") ? `Ambição: ${textoExtra(ficha, "ambicao") || "—"} · Desejo: ${textoExtra(ficha, "desejo") || "—"}` : "",
       lista("conviccoes") ? `Convicções: ${lista("conviccoes")}` : "",
@@ -537,6 +608,7 @@ export const vtm5: Sistema = {
       `Inventário: ${ficha.inventario.join(", ") || "nada"}`,
       `Condições: ${ficha.condicoes.join(", ") || "nenhuma"}${ficha.pv === 0 ? " (Saúde 0: torpor ou Morte Final, conforme o dano)" : ""}`,
       ficha.historia ? `História: ${ficha.historia}` : "",
+      ficha.extras.foraDoLivro === true ? "Ficha fora do padrão de criação, por escolha do jogador: respeite os números dela." : "",
     ];
     return linhas.filter(Boolean).join("\n");
   },
@@ -616,6 +688,10 @@ export const vtm5: Sistema = {
     const def = listaExtra(ficha, "defeitos");
     if (def.length) blocos.push({ tipo: "etiquetas", titulo: "Defeitos", itens: def });
     blocos.push({ tipo: "lista", titulo: "Inventário", itens: ficha.inventario });
+    const notas = listaExtra(ficha, "notasCriacao");
+    if (notas.length || ficha.extras.foraDoLivro === true) {
+      blocos.push({ tipo: "lista", titulo: "Notas da criação", itens: [...notas, ...(ficha.extras.foraDoLivro === true ? ["fora do livro de propósito (regra da casa)"] : [])] });
+    }
     if (ficha.condicoes.length) blocos.splice(1, 0, { tipo: "etiquetas", titulo: "Condições", itens: ficha.condicoes });
     return blocos;
   },
@@ -687,6 +763,18 @@ export const vtm5: Sistema = {
     };
   },
 
+  avisosCriacao: avisosDaCriacao,
+
+  mudarRecurso(ficha, id, delta) {
+    // só Mancha ganha regra própria: sem caixa livre, cada uma vira degeneração de Humanidade
+    if (ficha.sistema !== ID || id !== "mancha" || delta <= 0) return null;
+    sincronizar(ficha);
+    const x = aplicarManchas(ficha, delta);
+    sincronizar(ficha);
+    const m = ficha.recursos.mancha;
+    return { texto: `${m.rotulo} ${m.atual}/${m.max}`, ...(x.humanidadePerdida || x.atormentado ? { alerta: x.texto } : {}) };
+  },
+
   aposTeste(original, resultado) {
     if (original.sistema !== ID || resultado.sistema !== ID) return null;
     const res = resultado as ResultadoVtm;
@@ -729,14 +817,26 @@ export const vtm5: Sistema = {
       if (c.passou) {
         r.fome.atual = Math.min(r.fome.atual, c.fomeDepois);
         if (c.ressonancia) ficha.extras.ressonancia = { tipo: c.ressonancia.tipo, intensidade: c.ressonancia.intensidade, disciplinas: c.ressonancia.disciplinas };
+        // sangue de vampiro: sem Ressonância de mortal (ressonanciaDe não reconhece o tipo, então não dá bônus)
+        else if (c.vampirica) ficha.extras.ressonancia = { tipo: "vampirica", intensidade: "fugaz", disciplinas: [] };
         if (r.fome.atual < 5) ficha.condicoes = ficha.condicoes.filter((x) => !normalizar(x).startsWith("faminto"));
-        if (c.manchas) {
-          r.mancha.atual = Math.min(r.mancha.max, r.mancha.atual + c.manchas);
-          ficha.extras.mancha = r.mancha.atual;
-        }
+        // Manchas por matar e por quebrar a Exclusão de Presa: sem caixa livre, cada uma vira degeneração
+        const manchas = c.manchas + (c.presaExcluida ? 1 : 0);
+        if (manchas) aplicarManchas(ficha, manchas);
+        if (c.vontadeGasta) r.vontade.atual = Math.max(0, r.vontade.atual - c.vontadeGasta);
       }
-      if (c.compulsao) condicao(`Compulsão (${c.compulsao})`);
       sincronizar(ficha);
+      mudou = true;
+    }
+
+    // compulsão sorteada: uma por vez, com o nome padronizado que o leitor encurta ("Compulsão: Crueldade")
+    if (res.compulsao) {
+      // a que já estava fica guardada: se a rerrolagem com Força de Vontade desfizer a Falha Bestial, ela volta
+      const anterior = ficha.condicoes.find((x) => normalizar(x).startsWith("compuls"));
+      if (anterior) ficha.extras.compulsaoAnterior = anterior;
+      else delete ficha.extras.compulsaoAnterior;
+      ficha.condicoes = ficha.condicoes.filter((x) => !normalizar(x).startsWith("compuls"));
+      condicao(`Compulsão: ${res.compulsao.nome}`);
       mudou = true;
     }
 

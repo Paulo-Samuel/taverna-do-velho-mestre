@@ -19,6 +19,9 @@ import { ENTRADAS, type EntradaAlterarFicha } from "./esquemas";
 
 // Ficha: dano, cura, recursos, itens e condições; XP e nível; descanso; reputação (modo história).
 
+/** Progressão "compra": o XP é moeda do jogador (gasta na ficha) e o nível não sobe por subir_nivel. */
+export const xpDeCompra = (s: Sistema) => s.progressao === "compra";
+
 export function defAlterarFicha(ctx: ContextoFerramentas, campos: CamposComuns): DefFerramenta {
   const recursos = [...new Set(ctx.personagens.flatMap((p) => Object.entries(p.ficha.recursos).map(([id, r]) => `${id} (${r.rotulo})`)))];
   return {
@@ -46,7 +49,9 @@ export function defAlterarFicha(ctx: ContextoFerramentas, campos: CamposComuns):
 export function defConcederXp(ctx: ContextoFerramentas, campos: CamposComuns): DefFerramenta {
   return {
     name: "conceder_xp",
-    description: semTabelaDeXp(ctx.sistema)
+    description: xpDeCompra(ctx.sistema)
+      ? "XP é a moeda que o JOGADOR gasta na ficha (botão Gastar XP): 1 a 3 por sessão no fim da noite, +1 numa grande virada da história; o servidor só soma."
+      : semTabelaDeXp(ctx.sistema)
       ? `${ctx.sistema.nomeCurto} sobe de nível por marcos: XP aqui é só registro. Para subir de nível use subir_nivel.`
       : `Concede XP a personagens ao fim de um encontro, missão ou marco da história. O servidor soma, sobe de nível sozinho quando passar do limite (${ctx.sistema.nomeCurto}) e avisa a mesa.`,
     input_schema: {
@@ -115,9 +120,17 @@ export function aplicarMudancas(sistema: Sistema, ficha: Ficha, e: EntradaAltera
   if (e.pv) ficha.pv = Math.max(0, Math.min(ficha.pvMax, ficha.pv + e.pv));
   if (e.dinheiro) ficha.dinheiro = Math.max(0, ficha.dinheiro + e.dinheiro);
   const recursosMudados: string[] = [];
+  const alertas: string[] = [];
   for (const [id, delta] of Object.entries(e.recursos ?? {})) {
     const chave = ficha.recursos[id] ? id : Object.keys(ficha.recursos).find((k) => normalizar(ficha.recursos[k].rotulo).includes(normalizar(id)));
     if (!chave) continue;
+    // regra própria do sistema para o recurso (Vampiro: Mancha sem caixa livre vira degeneração)
+    const proprio = sistema.mudarRecurso?.(ficha, chave, delta) ?? null;
+    if (proprio) {
+      recursosMudados.push(proprio.texto);
+      if (proprio.alerta) alertas.push(proprio.alerta);
+      continue;
+    }
     const r = ficha.recursos[chave];
     r.atual = Math.max(0, Math.min(r.max, r.atual + delta));
     recursosMudados.push(`${r.rotulo} ${r.atual}/${r.max}`);
@@ -145,7 +158,7 @@ export function aplicarMudancas(sistema: Sistema, ficha: Ficha, e: EntradaAltera
     if (ficha.pv > 0) ficha.condicoes = ficha.condicoes.filter((c) => c !== "inconsciente");
   }
   sistema.aposMudancaDePv?.(ficha, pvAntes, "alterar_ficha");
-  return { pvAntes, recursosMudados };
+  return { pvAntes, recursosMudados, alertas };
 }
 
 /** Soma XP e sobe quantos níveis couberem. Devolve os resumos de cada nível. */
@@ -173,7 +186,7 @@ export const executoresFicha: Record<string, Executor> = {
   alterar_ficha: (ctx, entrada) => {
     const e = ENTRADAS.alterar_ficha.parse(entrada);
     const p = acharPersonagem(ctx, e.personagem);
-    const { pvAntes, recursosMudados } = aplicarMudancas(ctx.sistema, p.ficha, e);
+    const { pvAntes, recursosMudados, alertas } = aplicarMudancas(ctx.sistema, p.ficha, e);
     persistirPersonagem(ctx, p);
     sincronizarCombate(ctx);
     const f = p.ficha;
@@ -189,6 +202,7 @@ export const executoresFicha: Record<string, Executor> = {
       ganhou: e.ganhar_itens ?? [],
       perdeu: e.perder_itens ?? [],
       condicoes: f.condicoes,
+      ...(alertas.length ? { alertas } : {}),
     };
     const delta = f.pv - pvAntes;
     registrarDado(ctx, `${f.nome}: ${e.motivo}${delta ? ` (PV ${delta > 0 ? "+" : ""}${delta} → ${f.pv}/${f.pvMax})` : ""}`, resumo, p.id);
@@ -198,7 +212,8 @@ export const executoresFicha: Record<string, Executor> = {
   conceder_xp: (ctx, entrada) => {
     const e = ENTRADAS.conceder_xp.parse(entrada);
     const alvos = acharVarios(ctx, e.personagens);
-    const marcos = semTabelaDeXp(ctx.sistema);
+    const compra = xpDeCompra(ctx.sistema);
+    const marcos = semTabelaDeXp(ctx.sistema) && !compra;
     const resultados = [];
     for (const p of alvos) {
       let r: ReturnType<typeof aplicarXp>;
@@ -212,7 +227,9 @@ export const executoresFicha: Record<string, Executor> = {
       const f = p.ficha;
       const resumo = r.subiu
         ? r.resumos.join(" ")
-        : marcos
+        : compra
+          ? `${f.nome} ganhou ${e.quantidade} XP (total ${f.xp}; o jogador gasta na ficha).`
+          : marcos
           ? `${f.nome} anotou ${e.quantidade} XP (total ${f.xp}). Nível por marcos: o mestre decide quando subir.`
           : `${f.nome} ganhou ${e.quantidade} XP (total ${f.xp}${r.proximo !== null ? `; próximo nível em ${r.proximo}` : ""}).`;
       const dados = {
@@ -235,6 +252,11 @@ export const executoresFicha: Record<string, Executor> = {
 
   subir_nivel: (ctx, entrada) => {
     const e = ENTRADAS.subir_nivel.parse(entrada);
+    if (xpDeCompra(ctx.sistema)) {
+      throw new Error(
+        `${ctx.sistema.nomeCurto} não sobe de nível: o XP é do jogador (conceder_xp) e ele gasta na ficha. A Potência de Sangue só sobe com potencia_de_sangue (diablerie de alguém mais potente ou décadas).`,
+      );
+    }
     const p = acharPersonagem(ctx, e.personagem);
     if (p.ficha.nivel >= ctx.sistema.nivelMaximo) throw new Error(`${p.ficha.nome} já está no nível máximo (${ctx.sistema.nivelMaximo}).`);
     const xp = p.ficha.xp;

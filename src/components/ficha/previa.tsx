@@ -175,6 +175,29 @@ export function Resumo({ sistema, e, opcoes, modo, passos, irPara, previa, carre
   return (
     <>
       <Titulo ajuda="Confira antes de empurrar a porta. Depois disso, só o mestre (e os dados) mudam a ficha.">Tudo certo?</Titulo>
+      {/* fora das regras de criação do livro: avisa, não bloqueia; marcar "de propósito" vira nota para o mestre */}
+      {!copia && !carregando && previa?.ok && previa.avisos.length > 0 && (
+        <div className="mb-5 rounded-lg border border-ambar/50 bg-ambar/10 px-4 py-3 text-sm" role="note">
+          <p className="font-semibold text-ambar">Esta ficha está fora do livro</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-foreground/90">
+            {previa.avisos.map((a) => (
+              <li key={a}>{a}</li>
+            ))}
+          </ul>
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <label className="flex items-center gap-2 text-xs">
+              <input type="checkbox" name="fora_do_livro" value="1" className="accent-[var(--color-ambar,currentColor)]" />
+              É de propósito (regra da casa): o mestre respeita os números
+            </label>
+            {passos.includes("atributos") && (
+              <button type="button" onClick={() => irPara("atributos")} className="rounded px-1.5 py-1 text-xs text-ambar hover:bg-ambar/10 hover:underline">
+                ajustar atributos
+              </button>
+            )}
+          </div>
+          <p className="mt-1 text-[11px] text-muted">Dá para criar assim mesmo.</p>
+        </div>
+      )}
       <div className="grid gap-5 md:grid-cols-2">
         <div className="cartao self-start px-4 py-2">
           <p className="pb-1 pt-2 text-[11px] uppercase tracking-widest text-ambar-forte">O personagem</p>

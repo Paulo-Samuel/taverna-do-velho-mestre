@@ -80,7 +80,8 @@ describe("resolver: parada com Fome", () => {
   });
 
   it("Falha Bestial quando falha e um dado de Fome mostra 1", () => {
-    const r = comFaces([2, 3, 4, 1, 5], () => resolver(vera(), pedido));
+    // o último dado é o d10 da compulsão que a Falha Bestial sorteia
+    const r = comFaces([2, 3, 4, 1, 5, 7], () => resolver(vera(), pedido));
     assert.equal(r.rotuloGrau, "Falha Bestial");
     assert.equal(r.grau, "falha_critica");
     assert.equal(r.sucesso, false);
@@ -135,7 +136,7 @@ describe("rerrolar com Força de Vontade", () => {
 
   it("gasta 1 de Força de Vontade, troca só dados normais e recalcula o grau", () => {
     const ficha = vera();
-    const antes = comFaces([2, 3, 4, 1, 5], () => resolver(ficha, pedido));
+    const antes = comFaces([2, 3, 4, 1, 5, 7], () => resolver(ficha, pedido));
     assert.equal(antes.rotuloGrau, "Falha Bestial");
     assert.equal(motivoSemRerrolagem(ficha, antes), null);
     assert.equal(valeOferecerRerrolagem(ficha, antes), true);
@@ -162,7 +163,7 @@ describe("rerrolar com Força de Vontade", () => {
 
   it("só uma vez por teste, e nunca sem Força de Vontade, em iniciativa ou com sucesso", () => {
     const ficha = vera();
-    const antes = comFaces([2, 3, 4, 1, 5], () => resolver(ficha, pedido));
+    const antes = comFaces([2, 3, 4, 1, 5, 7], () => resolver(ficha, pedido));
     const { resultado: depois, ficha: nova } = comFaces([2, 2, 2], () => rerrolarComVontade(ficha, antes));
     assert.match(motivoSemRerrolagem(nova, depois) ?? "", /já foi rerrolado/);
     assert.throws(() => rerrolarComVontade(nova, depois), /já foi rerrolado/);

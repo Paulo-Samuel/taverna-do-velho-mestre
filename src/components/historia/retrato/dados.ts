@@ -152,14 +152,14 @@ export function figurinoDaClasse(classe?: string): string {
   if ((CLASSES_RETRATO as readonly string[]).includes(c)) return c;
   if (/palad|campe|champion|cavaleir|knight/.test(c)) return "paladino";
   if (/barbar/.test(c)) return "barbaro";
-  if (/necro|bruxo|warlock|ocult|lich/.test(c)) return "necromante";
-  if (/mago|wizard|feitic|sorcer|arcan|magus|invoc|alquim/.test(c)) return "mago";
-  if (/cler|cleric|sacerd|priest|druid|orac|monge|monk/.test(c)) return "clerigo";
+  if (/necro|bruxo|bruxa|warlock|ocult|lich/.test(c)) return "necromante";
+  if (/mago|maga\b|wizard|feitic|sorcer|arcan|magus|invoc|alquim/.test(c)) return "mago";
+  if (/cler|cleric|sacerd|priest|druid|orac|monge|monja|monk|padre|frei|freira|abade|abadessa|madre|curandeir/.test(c)) return "clerigo";
   if (/bard|skald|menestr/.test(c)) return "bardo";
   if (/caca|ranger|patrulh|batedor|hunter|explor/.test(c)) return "cacador";
-  if (/ladin|rogue|ladr|thief|assass|gatun|espi/.test(c)) return "ladino";
-  if (/merc|pistol|gunsl|soldad|veter/.test(c)) return "mercenario";
-  if (/guerr|fighter|lutad|gladi|warrior|combat/.test(c)) return "guerreiro";
+  if (/ladin|rogue|ladr|thief|assass|gatun|espi|saltead|bandid|contrabandi/.test(c)) return "ladino";
+  if (/merc|pistol|gunsl|soldad|veter|capang|jagun/.test(c)) return "mercenario";
+  if (/guerr|fighter|lutad|gladi|warrior|combat|guard|sentinel|vigia|milic/.test(c)) return "guerreiro";
   return "aldeao";
 }
 
@@ -521,4 +521,82 @@ export function normalizarRetrato(x: unknown): DadosRetrato | null {
     aura: o.aura === null || o.aura === undefined ? null : cor(o.aura, "#7fc8ff"),
     brinco: o.brinco === true,
   };
+}
+
+// ---------- NPCs do diário ----------
+
+// Pessoas que o mestre anota no diário também ganham rosto. O servidor gera o retrato ao anotar (dados.retrato) e a tela, para
+// NPCs antigos sem retrato, gera o mesmo na leitura: a semente é o nome, então os dois caminhos dão a mesma cara.
+
+const TITULO_FEMININO = /^(dona|senhora|sra|sinha|irma|madre|mae|tia|avo|lady|dama|rainha|princesa|condessa|duquesa|baronesa|marquesa|abadessa|sacerdotisa|madame|miss|mrs|senhorita)$/;
+const TITULO_MASCULINO = /^(dom|don|seu|senhor|sr|sinho|irmao|padre|frei|pai|tio|sir|lorde|lord|rei|principe|conde|duque|barao|marques|abade|sacerdote|mister|mr|monsieur)$/;
+
+/**
+ * Sexo provável de um NPC pelo nome: títulos ("Dona", "Irmã", "Dom", "Padre"), o artigo do aposto ("Berta, a taverneira") e a
+ * terminação do primeiro nome (-a feminino; -o, -os, -us masculino). Sem pista clara, null (o gerador sorteia pela semente).
+ */
+export function inferirSexo(nome: string): SexoRetrato | null {
+  const n = semAcento(nome);
+  // "Berta, a taverneira" / "Bruno, o ferreiro"
+  const aposto = /,\s*(a|o)\s+\S/.exec(n);
+  const palavras = n.split(/[\s,]+/).map((p) => p.replace(/[^a-z-]/g, "")).filter(Boolean);
+  if (!palavras.length) return null;
+  // artigo antes do nome: "a velha Maria", "o ferreiro"
+  let i = 0;
+  if (palavras[0] === "a" || palavras[0] === "o") {
+    if (palavras.length > 1) return palavras[0] === "a" ? "mulher" : "homem";
+    i = 1;
+  }
+  const primeira = palavras[i] ?? "";
+  if (TITULO_FEMININO.test(primeira)) return "mulher";
+  if (TITULO_MASCULINO.test(primeira)) return "homem";
+  if (aposto) return aposto[1] === "a" ? "mulher" : "homem";
+  if (primeira.length < 3) return null;
+  if (/a$/.test(primeira)) return "mulher";
+  if (/(o|os|us)$/.test(primeira)) return "homem";
+  return null;
+}
+
+/** Origem (raça) do NPC só se o texto disser; sem menção, humano (a maioria das pessoas de qualquer cenário). */
+function origemDoTexto(texto: string): string {
+  const t = semAcento(texto);
+  // "anã" sem acento vira "ana", que é nome de gente: fica de fora
+  const m = /\b(elf[oa]s?|elven|anao|anaos|anoes|dwarf|meio-orc|orcs?|orques?|halflings?|pequenin[oa]s?|tieflings?)\b/.exec(t);
+  if (!m) return "humano";
+  return /^an/.test(m[1]) ? "anao" : /^orq/.test(m[1]) ? "meio-orc" : (normalizarOrigem(m[1]) ?? "humano");
+}
+
+/** Começos de palavra que são ofício de verdade (no texto livre, "coração" e "mercado" não podem vestir ninguém de padre ou de mercenário). */
+const OFICIOS_NO_TEXTO =
+  /^(palad|cavaleir|barbar|necro|brux|mag[oa]s?$|feitic|alquim|sacerd|padre|frei|abade|abadessa|madre|monge|monja|druid|curandeir|clerig|bardo|barda|menestr|cacador|patrulh|batedor|explorador|ladr|assassin|gatun|espia|espiao|saltead|bandid|contrabandi|mercenari|pistoleir|soldad|veteran|capanga|jagun|guerreir|lutador|gladiad|guarda|sentinel|vigia|milician)/;
+
+/** Figurino pelo que o texto conta da pessoa ("Taverneiro, ex-soldado" veste malha); sem ofício reconhecível, aldeão. */
+function figurinoDoTexto(texto: string): string {
+  for (const palavra of semAcento(texto).split(/[^a-z]+/)) if (OFICIOS_NO_TEXTO.test(palavra)) return figurinoDaClasse(palavra);
+  return "aldeao";
+}
+
+export type BaseNpc ={ sexo?: unknown; oficio?: unknown; texto?: unknown; aparencia?: unknown };
+
+const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+
+/**
+ * Retrato determinístico de um NPC: semente no nome (sem diferença de maiúsculas), sexo informado ou inferido pelo nome,
+ * figurino pelo ofício (ou, sem ofício, pelo que o texto diz dele: "ex-soldado" veste malha) e raça só se o texto disser.
+ */
+export function retratoDoNpc(nome: string, base: BaseNpc = {}): DadosRetrato {
+  const oficio = str(base.oficio);
+  const descricao = [str(base.texto), str(base.aparencia)].filter(Boolean).join(" ");
+  const sexo = normalizarSexo(str(base.sexo)) ?? inferirSexo(nome) ?? undefined;
+  return gerarRetrato(`npc|${semAcento(nome)}`, {
+    sexo,
+    origem: origemDoTexto(`${oficio ?? ""} ${descricao}`),
+    classe: oficio ?? figurinoDoTexto(descricao),
+  });
+}
+
+/** O retrato salvo da entrada do diário ou, para NPC antigo sem retrato, o mesmo que o servidor teria gerado. */
+export function retratoDaEntrada(e: { titulo: string; texto?: string; dados?: Record<string, unknown> }): DadosRetrato {
+  const d = e.dados ?? {};
+  return normalizarRetrato(d.retrato) ?? retratoDoNpc(e.titulo, { sexo: d.sexo, oficio: d.oficio, texto: e.texto, aparencia: d.aparencia });
 }

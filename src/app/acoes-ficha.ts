@@ -22,7 +22,8 @@ export async function sugerirAtributos(sistemaId: string, classeId: string, meto
   }
 }
 
-export type PreviaFicha = { ok: true; ficha: Ficha; blocos: BlocoFicha[] } | { ok: false; erro: string };
+/** `avisos`: a ficha foge das regras de criação do livro (não bloqueia; o Resumo mostra e pergunta se é de propósito). */
+export type PreviaFicha = { ok: true; ficha: Ficha; blocos: BlocoFicha[]; avisos: string[] } | { ok: false; erro: string };
 
 /**
  * Monta a ficha como ela vai ficar, sem gravar nada, para o resumo final do formulário.
@@ -44,5 +45,11 @@ export async function previaFicha(form: FormData): Promise<PreviaFicha> {
   } catch (e) {
     console.warn(`[taverna] blocosFicha falhou na prévia (${r.sistema.id}):`, e);
   }
-  return { ok: true, ficha: r.ficha, blocos };
+  let avisos: string[] = [];
+  try {
+    avisos = r.sistema.avisosCriacao?.(r.entrada) ?? [];
+  } catch (e) {
+    console.warn(`[taverna] avisosCriacao falhou na prévia (${r.sistema.id}):`, e);
+  }
+  return { ok: true, ficha: r.ficha, blocos, avisos };
 }

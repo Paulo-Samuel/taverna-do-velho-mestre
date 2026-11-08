@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import * as identidade from "@/lib/cliente/identidade";
 import type { PersonagemVisivel } from "@/lib/mesa";
-import type { BlocoFicha } from "@/lib/sistemas/tipos";
+import { lerCondicao, textoCondicao } from "@/lib/sistemas/pf2e/condicoes";
+import type { BlocoFicha, CondicaoDef } from "@/lib/sistemas/tipos";
 
 // Ajuste manual da ficha na mesa: o mestre esqueceu o dano, a Força de Vontade gasta, a Fome... o jogador corrige.
 // Cliques seguidos se juntam (debounce) num só PATCH com variações; o valor aparece na hora e o SSE {e:"personagem"} confirma.
@@ -33,7 +34,8 @@ const somar = (a: Pendente, b: Pendente): Pendente => {
 };
 const vazio = (p: Pendente) => !p.pv && !p.dinheiro && Object.values(p.recursos).every((d) => !d);
 
-export type ValorMarcador = { rotulo: string; atual: number; min: number; max: number; pendente: boolean };
+/** `alemDoMax`: o "+" continua valendo no máximo (Mancha do Vampiro sem caixa livre vira degeneração no servidor). */
+export type ValorMarcador = { rotulo: string; atual: number; min: number; max: number; pendente: boolean; alemDoMax?: boolean };
 
 export type AjusteFicha = {
   editando: boolean;
@@ -51,6 +53,8 @@ export type AjusteFicha = {
   itens: string[];
   adicionar: (lista: Lista, texto: string) => void;
   remover: (lista: Lista, texto: string) => void;
+  /** troca um texto por outro num PATCH só ("amedrontado 1" → "amedrontado 2"); `de` vazio = só adiciona */
+  trocar: (lista: Lista, de: string | null, para: string | null) => void;
 };
 
 function aplicarOperacoes(base: string[], ops: Operacao[], lista: Lista): string[] {
@@ -153,14 +157,15 @@ export function useAjusteFicha(personagem: PersonagemVisivel, rotulos: { pv: str
     // Vampiro: as caixas de Mancha são o que sobra da Humanidade (o servidor recalcula igual)
     const humanidade = ficha.sistema === "vtm5" && alvo.id === "mancha" ? valor({ tipo: "recurso", id: "humanidade" }) : null;
     const max = humanidade ? Math.max(0, 10 - humanidade.atual) : r.max;
-    return { rotulo: r.rotulo, atual: Math.max(0, Math.min(max, r.atual + d)), min: 0, max, pendente: d !== 0 };
+    return { rotulo: r.rotulo, atual: Math.max(0, Math.min(max, r.atual + d)), min: 0, max, pendente: d !== 0, ...(humanidade ? { alemDoMax: true } : {}) };
   }
 
   function mudar(alvo: AlvoMarcador, delta: number) {
     if (bloqueado) return;
     const v = valor(alvo);
     if (!v) return;
-    const efetivo = Math.max(v.min, Math.min(v.max, v.atual + delta)) - v.atual;
+    // Mancha no máximo: o +1 vai assim mesmo (o servidor baixa a Humanidade e a caixa liberada recebe a Mancha)
+    const efetivo = v.alemDoMax && delta > 0 && v.atual >= v.max ? delta : Math.max(v.min, Math.min(v.max, v.atual + delta)) - v.atual;
     if (!efetivo) return;
     const extra: Pendente =
       alvo.tipo === "pv" ? { ...VAZIO, pv: efetivo } : alvo.tipo === "dinheiro" ? { ...VAZIO, dinheiro: efetivo } : { ...VAZIO, recursos: { [alvo.id]: efetivo } };
@@ -211,6 +216,18 @@ export function useAjusteFicha(personagem: PersonagemVisivel, rotulos: { pv: str
     void enviar({ [campo]: [op.texto] }, () => setOps((o) => o.filter((x) => x !== op)));
   }
 
+  /** Remove e adiciona no mesmo PATCH (o servidor aplica as adições e depois as remoções). */
+  function trocar(lista: Lista, de: string | null, para: string | null) {
+    if (bloqueado) return;
+    const novo = para?.trim().slice(0, 120) || null;
+    if (!de && !novo) return;
+    if (de && novo && de === novo) return;
+    const feitas: Operacao[] = [...(novo ? [{ lista, acao: "+" as const, texto: novo }] : []), ...(de ? [{ lista, acao: "-" as const, texto: de }] : [])];
+    setOps((o) => [...o, ...feitas]);
+    const campos = { condicoes: ["adicionarCondicoes", "removerCondicoes"], itens: ["adicionarItens", "removerItens"] }[lista];
+    void enviar({ ...(novo ? { [campos[0]]: [novo] } : {}), ...(de ? { [campos[1]]: [de] } : {}) }, () => setOps((o) => o.filter((x) => !feitas.includes(x))));
+  }
+
   return {
     editando,
     alternarEdicao: () => setEditando((e) => !e),
@@ -228,6 +245,7 @@ export function useAjusteFicha(personagem: PersonagemVisivel, rotulos: { pv: str
       if (t) operar({ lista, acao: "+", texto: t });
     },
     remover: (lista, texto) => operar({ lista, acao: "-", texto }),
+    trocar,
   };
 }
 
@@ -280,7 +298,14 @@ export function BotoesMarcador({
     <span className={`inline-flex items-center gap-1 ${classe}`}>
       <Botao rotulo={`Diminuir ${v.rotulo}${motivo}`} simbolo="−" desligado={ajuste.bloqueado || v.atual <= v.min} aoClicar={() => ajuste.mudar(alvo, -1)} grande={grande} classe={revelar} />
       {children}
-      <Botao rotulo={`Aumentar ${v.rotulo}${motivo}`} simbolo="+" desligado={ajuste.bloqueado || v.atual >= v.max} aoClicar={() => ajuste.mudar(alvo, 1)} grande={grande} classe={revelar} />
+      <Botao
+        rotulo={`Aumentar ${v.rotulo}${v.alemDoMax && v.atual >= v.max ? " (sem caixa livre: degeneração, −1 de Humanidade)" : ""}${motivo}`}
+        simbolo="+"
+        desligado={ajuste.bloqueado || (v.atual >= v.max && !v.alemDoMax)}
+        aoClicar={() => ajuste.mudar(alvo, 1)}
+        grande={grande}
+        classe={revelar}
+      />
     </span>
   );
 }
@@ -349,6 +374,110 @@ export function AdicionarNaLista({ ajuste, lista, dica }: { ajuste: AjusteFicha;
         ✕
       </button>
     </form>
+  );
+}
+
+/**
+ * Condição da lista fechada do sistema (PF2e): escolhe no seletor, acerta o valor no −/+ e grava com o nome canônico
+ * ("amedrontado 2"). Se a ficha já tem a mesma condição com outra grafia ("medo 1"), troca em vez de duplicar. Texto livre
+ * continua a um clique ("outra…").
+ */
+export function SeletorCondicao({ ajuste, condicoes, dica }: { ajuste: AjusteFicha; condicoes: CondicaoDef[]; dica: string }) {
+  const [aberto, setAberto] = useState(false);
+  const [livre, setLivre] = useState(false);
+  const [id, setId] = useState(condicoes[0]?.id ?? "");
+  const [valor, setValor] = useState(1);
+  if (!ajuste.editando) return null;
+  if (livre) return <AdicionarNaLista ajuste={ajuste} lista="condicoes" dica={dica} />;
+  const def = condicoes.find((c) => c.id === id) ?? condicoes[0];
+  if (!aberto || !def) {
+    return (
+      <button
+        type="button"
+        disabled={ajuste.bloqueado}
+        onClick={() => setAberto(true)}
+        className="mt-1 text-xs text-muted hover:text-ambar focus-visible:text-ambar focus-visible:outline-none disabled:text-muted/40"
+      >
+        + condição
+      </button>
+    );
+  }
+  const max = def.max ?? 9;
+  const existente = ajuste.condicoes.find((c) => lerCondicao(c, condicoes)?.def.id === def.id) ?? null;
+  function gravar(e: FormEvent) {
+    e.preventDefault();
+    if (!def) return;
+    ajuste.trocar("condicoes", existente, textoCondicao(def, def.temValor ? valor : null));
+    setAberto(false);
+  }
+  return (
+    <form onSubmit={gravar} className="mt-1.5 flex flex-wrap items-center gap-1.5" aria-label="Adicionar condição">
+      <select
+        autoFocus
+        value={def.id}
+        onChange={(e) => {
+          setId(e.target.value);
+          setValor(1);
+        }}
+        aria-label="Condição"
+        className="campo min-w-0 flex-1 px-2 py-1 text-xs"
+      >
+        {condicoes.map((c) => (
+          <option key={c.id} value={c.id} title={c.efeito}>
+            {c.nome}
+          </option>
+        ))}
+      </select>
+      {def.temValor && (
+        <span className="inline-flex items-center gap-1" aria-label="Valor">
+          <Botao rotulo="Diminuir valor" simbolo="−" desligado={valor <= 1} aoClicar={() => setValor((v) => Math.max(1, v - 1))} grande={false} />
+          <span className="min-w-5 text-center text-xs tabular-nums text-pergaminho" aria-live="polite">
+            {valor}
+          </span>
+          <Botao rotulo="Aumentar valor" simbolo="+" desligado={valor >= max} aoClicar={() => setValor((v) => Math.min(max, v + 1))} grande={false} />
+        </span>
+      )}
+      <button type="submit" className="btn-borda px-2 py-1 text-xs" disabled={ajuste.bloqueado}>
+        {existente ? "trocar" : "ok"}
+      </button>
+      <button type="button" className="px-1 text-xs text-muted hover:text-foreground" onClick={() => setLivre(true)}>
+        outra…
+      </button>
+      <button type="button" className="px-1 text-xs text-muted hover:text-foreground" onClick={() => setAberto(false)} aria-label="Fechar">
+        ✕
+      </button>
+      {def.efeito && <p className="w-full text-[11px] text-muted">{def.efeito}</p>}
+      {existente && <p className="w-full text-[11px] text-ambar">Já tem “{existente}”: grava no lugar dela.</p>}
+    </form>
+  );
+}
+
+/** −/+ no valor de uma condição que já está na ficha ("amedrontado 2" → 1 ou 3); no 0 ela sai. Precisa de `group/item`. */
+export function PassoCondicao({ ajuste, texto, condicoes }: { ajuste: AjusteFicha; texto: string; condicoes: CondicaoDef[] }) {
+  const lida = lerCondicao(texto, condicoes);
+  if (!lida || !lida.def.temValor || lida.valor === null) return null;
+  const { def, valor } = lida;
+  const max = def.max ?? 9;
+  const revelar = classeRevelar(ajuste, "item");
+  return (
+    <>
+      <Botao
+        rotulo={`Baixar ${def.nome}`}
+        simbolo="−"
+        desligado={ajuste.bloqueado}
+        aoClicar={() => ajuste.trocar("condicoes", texto, valor > 1 ? textoCondicao(def, valor - 1) : null)}
+        grande={false}
+        classe={revelar}
+      />
+      <Botao
+        rotulo={`Subir ${def.nome}`}
+        simbolo="+"
+        desligado={ajuste.bloqueado || valor >= max}
+        aoClicar={() => ajuste.trocar("condicoes", texto, textoCondicao(def, valor + 1))}
+        grande={false}
+        classe={revelar}
+      />
+    </>
   );
 }
 

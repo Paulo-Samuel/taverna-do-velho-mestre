@@ -3,7 +3,7 @@ import type { DefFerramenta } from "../tipos";
 import { DEF_NARRAR, DEF_SUGERIR_ACOES, defAtualizarCena } from "./cena";
 import { extensoesDe, jogadorRolaOsDados, semTabelaDeXp, type CamposComuns, type ContextoFerramentas } from "./contexto";
 import { DEF_ANOTAR_DIARIO } from "./diario";
-import { defAjustarReputacao, defAlterarFicha, defConcederXp, defDescansar, defSubirNivel } from "./ficha";
+import { defAjustarReputacao, defAlterarFicha, defConcederXp, defDescansar, defSubirNivel, xpDeCompra } from "./ficha";
 import { DEF_ROLAR_DADOS, defPedirTeste, defTeste } from "./testes";
 
 // A lista de ferramentas que o modelo recebe neste turno. A ORDEM é parte do contrato (os testes golden a fixam):
@@ -45,6 +45,7 @@ export function definirFerramentas(ctx: ContextoFerramentas): DefFerramenta[] {
   if (ctx.campanha.config.sugestoes !== false) lista.push(DEF_SUGERIR_ACOES);
   if (ctx.sistema.id === "historia") lista.push(defAjustarReputacao(campos));
   for (const ext of extensoesDe(ctx.sistema)) lista.push(...(ext.definicoes?.(ctx, campos) ?? []));
-  if (semTabelaDeXp(ctx.sistema)) lista.push(defSubirNivel(ctx, campos));
+  // por marcos o mestre sobe o nível; na progressão "compra" (XP gasto pelo jogador) não há subir_nivel
+  if (semTabelaDeXp(ctx.sistema) && !xpDeCompra(ctx.sistema)) lista.push(defSubirNivel(ctx, campos));
   return lista;
 }

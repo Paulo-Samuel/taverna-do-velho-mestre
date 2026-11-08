@@ -1,5 +1,6 @@
 import "server-only";
-import { acharPersonagem, type ExtensaoFerramentas } from "./contexto";
+import { sincronizarCombate } from "./combate";
+import { acharPersonagem, persistirPersonagem, registrarDado, type ExtensaoFerramentas } from "./contexto";
 import { ENTRADAS } from "./esquemas";
 import { comFicha, testeNaHora } from "./testes";
 
@@ -13,6 +14,11 @@ export const extensaoVampiro: ExtensaoFerramentas = {
   camposTeste: {
     custo_despertar: { type: "integer", minimum: 0, maximum: 3, description: "Despertares do poder testado (SANGUE nas regras). Omita para o padrão." },
     nivel_poder: { type: "integer", minimum: 1, maximum: 5, description: "Nível do poder testado (1–5)." },
+    compulsao: {
+      type: "string",
+      enum: ["serve", "contra", "sortear"],
+      description: "Com compulsão ativa: serve (a ação a satisfaz, sem −2) ou contra (padrão, −2). sortear: Crítico Sujo também sorteia uma.",
+    },
   },
   notaTeste: " Vampiro: com disciplina na parada, o Despertar do poder vem junto. Caça, Frenesi, Remorso, Surto e Despertar avulso têm ferramentas próprias.",
   resultadoComFicha: true,
@@ -76,6 +82,10 @@ export const extensaoVampiro: ExtensaoFerramentas = {
           matar: { type: "boolean", description: "true se o vampiro drena a vítima até a morte." },
           manchas: { type: "integer", minimum: 0, maximum: 5, description: "Manchas por matar (padrão 2; mais para inocentes ou contra as Convicções)." },
           parada: { type: "string", description: "Troca a parada de caça, ex.: \"Destreza + Briga\" (tipos de predador sem teste ou caça fora do costume)." },
+          presa: {
+            type: "string",
+            description: "Quem é a vítima: \"mortal\", \"doador que consente\", \"morador local\", \"animal\", \"vampiro\". Obrigatório com Exclusão de Presa ou Fazendeiro na ficha.",
+          },
           motivo: { type: "string", description: "Onde e como caça, mostrado no cartão." },
         },
         additionalProperties: false,
@@ -87,6 +97,22 @@ export const extensaoVampiro: ExtensaoFerramentas = {
       input_schema: {
         type: "object",
         properties: { personagem: campos.personagem },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "potencia_de_sangue",
+      description:
+        "Potência de Sangue +1: só por diablerie de alguém mais potente (diga potencia_vitima) ou por décadas passadas na história. Nunca como prêmio de missão: XP é com conceder_xp.",
+      input_schema: {
+        type: "object",
+        properties: {
+          personagem: campos.personagem,
+          motivo: { type: "string", enum: ["diablerie", "decadas"], description: "diablerie (drenou a alma de outro vampiro) ou decadas (o tempo passou na história)." },
+          potencia_vitima: { type: "integer", minimum: 0, maximum: 10, description: "Diablerie: a Potência de Sangue da vítima (precisa ser maior que a do personagem)." },
+          detalhe: { type: "string", description: "Quem foi drenado ou quanto tempo passou, mostrado no cartão." },
+        },
+        required: ["motivo"],
         additionalProperties: false,
       },
     },
@@ -113,7 +139,13 @@ export const extensaoVampiro: ExtensaoFerramentas = {
     cacar: (ctx, entrada) => {
       const e = ENTRADAS.cacar.parse(entrada);
       const p = acharPersonagem(ctx, e.personagem);
-      const opcoes = { matar: Boolean(e.matar), ...(e.manchas !== undefined ? { manchas: e.manchas } : {}), ...(e.ressonancia ? { ressonancia: e.ressonancia } : {}), ...(e.intensidade ? { intensidade: e.intensidade } : {}) };
+      const opcoes = {
+        matar: Boolean(e.matar),
+        ...(e.manchas !== undefined ? { manchas: e.manchas } : {}),
+        ...(e.ressonancia ? { ressonancia: e.ressonancia } : {}),
+        ...(e.intensidade ? { intensidade: e.intensidade } : {}),
+        ...(e.presa?.trim() ? { presa: e.presa.trim() } : {}),
+      };
       const teste = e.parada?.trim() ? `Caça: ${e.parada.trim()}` : "Caça";
       return comFicha(p, testeNaHora(ctx, p, { teste, alvo: e.dificuldade ?? 3, motivo: e.motivo || "Caçar", opcoes }));
     },
@@ -121,6 +153,30 @@ export const extensaoVampiro: ExtensaoFerramentas = {
       const e = ENTRADAS.teste_de_remorso.parse(entrada);
       const p = acharPersonagem(ctx, e.personagem);
       return comFicha(p, testeNaHora(ctx, p, { teste: "Remorso", motivo: "Fim da noite: o peso do que fez" }));
+    },
+    potencia_de_sangue: (ctx, entrada) => {
+      const e = ENTRADAS.potencia_de_sangue.parse(entrada);
+      const p = acharPersonagem(ctx, e.personagem);
+      const antes = p.ficha.nivel;
+      if (antes >= ctx.sistema.nivelMaximo) throw new Error(`${p.ficha.nome} já tem Potência de Sangue ${antes}, o máximo.`);
+      if (e.motivo === "diablerie") {
+        if (e.potencia_vitima === undefined) throw new Error("Diablerie: diga potencia_vitima, a Potência de Sangue de quem foi drenado.");
+        if (e.potencia_vitima <= antes) {
+          throw new Error(
+            `Diablerie de alguém com Potência ${e.potencia_vitima} não engrossa o sangue de ${p.ficha.nome} (Potência ${antes}): só vítima mais potente sobe a Potência. Narre o gosto e as consequências (aura manchada, Manchas) sem mexer na Potência.`,
+          );
+        }
+      }
+      const xp = p.ficha.xp;
+      const r = ctx.sistema.subirNivel(p.ficha);
+      p.ficha = { ...r.ficha, xp };
+      persistirPersonagem(ctx, p);
+      sincronizarCombate(ctx);
+      const porque = e.motivo === "diablerie" ? `diablerie (vítima com Potência ${e.potencia_vitima})` : "décadas de não-vida";
+      const motivo = [porque, e.detalhe.trim()].filter(Boolean).join(": ");
+      const dados = { tipo: "xp", personagem: p.ficha.nome, motivo, total: xp, nivel: p.ficha.nivel, subiuPara: p.ficha.nivel, resumo: r.resumo };
+      registrarDado(ctx, `${p.ficha.nome}: Potência de Sangue ${antes} → ${p.ficha.nivel} — ${motivo}`, dados, p.id);
+      return dados;
     },
   },
 };

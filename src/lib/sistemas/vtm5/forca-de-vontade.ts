@@ -78,13 +78,24 @@ export function rerrolarComVontade(original: Ficha, resultado: ResultadoTeste, e
   const antes = vontadeDe(original);
   vontade.atual = antes - 1;
 
+  // a rerrolagem desfez a Falha Bestial: a compulsão sorteada (já gravada pelo aposTeste) sai da ficha e do cartão
+  const semCompulsao = r.compulsao && !av.bestial ? r.compulsao : null;
+  if (semCompulsao) {
+    ficha.condicoes = ficha.condicoes.filter((c) => c !== `Compulsão: ${semCompulsao.nome}`);
+    // a compulsão que a Falha Bestial tinha trocado volta
+    const anterior = typeof ficha.extras.compulsaoAnterior === "string" ? ficha.extras.compulsaoAnterior : "";
+    if (anterior && !ficha.condicoes.includes(anterior)) ficha.condicoes.push(anterior);
+    delete ficha.extras.compulsaoAnterior;
+  }
+
   // o gasto e as trocas ficam em `rerrolado` (o cartão desenha a linha da Força de Vontade); aqui só o grau novo
-  const notasAntigas = (r.detalhes ?? "").split(" · ").filter((n) => n && !NOTA_DE_GRAU.test(n));
+  const notasAntigas = (r.detalhes ?? "").split(" · ").filter((n) => n && !NOTA_DE_GRAU.test(n) && !(semCompulsao && n.startsWith("Compulsão sorteada")));
   const detalhes = [...notasAntigas, ...notasDoGrau(av, r.alvo, fome.length, fome.length > 0)].filter(Boolean).join(" · ") || undefined;
   return {
     ficha,
     resultado: {
       ...r,
+      ...(semCompulsao ? { compulsao: undefined, efeitos: r.efeitos?.filter((x) => !x.texto.startsWith("Compulsão:")) } : {}),
       dados: [...novos, ...fome],
       total: av.total,
       grau: av.grau,
@@ -102,5 +113,5 @@ export function textoRerrolagemParaMestre(r: ResultadoVtm): string {
   const x = r.rerrolado;
   if (!x) return "";
   const n = x.dados.length;
-  return `${r.personagem} gastou 1 de Força de Vontade (${x.vontade.antes} → ${x.vontade.depois}, dano superficial, já aplicado) e rerrolou ${n} dado${n > 1 ? "s" : ""} ${n > 1 ? "normais" : "normal"} (${x.dados.map((t) => `${t.antes}→${t.depois}`).join(", ")}): antes ${x.grauAntes}, agora ${r.rotuloGrau}. Narre o esforço de vontade; não role de novo.`;
+  return `${r.personagem} gastou 1 de Força de Vontade (${x.vontade.antes} → ${x.vontade.depois}, dano superficial, já aplicado) e rerrolou ${n} dado${n > 1 ? "s" : ""} ${n > 1 ? "normais" : "normal"} (${x.dados.map((t) => `${t.antes}→${t.depois}`).join(", ")}): antes ${x.grauAntes}, agora ${r.rotuloGrau}.${x.grauAntes === "Falha Bestial" && r.grau !== "falha_critica" ? " A compulsão sorteada na Falha Bestial saiu da ficha." : ""} Narre o esforço de vontade; não role de novo.`;
 }

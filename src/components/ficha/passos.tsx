@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import type { AventuraPublica } from "@/lib/aventuras/tipos";
 import { DIFICULDADES, FOCOS, MAX_FOCO_LIVRE, MAX_INSTRUCOES, TAMANHOS, type Dificuldade, type TamanhoNarracao } from "@/lib/mestre/estilo";
 import { exemploDoCampo, sementesDe, type ParSemente } from "@/lib/sistemas/sementes";
+import { atributosIniciaisPf2, periciasCriacaoPf2 } from "@/lib/sistemas/pf2e/criacao";
 import type { AncestralidadeDef, ClasseDef, OpcaoCriacao, SistemaPublico } from "@/lib/sistemas/tipos";
 import { temaDoSistema } from "@/lib/temas";
 import {
@@ -708,10 +709,50 @@ export function PassoAtributos({ sistema, e, carregando, sugerir, editar, sugest
 
 /* ---------- 6. perícias ---------- */
 
+export type PericiasDoPasso = {
+  /** perícias que já vêm treinadas, com de onde vêm ("Mago", "antecedente Erudito", "Linhagem: Dracônica") */
+  fixas: { id: string; origem: string }[];
+  /** quantas o jogador escolhe além das fixas */
+  limite: number;
+  /** como o limite foi montado ("2 da classe +4 de INT"), quando o sistema soma algo */
+  conta?: string;
+};
+
+/** Atributos que a ficha vai usar: os digitados, ou os que o sistema sugere pelo método (o servidor faz igual). */
+function atributosDoPasso(sistema: SistemaPublico, e: Escolhas): Record<string, number> | undefined {
+  const todos = sistema.atributos.length > 0 && sistema.atributos.every((a) => (e.atributos[a.id] ?? "").trim() !== "" && Number.isFinite(Number(e.atributos[a.id])));
+  if (todos) return Object.fromEntries(sistema.atributos.map((a) => [a.id, Number(e.atributos[a.id])]));
+  return sistema.id === "pf2e" ? atributosIniciaisPf2(e.classe, e.metodo) : undefined;
+}
+
+/**
+ * Perícias da criação: as fixas (com origem) e o limite real. PF2e conta classe + antecedente + subclasse e soma a INT final
+ * (+1 por fixa repetida); outros sistemas usam `limitePericias` (base ou valor da classe + atributo) ou `periciasEscolhiveis`.
+ */
+export function periciasDoPasso(sistema: SistemaPublico, e: Escolhas): PericiasDoPasso {
+  const classe = sistema.classes.find((c) => c.id === e.classe);
+  if (sistema.id === "pf2e") {
+    const r = periciasCriacaoPf2({ classe: e.classe, ancestralidade: e.ancestralidade, antecedente: e.antecedente || undefined, atributos: atributosDoPasso(sistema, e), extras: e.extras });
+    return { fixas: r.fixas, limite: r.limite, conta: r.conta };
+  }
+  const fixas = (classe?.pericias ?? []).map((id) => ({ id, origem: classe?.nome ?? sistema.rotulos.classe }));
+  const regra = sistema.limitePericias;
+  if (!regra) return { fixas, limite: sistema.periciasEscolhiveis ?? 0 };
+  const base = regra.porClasse?.[e.classe] ?? regra.base;
+  let soma = 0;
+  if (regra.somaAtributo) {
+    const valor = atributosDoPasso(sistema, e)?.[regra.somaAtributo] ?? (regra.modD20 ? 10 : 0);
+    soma = regra.modD20 ? Math.floor((valor - 10) / 2) : valor;
+  }
+  const abrev = regra.somaAtributo ? abrevDe(sistema, regra.somaAtributo) : "";
+  return { fixas, limite: Math.max(0, base + soma), conta: regra.somaAtributo ? `${base} ${sinal(soma)} de ${abrev}` : undefined };
+}
+
 export function PassoPericias({ sistema, e, atualizar }: PropsPasso) {
   const [busca, setBusca] = useState("");
-  const limite = sistema.periciasEscolhiveis ?? 0;
-  const daClasse = new Set(sistema.classes.find((c) => c.id === e.classe)?.pericias ?? []);
+  const { fixas, limite, conta } = periciasDoPasso(sistema, e);
+  const daClasse = new Set(fixas.map((f) => f.id));
+  const origemDe = (id: string) => fixas.find((f) => f.id === id)?.origem ?? sistema.rotulos.classe.toLowerCase();
   const escolhidas = e.pericias.filter((p) => !daClasse.has(p));
   const lista = sistema.pericias.filter((p) => casaBusca(busca, p.nome, p.descricao, p.atributo && abrevDe(sistema, p.atributo)));
   const grupos = agrupar(lista, (p) => (p.atributo ? abrevDe(sistema, p.atributo) : ""));
@@ -727,15 +768,24 @@ export function PassoPericias({ sistema, e, atualizar }: PropsPasso) {
       <Titulo
         ajuda={
           <>
-            Escolha até <span className="text-ambar">{limite}</span> além das que {sistema.rotulos.classe.toLowerCase()} já dá.
+            Escolha até <span className="text-ambar">{limite}</span> além das que já vêm de graça
+            {conta ? <span className="text-muted"> ({conta})</span> : null}.
           </>
         }
-        acao={<BotaoSortear onClick={() => atualizar({ pericias: sortearPericias(sistema, e.classe) })} titulo="Sorteia as perícias livres" />}
+        acao={
+          <BotaoSortear
+            onClick={() => atualizar({ pericias: sortearPericias({ ...sistema, periciasEscolhiveis: limite }, e.classe).filter((p) => !daClasse.has(p)).slice(0, limite) })}
+            titulo="Sorteia as perícias livres"
+          />
+        }
       >
         Perícias
       </Titulo>
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <span className={`rounded-full border px-3 py-1 text-sm tabular-nums ${escolhidas.length === limite ? "border-ambar text-ambar" : "border-border text-muted"}`}>
+        <span
+          className={`rounded-full border px-3 py-1 text-sm tabular-nums ${escolhidas.length === limite ? "border-ambar text-ambar" : "border-border text-muted"}`}
+          aria-label={`${escolhidas.length} de ${limite} perícias escolhidas`}
+        >
           {escolhidas.length}/{limite}
         </span>
         {sistema.pericias.length > 12 && (
@@ -759,7 +809,7 @@ export function PassoPericias({ sistema, e, atualizar }: PropsPasso) {
                     type="button"
                     aria-pressed={ativa}
                     disabled={fixa || cheio}
-                    title={fixa ? `Já vem de ${sistema.rotulos.classe.toLowerCase()}` : p.descricao}
+                    title={fixa ? `Já vem de ${origemDe(p.id)}` : p.descricao}
                     onClick={() => alternar(p.id)}
                     className={`min-h-10 rounded-full border px-3 py-1 text-sm transition disabled:cursor-not-allowed sm:min-h-8 ${
                       fixa
@@ -780,7 +830,23 @@ export function PassoPericias({ sistema, e, atualizar }: PropsPasso) {
           </section>
         ))}
       </div>
-      {daClasse.size > 0 && <p className="mt-3 text-xs text-muted">Em verde: já vêm de {sistema.rotulos.classe.toLowerCase()}.</p>}
+      {daClasse.size > 0 && (
+        <div className="mt-3 text-xs text-muted">
+          <p>Em verde: já vêm de graça.</p>
+          <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+            {fixas.map((f) => (
+              <li key={f.id}>
+                <span className="text-musgo">✓ {sistema.pericias.find((p) => p.id === f.id)?.nome ?? f.id}</span> vem de {f.origem}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {escolhidas.length < limite && (
+        <p className="mt-2 text-xs text-ambar" role="status">
+          Faltam {limite - escolhidas.length} de {limite}: se deixar assim, a ficha completa com as sugeridas {sistema.rotulos.classe.toLowerCase() === "classe" ? "da classe" : `de ${sistema.rotulos.classe.toLowerCase()}`}.
+        </p>
+      )}
     </>
   );
 }

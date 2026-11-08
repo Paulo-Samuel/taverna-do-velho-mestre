@@ -4,7 +4,7 @@ import { descreverRolagem, rolar } from "../../dados";
 import { normalizar, sinal } from "../../sistemas/comum";
 import type { Cena, Combatente, Sistema } from "../../sistemas/tipos";
 import { publicar } from "../../tempo-real";
-import { registrarDado, type ContextoFerramentas } from "./contexto";
+import { persistirPersonagem, registrarDado, type ContextoFerramentas } from "./contexto";
 import type { EntradaCombate, EntradaCombatente } from "./esquemas";
 
 // Motor do rastreador de combate (a parte `combate` de atualizar_cena): iniciativa, ordem, vez, dano e condições dos NPCs.
@@ -25,16 +25,100 @@ export function gravarCena(ctx: ContextoFerramentas, cena: Cena) {
 
 const ehPersonagem = (ctx: ContextoFerramentas, c: Combatente) => c.aliado && ctx.personagens.some((p) => p.ficha.nome === c.nome);
 
-/** Copia PV, defesa e condições das fichas para as linhas dos personagens no rastreador. */
+/**
+ * Turnos que terminaram e ainda não tiveram o "fim do turno" aplicado (PF2e: amedrontado cai 1). passarVez só mexe no objeto do
+ * combate; quem tem o contexto (sincronizarPersonagens, chamado logo depois por atualizar_cena) aplica e grava.
+ */
+const fimDeTurnoPendente = new WeakMap<Combate, string[]>();
+
+/** Aplica o fim do turno de quem acabou de agir: na ficha (personagem) ou na linha do rastreador (NPC). */
+function aplicarFimDoTurno(ctx: ContextoFerramentas, combate: Combate) {
+  const pendentes = fimDeTurnoPendente.get(combate);
+  if (!pendentes?.length) return;
+  fimDeTurnoPendente.delete(combate);
+  const fimDoTurno = ctx.sistema.fimDoTurno;
+  if (!fimDoTurno) return;
+  for (const nome of pendentes) {
+    const c = combate.ordem.find((x) => x.nome === nome);
+    if (!c) continue;
+    const p = ehPersonagem(ctx, c) ? ctx.personagens.find((x) => x.ficha.nome === c.nome) : undefined;
+    const r = fimDoTurno(p ? p.ficha.condicoes : (c.condicoes ?? []));
+    if (!r.mudancas.length) continue;
+    if (p) {
+      p.ficha.condicoes = r.condicoes;
+      persistirPersonagem(ctx, p);
+      const motivo = `fim do turno: ${r.mudancas.join(", ")}`;
+      registrarDado(
+        ctx,
+        `${p.ficha.nome}: ${motivo}`,
+        { tipo: "ficha", personagem: p.ficha.nome, motivo, pvAntes: p.ficha.pv, pv: p.ficha.pv, pvMax: p.ficha.pvMax, dinheiro: p.ficha.dinheiro, recursos: [], ganhou: [], perdeu: [], condicoes: p.ficha.condicoes },
+        p.id,
+      );
+    } else c.condicoes = r.condicoes;
+  }
+}
+
+/** Contadores de ações do sistema (PF2e: 3 ações) para quem ainda não tem. */
+function iniciarContadores(sistema: Sistema, combate: Combate) {
+  if (!sistema.combate?.acoes) return;
+  for (const c of combate.ordem) {
+    c.acoes ??= 0;
+    c.ataques ??= 0;
+  }
+}
+
+/**
+ * Copia PV, defesa e condições das fichas para as linhas dos personagens no rastreador, aplica o fim do turno pendente e
+ * calcula a defesa com as condições de todo mundo (PF2e: amedrontado, desprevenido...).
+ */
 export function sincronizarPersonagens(ctx: ContextoFerramentas, combate: Combate) {
+  aplicarFimDoTurno(ctx, combate);
+  iniciarContadores(ctx.sistema, combate);
   for (const c of combate.ordem) {
     const p = ehPersonagem(ctx, c) ? ctx.personagens.find((x) => x.ficha.nome === c.nome) : undefined;
-    if (!p) continue;
-    c.pv = p.ficha.pv;
-    c.pvMax = p.ficha.pvMax;
-    c.defesa = p.ficha.defesa || null;
-    c.condicoes = [...p.ficha.condicoes];
+    if (p) {
+      c.pv = p.ficha.pv;
+      c.pvMax = p.ficha.pvMax;
+      c.defesa = p.ficha.defesa || null;
+      c.condicoes = [...p.ficha.condicoes];
+    }
+    const efetiva = ctx.sistema.defesaComCondicoes && c.defesa ? ctx.sistema.defesaComCondicoes(c.defesa, c.condicoes ?? []) : null;
+    if (efetiva && efetiva.valor !== c.defesa) {
+      c.defesaEfetiva = efetiva.valor;
+      c.defesaNota = efetiva.detalhe;
+    } else {
+      delete c.defesaEfetiva;
+      delete c.defesaNota;
+    }
   }
+}
+
+/** Ataques que `nome` já fez no turno dele (0 fora do turno, sem combate ou em sistema que não conta ações). */
+export function ataquesNoTurno(ctx: ContextoFerramentas, nome: string): number {
+  if (!ctx.sistema.combate?.acoes) return 0;
+  const combate = cenaAtual(ctx).combate;
+  if (!combate?.ativo) return 0;
+  const c = combate.ordem[combate.vez];
+  return c && normalizar(c.nome) === normalizar(nome) ? (c.ataques ?? 0) : 0;
+}
+
+/**
+ * Conta um ataque de `nome` no rastreador (o 1º, 2º, 3º... do turno) e 1 ação gasta. Só vale na vez dele: ataque fora da vez
+ * (reação) não entra na conta. Devolve true quando contou.
+ */
+export function contarAtaque(ctx: ContextoFerramentas, nome: string, numero: number): boolean {
+  const acoes = ctx.sistema.combate?.acoes;
+  if (!acoes) return false;
+  const cena = cenaAtual(ctx);
+  const combate = cena.combate;
+  if (!combate?.ativo) return false;
+  const c = combate.ordem[combate.vez];
+  if (!c || normalizar(c.nome) !== normalizar(nome)) return false;
+  // o número do ataque manda: "Ataque 1" forçado pelo mestre reinicia a conta (o próximo sai como 2º)
+  c.ataques = Math.max(0, numero);
+  c.acoes = Math.min(acoes, (c.acoes ?? 0) + 1);
+  gravarCena(ctx, cena);
+  return true;
 }
 
 /** Depois de mexer em ficha durante um combate, o rastreador acompanha. */
@@ -125,14 +209,53 @@ function ordenar(lista: Rolado[]): Rolado[] {
   return [...lista].sort((a, b) => (b.iniciativa ?? 0) - (a.iniciativa ?? 0) || b.bonus - a.bonus || Number(Boolean(b.aliado)) - Number(Boolean(a.aliado)));
 }
 
-const semBonus = ({ nome, iniciativa, pv, pvMax, defesa, condicoes, aliado }: Rolado): Combatente => ({ nome, iniciativa, pv, pvMax, defesa, condicoes, aliado });
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const semBonus = ({ bonus, detalhe, ...c }: Rolado): Combatente => c;
 
 /** Inimigo caído não age; personagem caído age (testes contra a morte, ou o equivalente do sistema). */
 export const podeAgir = (c: Combatente) => c.aliado || c.pv === null || c.pv === undefined || c.pv > 0;
 
+/**
+ * Passa a vez para o próximo que pode agir. Quem termina o turno fica anotado para o fim do turno (aplicado em
+ * sincronizarPersonagens) e os contadores de ações/ataques (quando o sistema conta) zeram para quem sai e para quem entra.
+ */
 export function passarVez(combate: Combate) {
   const n = combate.ordem.length;
   if (!n) return;
+  const saindo = combate.ordem[combate.vez];
+  if (saindo) {
+    fimDeTurnoPendente.set(combate, [...(fimDeTurnoPendente.get(combate) ?? []), saindo.nome]);
+    if (saindo.acoes !== undefined) saindo.acoes = 0;
+    if (saindo.ataques !== undefined) saindo.ataques = 0;
+  }
+  avancarVez(combate);
+  const entrando = combate.ordem[combate.vez];
+  if (entrando) {
+    if (entrando.acoes !== undefined) entrando.acoes = 0;
+    if (entrando.ataques !== undefined) entrando.ataques = 0;
+  }
+}
+
+/**
+ * Dá a vez direto para a posição `i` (o mestre escolheu quem age). Se a vez muda de mão, é um fim de turno como o de passarVez:
+ * quem sai fica anotado para o fim do turno e os contadores de ações/ataques zeram para quem sai e para quem entra.
+ */
+export function darVez(combate: Combate, i: number) {
+  if (i < 0 || i >= combate.ordem.length || i === combate.vez) return;
+  const saindo = combate.ordem[combate.vez];
+  if (saindo) {
+    fimDeTurnoPendente.set(combate, [...(fimDeTurnoPendente.get(combate) ?? []), saindo.nome]);
+    if (saindo.acoes !== undefined) saindo.acoes = 0;
+    if (saindo.ataques !== undefined) saindo.ataques = 0;
+  }
+  combate.vez = i;
+  const entrando = combate.ordem[i];
+  if (entrando.acoes !== undefined) entrando.acoes = 0;
+  if (entrando.ataques !== undefined) entrando.ataques = 0;
+}
+
+function avancarVez(combate: Combate) {
+  const n = combate.ordem.length;
   for (let passo = 0; passo < n; passo++) {
     combate.vez += 1;
     if (combate.vez >= n) {
@@ -153,7 +276,9 @@ export function iniciarCombate(ctx: ContextoFerramentas, cena: Cena, inimigos: E
   for (const e of inimigos) rolados.push(rolarInimigo(ctx, e, nomeLivre(rolados.map((r) => r.nome), e.nome.trim())));
   const ordem = ordenar(rolados);
   const combate: Combate = { ativo: true, rodada: 1, vez: 0, ordem: ordem.map(semBonus) };
-  if (!podeAgir(combate.ordem[0] ?? { nome: "", iniciativa: null })) passarVez(combate);
+  iniciarContadores(ctx.sistema, combate);
+  // ninguém terminou turno ainda: só pula quem não pode agir (sem fim de turno)
+  if (!podeAgir(combate.ordem[0] ?? { nome: "", iniciativa: null })) avancarVez(combate);
   cena.combate = combate;
   registrarDado(ctx, `Iniciativa: ${ordem.map((r) => `${r.nome} (${r.iniciativa})`).join(", ")}`, {
     tipo: "iniciativa",
@@ -190,6 +315,7 @@ export function atualizarCombate(ctx: ContextoFerramentas, combate: Combate, e: 
   if (novos.length) {
     const comBonus = combate.ordem.map((c) => ({ ...c, bonus: 0, detalhe: "" }));
     combate.ordem = ordenar([...comBonus, ...novos]).map(semBonus);
+    iniciarContadores(ctx.sistema, combate);
     registrarDado(ctx, `Reforços na iniciativa: ${novos.map((r) => `${r.nome} ${r.iniciativa}`).join(", ")}`, {
       tipo: "iniciativa",
       rodada: combate.rodada,

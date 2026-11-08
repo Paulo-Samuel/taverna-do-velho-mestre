@@ -3,7 +3,7 @@ import { testesPendentes, type Personagem } from "../../db";
 import { descreverRolagem, rolar } from "../../dados";
 import type { PedidoTeste, ResultadoTeste } from "../../sistemas/tipos";
 import type { DefFerramenta } from "../tipos";
-import { sincronizarCombate } from "./combate";
+import { ataquesNoTurno, contarAtaque, sincronizarCombate } from "./combate";
 import {
   acharPersonagem,
   cobrarNarracao,
@@ -90,14 +90,30 @@ export const DEF_ROLAR_DADOS: DefFerramenta = {
 };
 
 /** Custo de Despertar e nível do poder vindos do teste/pedir_teste (só sistemas que declaram esses campos); undefined quando nada foi dito. */
-function opcoesDoPoder(e: { custo_despertar?: number; nivel_poder?: number }): Record<string, unknown> | undefined {
-  if (e.custo_despertar === undefined && e.nivel_poder === undefined) return undefined;
-  return { ...(e.custo_despertar !== undefined ? { custoDespertar: e.custo_despertar } : {}), ...(e.nivel_poder !== undefined ? { nivelPoder: e.nivel_poder } : {}) };
+function opcoesDoPoder(e: { custo_despertar?: number; nivel_poder?: number; compulsao?: string }): Record<string, unknown> | undefined {
+  if (e.custo_despertar === undefined && e.nivel_poder === undefined && e.compulsao === undefined) return undefined;
+  return {
+    ...(e.custo_despertar !== undefined ? { custoDespertar: e.custo_despertar } : {}),
+    ...(e.nivel_poder !== undefined ? { nivelPoder: e.nivel_poder } : {}),
+    ...(e.compulsao !== undefined ? { compulsao: e.compulsao } : {}),
+  };
+}
+
+/**
+ * Em sistema que conta ações (PF2e), o pedido leva quantos ataques o personagem já fez no turno: o sistema aplica a penalidade
+ * de ataques múltiplos sozinho, sem o mestre escrever "Ataque 2".
+ */
+function comAtaquesDoTurno(ctx: ContextoFerramentas, p: Personagem, pedido: PedidoTeste): PedidoTeste {
+  if (!ctx.sistema.combate?.acoes) return pedido;
+  const feitos = ataquesNoTurno(ctx, p.ficha.nome);
+  return feitos ? { ...pedido, opcoes: { ...(pedido.opcoes ?? {}), ataquesNoTurno: feitos } } : pedido;
 }
 
 /** Teste rolado na hora pelo servidor: grava o cartão, aplica o gancho do sistema (Fome, Manchas, condições...) e devolve o resultado. */
 export function testeNaHora(ctx: ContextoFerramentas, p: Personagem, pedido: PedidoTeste): ResultadoTeste {
-  const r = ctx.sistema.resolverTeste(p.ficha, pedido);
+  const r = ctx.sistema.resolverTeste(p.ficha, comAtaquesDoTurno(ctx, p, pedido));
+  // ataque contado no turno (PF2e): o rastreador guarda qual foi e gasta 1 ação, e o próximo já vem com a penalidade
+  if (r.ataque) contarAtaque(ctx, p.ficha.nome, r.ataque.numero);
   // d100 rola abaixo do valor: "43 ≤ 52" diz mais que "43 vs 52"
   const comparacao = r.alvo === null ? "" : ctx.sistema.dadoPrincipal.includes("100") ? ` (alvo ${r.alvo})` : ` vs ${r.alvo}`;
   const texto = `${p.ficha.nome} · ${r.teste} — ${r.motivo}: ${r.expressao} → ${r.total}${comparacao} · ${r.rotuloGrau}`;
@@ -155,8 +171,15 @@ export const executoresTestes: Record<string, Executor> = {
       throw new Error(`${p.ficha.nome} já tem um teste esperando o jogador rolar. Termine o turno.`);
     }
     // prévia só para mostrar o bônus no cartão; o dado de verdade é sorteado quando o jogador clica (custos como o Despertar também)
-    const opcoes = opcoesDoPoder(e);
-    const previa = ctx.sistema.resolverTeste(p.ficha, { teste: e.teste, alvo: e.alvo, modo: e.modo, modificador: e.modificador, motivo: e.motivo, previa: true, ...(opcoes ? { opcoes } : {}) });
+    const doPoder = opcoesDoPoder(e);
+    const previa = ctx.sistema.resolverTeste(
+      p.ficha,
+      comAtaquesDoTurno(ctx, p, { teste: e.teste, alvo: e.alvo, modo: e.modo, modificador: e.modificador, motivo: e.motivo, previa: true, ...(doPoder ? { opcoes: doPoder } : {}) }),
+    );
+    // ataque contado no turno (PF2e): o número fica fixo no pedido (o jogador rola depois, quando a conta já andou) e o
+    // rastreador já conta este ataque, para o próximo pedido vir com a penalidade
+    const opcoes = previa.ataque ? { ...(doPoder ?? {}), numeroAtaque: previa.ataque.numero } : doPoder;
+    if (previa.ataque) contarAtaque(ctx, p.ficha.nome, previa.ataque.numero);
     // custos que o sistema anuncia antes do clique (Vampiro: "Despertar · Celeridade ●●", "Surto +2")
     const efeitos = (previa as { efeitos?: { texto?: unknown }[] }).efeitos;
     const custos = Array.isArray(efeitos) ? efeitos.map((x) => String(x.texto ?? "")).filter(Boolean) : [];
