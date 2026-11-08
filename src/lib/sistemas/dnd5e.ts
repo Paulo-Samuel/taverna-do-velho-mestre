@@ -299,6 +299,8 @@ export const dnd5e: Sistema = {
   limitesAtributos: { min: 3, max: 20 },
   periciasEscolhiveis: 2,
   nivelMaximo: 20,
+  combate: { modelo: "rodadas", iniciativaNpc: "1d20" },
+  progressao: "xp",
   testesSugeridos: [
     "Atletismo", "Acrobacia", "Furtividade", "Percepção", "Investigação", "Persuasão", "Enganação", "Intuição", "Sobrevivência", "Arcanismo",
     "Resistência de DES", "Resistência de CON", "Resistência de SAB", "Concentração", "Ataque", "Magia", "Iniciativa", "Teste contra a morte",

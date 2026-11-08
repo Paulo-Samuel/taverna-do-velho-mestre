@@ -2,29 +2,59 @@ import "server-only";
 import { DatabaseSync } from "node:sqlite";
 import { existsSync, mkdirSync, renameSync } from "node:fs";
 import path from "node:path";
+import { arquivoBanco, copiaAntesDeMigrar, gravarNaLixeira } from "./backup";
+import { aplicarMigracoes, atualizarExportacao, migracoesPendentes, VERSAO_ATUAL, versaoDoBanco, type DadosExportados } from "./db/migracoes";
 import type { Cena, EntradaDiario, Ficha, TipoDiario } from "./sistemas/tipos";
 
 // SQLite embutido no Node 24: nada de dependência nativa para compilar no Windows.
-const pasta = path.join(process.cwd(), "data");
+// O caminho vem de backup.ts (data/taverna.db, ou TAVERNA_DB nos testes); o esquema, de db/migracoes.ts.
+const ARQUIVO = arquivoBanco();
+const pasta = path.dirname(ARQUIVO);
 mkdirSync(pasta, { recursive: true });
-const ARQUIVO = path.join(pasta, "taverna.db");
-const VERSAO = 2;
 
-const globalDb = globalThis as unknown as { __tavernaDb?: DatabaseSync };
+const globalDb = globalThis as unknown as { __tavernaDb?: DatabaseSync; __tavernaVersao?: number };
 // Abre só no primeiro uso: o next build importa as rotas em vários processos ao mesmo tempo e não deve tocar no banco.
 const db = new Proxy({} as DatabaseSync, {
   get(_alvo, chave) {
-    const real = (globalDb.__tavernaDb ??= abrir());
+    const real = conexao();
     const valor = Reflect.get(real, chave, real);
     return typeof valor === "function" ? valor.bind(real) : valor;
   },
 });
 
+function conexao(): DatabaseSync {
+  const real = (globalDb.__tavernaDb ??= abrir());
+  // no modo dev a conexão sobrevive às recargas do módulo: uma migração nova também precisa rodar nela
+  if (globalDb.__tavernaVersao !== VERSAO_ATUAL) {
+    migrar(real);
+    globalDb.__tavernaVersao = VERSAO_ATUAL;
+  }
+  return real;
+}
+
+/** Cópia do banco (data/copias) e depois as migrações que faltam, numa transação só. */
+function migrar(conexao: DatabaseSync) {
+  const versao = versaoDoBanco(conexao);
+  if (!migracoesPendentes(versao).length) return;
+  // banco novo (versão 0, sem tabelas) não tem o que guardar
+  const temDados = Boolean(conexao.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'campanhas'").get());
+  if (versao > 0 || temDados) {
+    try {
+      const copia = copiaAntesDeMigrar(conexao, versao, VERSAO_ATUAL);
+      console.log(`[taverna] banco v${versao} → v${VERSAO_ATUAL}: cópia em data/copias/${copia}`);
+    } catch (erro) {
+      // a migração é uma transação (tudo ou nada); sem cópia ela segue, mas fica o aviso
+      console.error("[taverna] não deu para copiar o banco antes de migrar:", (erro as Error).message);
+    }
+  }
+  aplicarMigracoes(conexao);
+}
+
 function abrir() {
   let conexao = new DatabaseSync(ARQUIVO, { timeout: 10000 });
-  const versao = (conexao.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
+  const versao = versaoDoBanco(conexao);
   const temV1 = (conexao.prepare("SELECT name FROM pragma_table_info('campanhas') WHERE name = 'ficha'").all() as unknown[]).length > 0;
-  if (versao < VERSAO && temV1) {
+  if (versao < 2 && temV1) {
     // banco da primeira versão (uma ficha por campanha): guarda uma cópia e começa do zero
     conexao.close();
     const copia = path.join(pasta, `taverna-v1-${Date.now()}.db`);
@@ -32,81 +62,14 @@ function abrir() {
     for (const sufixo of ["-wal", "-shm"]) if (existsSync(ARQUIVO + sufixo)) renameSync(ARQUIVO + sufixo, copia + sufixo);
     conexao = new DatabaseSync(ARQUIVO, { timeout: 10000 });
   }
-  conexao.exec(`
-    PRAGMA journal_mode = WAL;
-    PRAGMA foreign_keys = ON;
-    CREATE TABLE IF NOT EXISTS campanhas (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      nome TEXT NOT NULL,
-      sistema TEXT NOT NULL DEFAULT 'dnd5e',
-      cenario TEXT NOT NULL DEFAULT '',
-      tom TEXT NOT NULL DEFAULT 'sombrio e debochado',
-      resumo TEXT NOT NULL DEFAULT '',
-      resumo_ate INTEGER NOT NULL DEFAULT 0,
-      cena TEXT NOT NULL DEFAULT '{}',
-      config TEXT NOT NULL DEFAULT '{}',
-      criada_em TEXT NOT NULL DEFAULT (datetime('now')),
-      atualizada_em TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE TABLE IF NOT EXISTS personagens (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campanha_id INTEGER NOT NULL REFERENCES campanhas(id) ON DELETE CASCADE,
-      ficha TEXT NOT NULL,
-      jogador TEXT NOT NULL DEFAULT '',
-      ordem INTEGER NOT NULL DEFAULT 0,
-      criado_em TEXT NOT NULL DEFAULT (datetime('now')),
-      atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS personagens_campanha ON personagens(campanha_id, ordem, id);
-    CREATE TABLE IF NOT EXISTS mensagens (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campanha_id INTEGER NOT NULL REFERENCES campanhas(id) ON DELETE CASCADE,
-      tipo TEXT NOT NULL CHECK (tipo IN ('mestre', 'jogador', 'dado', 'sistema')),
-      texto TEXT NOT NULL DEFAULT '',
-      dados TEXT,
-      personagem_id INTEGER,
-      autor TEXT,
-      criada_em TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS mensagens_campanha ON mensagens(campanha_id, id);
-    CREATE TABLE IF NOT EXISTS fila (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campanha_id INTEGER NOT NULL REFERENCES campanhas(id) ON DELETE CASCADE,
-      personagem_id INTEGER,
-      autor TEXT NOT NULL DEFAULT '',
-      acao TEXT NOT NULL,
-      criada_em TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE TABLE IF NOT EXISTS diario (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campanha_id INTEGER NOT NULL REFERENCES campanhas(id) ON DELETE CASCADE,
-      tipo TEXT NOT NULL,
-      titulo TEXT NOT NULL,
-      texto TEXT NOT NULL DEFAULT '',
-      status TEXT NOT NULL DEFAULT '',
-      atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS diario_campanha ON diario(campanha_id, tipo);
-    CREATE TABLE IF NOT EXISTS ajustes (
-      chave TEXT PRIMARY KEY,
-      valor TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS instantaneos (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campanha_id INTEGER NOT NULL REFERENCES campanhas(id) ON DELETE CASCADE,
-      turno TEXT NOT NULL,
-      entrada TEXT,
-      acoes TEXT NOT NULL DEFAULT '[]',
-      aberto INTEGER NOT NULL DEFAULT 0,
-      criado_em TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS instantaneos_campanha ON instantaneos(campanha_id, id);
-    PRAGMA user_version = ${VERSAO};
-  `);
-  // colunas acrescentadas depois da v2 (bancos antigos não têm)
-  const colunasDiario = (conexao.prepare("SELECT name FROM pragma_table_info('diario')").all() as { name: string }[]).map((c) => c.name);
-  if (!colunasDiario.includes("dados")) conexao.exec("ALTER TABLE diario ADD COLUMN dados TEXT");
+  // fora de transação: o journal_mode não muda dentro de uma; o esquema vem das migrações (conexao())
+  conexao.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
   return conexao;
+}
+
+/** Versão do esquema no banco aberto (depois das migrações: VERSAO_ATUAL, ou maior se o banco veio de uma taverna mais nova). */
+export function versaoDoEsquema(): number {
+  return versaoDoBanco(conexao());
 }
 
 // ---------- tipos ----------
@@ -284,8 +247,20 @@ export function atualizarCampanha(id: number, dados: Partial<Pick<Campanha, "nom
   );
 }
 
-export function excluirCampanha(id: number) {
+/**
+ * Apaga a campanha (CASCADE: personagens, chat, diário, fatos...). Antes, por padrão, ela vai inteira para a lixeira
+ * (data/lixeira, formato taverna-campanha): se não der para gravar o arquivo, nada é apagado.
+ * Devolve o nome do arquivo na lixeira (null sem lixeira ou quando a campanha não existe).
+ */
+export function excluirCampanha(id: number, opcoes: { lixeira?: boolean } = {}): string | null {
+  let arquivo: string | null = null;
+  if (opcoes.lixeira !== false) {
+    const dados = exportarCampanha(id, { comPin: true });
+    if (!dados) return null;
+    arquivo = gravarNaLixeira(dados, id);
+  }
   db.prepare("DELETE FROM campanhas WHERE id = ?").run(id);
+  return arquivo;
 }
 
 /**
@@ -426,22 +401,13 @@ export function removerPersonagem(personagemId: number) {
 }
 
 // Anotações do jogador: coluna própria, fora da ficha (o mestre não lê, o turno não sobrescreve e o "desfazer" não apaga).
-let temColunaNotas = false;
-function garantirColunaNotas() {
-  if (temColunaNotas) return;
-  // conferida no primeiro uso (e não em abrir()): o servidor de desenvolvimento reaproveita a conexão aberta entre recargas
-  const colunas = (db.prepare("SELECT name FROM pragma_table_info('personagens')").all() as { name: string }[]).map((c) => c.name);
-  if (!colunas.includes("notas")) db.exec("ALTER TABLE personagens ADD COLUMN notas TEXT NOT NULL DEFAULT ''");
-  temColunaNotas = true;
-}
+// A coluna vem da migração 4 (db/migracoes.ts).
 
 export function lerNotas(personagemId: number): string {
-  garantirColunaNotas();
   return (db.prepare("SELECT notas FROM personagens WHERE id = ?").get(personagemId) as { notas: string } | undefined)?.notas ?? "";
 }
 
 export function salvarNotas(personagemId: number, notas: string) {
-  garantirColunaNotas();
   db.prepare("UPDATE personagens SET notas = ? WHERE id = ?").run(notas, personagemId);
 }
 
@@ -564,50 +530,29 @@ export type Fato = { id: number; texto: string; autor: string; ordem: number; cr
 type LinhaFato = { id: number; texto: string; autor: string; ordem: number; criado_em: string };
 const paraFato = (l: LinhaFato): Fato => ({ id: l.id, texto: l.texto, autor: l.autor, ordem: l.ordem, criadoEm: l.criado_em });
 
-let temTabelaFatos = false;
-function garantirTabelaFatos() {
-  if (temTabelaFatos) return;
-  // criada no primeiro uso (como a coluna de notas): o servidor de desenvolvimento reaproveita a conexão aberta
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS fatos (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campanha_id INTEGER NOT NULL REFERENCES campanhas(id) ON DELETE CASCADE,
-      texto TEXT NOT NULL,
-      autor TEXT NOT NULL DEFAULT '',
-      ordem INTEGER NOT NULL DEFAULT 0,
-      criado_em TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS fatos_campanha ON fatos(campanha_id, ordem, id);
-  `);
-  temTabelaFatos = true;
-}
+// A tabela vem da migração 5 (db/migracoes.ts).
 
 export function listarFatos(campanhaId: number): Fato[] {
-  garantirTabelaFatos();
   return (db.prepare("SELECT * FROM fatos WHERE campanha_id = ? ORDER BY ordem, id").all(campanhaId) as LinhaFato[]).map(paraFato);
 }
 
 export function obterFato(id: number): (Fato & { campanhaId: number }) | null {
-  garantirTabelaFatos();
   const l = db.prepare("SELECT * FROM fatos WHERE id = ?").get(id) as (LinhaFato & { campanha_id: number }) | undefined;
   return l ? { ...paraFato(l), campanhaId: l.campanha_id } : null;
 }
 
 /** Fato novo vai para o fim da lista. */
 export function criarFato(campanhaId: number, texto: string, autor = ""): Fato {
-  garantirTabelaFatos();
   const ordem = (db.prepare("SELECT COALESCE(MAX(ordem), -1) + 1 AS o FROM fatos WHERE campanha_id = ?").get(campanhaId) as { o: number }).o;
   const r = db.prepare("INSERT INTO fatos (campanha_id, texto, autor, ordem) VALUES (?, ?, ?, ?)").run(campanhaId, texto, autor, ordem);
   return paraFato(db.prepare("SELECT * FROM fatos WHERE id = ?").get(Number(r.lastInsertRowid)) as LinhaFato);
 }
 
 export function editarFato(id: number, texto: string) {
-  garantirTabelaFatos();
   db.prepare("UPDATE fatos SET texto = ? WHERE id = ?").run(texto, id);
 }
 
 export function removerFato(id: number) {
-  garantirTabelaFatos();
   db.prepare("DELETE FROM fatos WHERE id = ?").run(id);
 }
 
@@ -734,6 +679,181 @@ export function removerInstantaneo(id: number) {
 /** Descarta o instantâneo aberto (o turno não chegou a acontecer). */
 export function descartarInstantaneoAberto(campanhaId: number) {
   db.prepare("DELETE FROM instantaneos WHERE campanha_id = ? AND aberto = 1").run(campanhaId);
+}
+
+// ---------- exportar / importar campanha (formato "taverna-campanha") ----------
+
+// Um JSON só para três coisas: "Exportar campanha" (levar para outro PC), a lixeira (excluir) e a importação.
+// `versao` é o user_version do banco que gerou o arquivo (db/migracoes.ts): um arquivo antigo é atualizado em memória pelas
+// `exportacao` das migrações que faltam; um mais novo que este código é recusado. Instantâneos e fila ficam de fora.
+
+export const FORMATO_CAMPANHA = "taverna-campanha";
+
+export type ArquivoCampanha = {
+  formato: typeof FORMATO_CAMPANHA;
+  versao: number;
+  app: string;
+  exportadoEm: string;
+  campanha: {
+    nome: string;
+    sistema: string;
+    cenario: string;
+    tom: string;
+    resumo: string;
+    /** id (do arquivo) da última mensagem coberta pelo resumo */
+    resumoAte: number;
+    cena: Cena;
+    /** sem o PIN na exportação; a lixeira guarda tudo (o arquivo não sai da máquina) */
+    config: ConfigCampanha;
+    criadaEm: string;
+    atualizadaEm: string;
+  };
+  personagens: { id: number; ficha: Ficha; jogador: string; ordem: number; notas: string }[];
+  mensagens: { id: number; tipo: TipoMensagem; texto: string; dados: Record<string, unknown> | null; personagemId: number | null; autor: string | null; criadaEm: string }[];
+  diario: { tipo: TipoDiario; titulo: string; texto: string; status: string; dados: Record<string, unknown> | null; atualizadoEm: string }[];
+  fatos: { texto: string; autor: string; ordem: number; criadoEm: string }[];
+};
+
+/** Erro com mensagem para mostrar a quem importou (arquivo errado, versão mais nova...). */
+export class ErroImportacao extends Error {}
+
+export function exportarCampanha(id: number, opcoes: { comPin?: boolean } = {}): ArquivoCampanha | null {
+  const c = db.prepare("SELECT * FROM campanhas WHERE id = ?").get(id) as LinhaCampanha | undefined;
+  if (!c) return null;
+  const config = JSON.parse(c.config || "{}") as ConfigCampanha;
+  if (!opcoes.comPin) delete config.pin;
+  const personagens = db.prepare("SELECT id, ficha, jogador, ordem, notas FROM personagens WHERE campanha_id = ? ORDER BY ordem, id").all(id) as (LinhaPersonagem & { notas: string })[];
+  const mensagens = db.prepare("SELECT * FROM mensagens WHERE campanha_id = ? ORDER BY id").all(id) as LinhaMensagem[];
+  const diario = db.prepare("SELECT * FROM diario WHERE campanha_id = ? ORDER BY id").all(id) as LinhaDiario[];
+  const fatos = db.prepare("SELECT * FROM fatos WHERE campanha_id = ? ORDER BY ordem, id").all(id) as LinhaFato[];
+  return {
+    formato: FORMATO_CAMPANHA,
+    versao: VERSAO_ATUAL,
+    app: "Taverna do Velho Mestre",
+    exportadoEm: new Date().toISOString(),
+    campanha: {
+      nome: c.nome,
+      sistema: c.sistema,
+      cenario: c.cenario,
+      tom: c.tom,
+      resumo: c.resumo,
+      resumoAte: c.resumo_ate,
+      cena: JSON.parse(c.cena || "{}"),
+      config,
+      criadaEm: c.criada_em,
+      atualizadaEm: c.atualizada_em,
+    },
+    personagens: personagens.map((p) => ({ id: p.id, ficha: JSON.parse(p.ficha), jogador: p.jogador, ordem: p.ordem, notas: p.notas ?? "" })),
+    mensagens: mensagens.map((m) => ({
+      id: m.id,
+      tipo: m.tipo,
+      texto: m.texto,
+      dados: m.dados ? JSON.parse(m.dados) : null,
+      personagemId: m.personagem_id,
+      autor: m.autor,
+      criadaEm: m.criada_em,
+    })),
+    diario: diario.map((d) => ({ tipo: d.tipo, titulo: d.titulo, texto: d.texto, status: d.status, dados: d.dados ? JSON.parse(d.dados) : null, atualizadoEm: d.atualizado_em })),
+    fatos: fatos.map((f) => ({ texto: f.texto, autor: f.autor, ordem: f.ordem, criadoEm: f.criado_em })),
+  };
+}
+
+const ehObjeto = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+const texto = (v: unknown, padrao = "") => (typeof v === "string" ? v : padrao);
+const inteiro = (v: unknown) => (typeof v === "number" && Number.isInteger(v) ? v : null);
+const dataSql = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(v) ? v.slice(0, 19).replace("T", " ") : null);
+const TIPOS_MENSAGEM = new Set(["mestre", "jogador", "dado", "sistema"]);
+
+/** Confere o arquivo e o atualiza até VERSAO_ATUAL. Lança ErroImportacao com o motivo, em português. */
+export function lerArquivoCampanha(bruto: unknown): ArquivoCampanha {
+  if (!ehObjeto(bruto) || bruto.formato !== FORMATO_CAMPANHA) throw new ErroImportacao("Esse arquivo não é uma campanha exportada pela taverna.");
+  const versao = inteiro(bruto.versao);
+  if (versao === null || versao < 2) throw new ErroImportacao("O arquivo não diz de que versão da taverna ele veio.");
+  if (versao > VERSAO_ATUAL) {
+    throw new ErroImportacao(`Este arquivo veio de uma taverna mais nova (formato ${versao}; esta lê até o ${VERSAO_ATUAL}). Atualize a taverna e tente de novo.`);
+  }
+  const d = atualizarExportacao(bruto as DadosExportados, versao);
+  const c = d.campanha;
+  if (!ehObjeto(c) || !texto(c.nome).trim() || !texto(c.sistema)) throw new ErroImportacao("O arquivo está sem os dados da campanha (nome e sistema).");
+  for (const lista of ["personagens", "mensagens", "diario", "fatos"] as const) {
+    if (!Array.isArray(d[lista]) || !d[lista]!.every(ehObjeto)) throw new ErroImportacao(`O arquivo está corrompido (lista "${lista}").`);
+  }
+  for (const p of d.personagens!) if (!ehObjeto(p.ficha)) throw new ErroImportacao("Há um personagem sem ficha no arquivo.");
+  for (const m of d.mensagens!) if (!TIPOS_MENSAGEM.has(texto(m.tipo))) throw new ErroImportacao("Há uma mensagem de tipo desconhecido no arquivo.");
+  return d as unknown as ArquivoCampanha;
+}
+
+/**
+ * Recria a campanha de um arquivo "taverna-campanha" com ids novos e devolve o id dela.
+ * Remapeia o personagem de cada mensagem e dos pedidos de teste (dados.personagemId), a campanha da decisão de rerrolar,
+ * o "resumo até" e o começo da música da cena (ids de mensagem). Tudo numa transação: ou entra inteira, ou nada.
+ */
+export function importarCampanha(bruto: unknown, opcoes: { nome?: string } = {}): number {
+  const a = lerArquivoCampanha(bruto);
+  const c = a.campanha;
+  const nome = (opcoes.nome ?? c.nome).trim().slice(0, 80) || "Campanha importada";
+  const config = ehObjeto(c.config) ? c.config : {};
+  const cena = ehObjeto(c.cena) ? (c.cena as Cena) : {};
+
+  db.exec("BEGIN");
+  try {
+    const r = db
+      .prepare("INSERT INTO campanhas (nome, sistema, cenario, tom, resumo, cena, config, criada_em) VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))")
+      .run(nome, c.sistema, texto(c.cenario), texto(c.tom, "sombrio e debochado"), texto(c.resumo), "{}", JSON.stringify(config), dataSql(c.criadaEm));
+    const novaId = Number(r.lastInsertRowid);
+
+    const personagens = new Map<number, number>();
+    const inserirPersonagem = db.prepare("INSERT INTO personagens (campanha_id, ficha, jogador, ordem, notas) VALUES (?, ?, ?, ?, ?)");
+    a.personagens.forEach((p, i) => {
+      const rp = inserirPersonagem.run(novaId, JSON.stringify(p.ficha), texto(p.jogador), inteiro(p.ordem) ?? i, texto(p.notas));
+      const antigo = inteiro(p.id);
+      if (antigo !== null) personagens.set(antigo, Number(rp.lastInsertRowid));
+    });
+    const novoPersonagem = (v: unknown) => {
+      const antigo = inteiro(v);
+      return antigo === null ? null : (personagens.get(antigo) ?? null);
+    };
+
+    const mensagens: [number, number][] = [];
+    const inserirMensagem = db.prepare("INSERT INTO mensagens (campanha_id, tipo, texto, dados, personagem_id, autor, criada_em) VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))");
+    const emOrdem = [...a.mensagens].sort((x, y) => (inteiro(x.id) ?? 0) - (inteiro(y.id) ?? 0));
+    for (const m of emOrdem) {
+      let dados = ehObjeto(m.dados) ? { ...m.dados } : null;
+      if (dados) {
+        if ("personagemId" in dados) dados.personagemId = novoPersonagem(dados.personagemId);
+        if (ehObjeto(dados.decisao) && "campanhaId" in dados.decisao) dados = { ...dados, decisao: { ...dados.decisao, campanhaId: novaId } };
+      }
+      const autor = typeof m.autor === "string" ? m.autor : null;
+      const rm = inserirMensagem.run(novaId, m.tipo, texto(m.texto), dados ? JSON.stringify(dados) : null, novoPersonagem(m.personagemId), autor, dataSql(m.criadaEm));
+      const antigo = inteiro(m.id);
+      if (antigo !== null) mensagens.push([antigo, Number(rm.lastInsertRowid)]);
+    }
+    // "até a mensagem X" do arquivo vira a última mensagem nova cujo id antigo era <= X
+    const novaMensagem = (ate: unknown) => {
+      const limite = inteiro(ate);
+      if (limite === null || limite <= 0) return 0;
+      let achada = 0;
+      for (const [antigo, novo] of mensagens) if (antigo <= limite) achada = novo;
+      return achada;
+    };
+    if (typeof cena.musicaDesde === "number") cena.musicaDesde = novaMensagem(cena.musicaDesde);
+    db.prepare("UPDATE campanhas SET cena = ?, resumo_ate = ?, atualizada_em = datetime('now') WHERE id = ?").run(JSON.stringify(cena), novaMensagem(c.resumoAte), novaId);
+
+    const inserirDiario = db.prepare("INSERT INTO diario (campanha_id, tipo, titulo, texto, status, dados, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))");
+    for (const e of a.diario) {
+      if (!texto(e.tipo) || !texto(e.titulo)) continue;
+      inserirDiario.run(novaId, e.tipo, e.titulo, texto(e.texto), texto(e.status), ehObjeto(e.dados) ? JSON.stringify(e.dados) : null, dataSql(e.atualizadoEm));
+    }
+    const inserirFato = db.prepare("INSERT INTO fatos (campanha_id, texto, autor, ordem, criado_em) VALUES (?, ?, ?, ?, COALESCE(?, datetime('now')))");
+    a.fatos.forEach((f, i) => {
+      if (texto(f.texto).trim()) inserirFato.run(novaId, f.texto, texto(f.autor), inteiro(f.ordem) ?? i, dataSql(f.criadoEm));
+    });
+    db.exec("COMMIT");
+    return novaId;
+  } catch (erro) {
+    db.exec("ROLLBACK");
+    throw erro;
+  }
 }
 
 // ---------- ajustes globais (provedor, modelo...) ----------

@@ -475,6 +475,9 @@ export const d100: Sistema = {
   limitesAtributos: { min: 15, max: 99 },
   periciasEscolhiveis: PERICIAS_ESCOLHIVEIS,
   nivelMaximo: NIVEL_MAX,
+  combate: { modelo: "rodadas", iniciativaNpc: "1d100" },
+  // evolução por fases de desenvolvimento que o mestre concede (sem tabela de XP)
+  progressao: "marcos",
   testesSugeridos: ["Encontrar", "Escutar", "Biblioteca", "Psicologia", "Furtividade", "Lábia", "Persuasão", "Esquivar", "Lutar", "Armas de Fogo", "Ideia", "Sorte", "Sanidade"],
   regrasParaMestre: `Sistema: horror investigativo d100 (Basic Roleplaying, ORC). Investigadores comuns contra o horror cósmico: correr e pesquisar valem mais que lutar.
 TESTE: rola-se 1d100 e o resultado precisa ser MENOR OU IGUAL ao valor da perícia/característica. Graus: 01 = Crítico; ≤ 1/5 do valor = Extremo; ≤ 1/2 = Difícil; ≤ valor = Normal; acima = Falha; 100 (ou 96-100 se o valor for menor que 50) = Desastre.

@@ -13,12 +13,19 @@ export type NpcRoteiro = {
 
 export type LocalRoteiro = { nome: string; texto: string };
 
+/**
+ * Texto que muda com o sistema da campanha: um texto para todos, ou um por sistema (chave = id do sistema; "padrao" vale
+ * para os demais). Recompensas e linhas de stats usam isto: uma aventura aberta a cinco fantasias fala em CA/PV no D&D,
+ * em DV e moral no OSR e em PV de horda no PbtA.
+ */
+export type PorSistema = string | Record<string, string>;
+
 /** Um encontro preparado: a linha de stats na linguagem do sistema da aventura (CA/PV/ataque, CD por nível...). */
 export type EncontroRoteiro = {
   nome: string;
   onde: string;
-  /** quem e com que números */
-  inimigos: string;
+  /** quem e com que números (por sistema, quando a aventura roda em mais de um) */
+  inimigos: PorSistema;
   /** como lutam e usam o cenário */
   tatica: string;
   /** como o encontro acaba sem ser na última gota de PV (fuga, rendição, negociação) */
@@ -29,7 +36,7 @@ export type EncontroRoteiro = {
  * Recompensas: um texto para todos os sistemas, ou um por sistema (chave = id do sistema; "padrao" vale para os demais).
  * É assim que "ouro conta XP" fica só no OSR e a runa +1 só no Pathfinder 2e.
  */
-export type Recompensas = string | Record<string, string>;
+export type Recompensas = PorSistema;
 
 /** O que só o mestre vê. Enxuto: entra inteiro no prompt de todo turno. */
 export type Roteiro = {
@@ -48,6 +55,8 @@ export type Roteiro = {
   sessoes?: string[];
   /** encontros preparados com números do sistema; opcional (masmorras e aventuras de combate) */
   encontros?: EncontroRoteiro[];
+  /** 6 cenas prontas para quando o grupo enrola ou falha (NPC aparece, pista chega torta, relógio avança com cena) */
+  complicacoes?: string[];
 };
 
 export type Aventura = {
@@ -67,7 +76,16 @@ export type Aventura = {
   /** a cena inicial que o mestre narra no [início da campanha] */
   abertura: string;
   roteiro: Roteiro;
+  /**
+   * Aventura que roda com um personagem só: `aliado` é o NPC que divide as cenas com ele (alguém para conversar, ajudar e
+   * perder). O roteiro imprime a frase condicional; quem decide se a mesa é solo é o mestre, olhando as fichas.
+   */
+  solo?: { aliado: string };
+  /** Vampiro: como uma Pedra de Toque do personagem entra na trama (o horror pessoal precisa de um mortal para perder) */
+  pedraEmJogo?: string;
 };
 
-/** O que o navegador pode ver: sem abertura e sem roteiro (spoiler é crime na taverna). */
-export type AventuraPublica = Pick<Aventura, "id" | "sistemas" | "titulo" | "chamada" | "duracao" | "recomendado" | "tom" | "cenario">;
+/** O que o navegador pode ver: sem abertura e sem roteiro (spoiler é crime na taverna). `soloOk` diz que roda com um só. */
+export type AventuraPublica = Pick<Aventura, "id" | "sistemas" | "titulo" | "chamada" | "duracao" | "recomendado" | "tom" | "cenario"> & {
+  soloOk?: true;
+};

@@ -523,7 +523,7 @@ TESTES (teste ou pedir_teste): 2d6 + modificador do atributo. 10+ sucesso pleno;
 
 MOVIMENTOS DO MESTRE (escolha um quando todos olham para você, num 6- ou quando os jogadores te dão uma oportunidade de ouro): usar um movimento de monstro, perigo ou local; revelar uma verdade indesejada; mostrar sinais de uma ameaça chegando; causar dano; gastar os recursos deles; virar o movimento deles contra eles; separá-los; dar uma oportunidade que combine com uma classe; mostrar uma desvantagem da classe, raça ou equipamento; oferecer uma oportunidade, com ou sem custo; pôr alguém numa enrascada; dizer as consequências e perguntar "o que você faz?". SUAVE = anuncia o perigo e dá chance de reagir; DURO = consequência imediata (normalmente após 6-). Termine sempre perguntando o que eles fazem.
 
-COMBATE: sem turnos nem iniciativa; passe o holofote. Inimigos não rolam para acertar: o dano deles vem como movimento do mestre (num 7-9 de Golpear, num 6-, ou quando ignoram a ameaça). Dano do personagem: teste "Dano" (dado da classe + bônus; vantagem = melhor de dois dados; passe a armadura do alvo em alvo) ou rolar_dados. Armadura reduz dano recebido. Dano dos monstros: d6 fraco, d8 comum, d10 forte, d12 brutal (+1d4 a +4 se perigoso). PV dos monstros: horda 3, grupo 6, solitário 12 (+4 grande, +8 enorme); armadura 0-4. Aplique dano nos personagens com alterar_ficha (pv negativo, já descontada a armadura da ficha). A 0 PV: teste "Última Respiração".
+COMBATE: sem turnos; passe o holofote. O rastreador é opcional, só para PV de inimigos; nunca role iniciativa. Inimigos não rolam para acertar: o dano deles vem como movimento do mestre (num 7-9 de Golpear, num 6-, ou quando ignoram a ameaça). Dano do personagem: teste "Dano" (dado da classe + bônus; vantagem = melhor de dois dados; passe a armadura do alvo em alvo) ou rolar_dados. Armadura reduz dano recebido. Dano dos monstros: d6 fraco, d8 comum, d10 forte, d12 brutal (+1d4 a +4 se perigoso). PV dos monstros: horda 3, grupo 6, solitário 12 (+4 grande, +8 enorme); armadura 0-4. Aplique dano nos personagens com alterar_ficha (pv negativo, já descontada a armadura da ficha). A 0 PV: teste "Última Respiração".
 DEBILIDADES (−1 no atributo, via adicionar_condicoes): Fraco (FOR), Trêmulo (DES), Doente (CON), Atordoado (INT), Confuso (SAB), Marcado (CAR). Use como alternativa a dano em movimentos duros.
 
 RECURSOS (ids para alterar_ficha): xp (marque +1 a cada 6- e no fim da sessão), racoes (Acampar gasta 1), municao (gasta num 7-9 de Disparar), usos (equipamento de aventura), magia (níveis de magia preparados do clérigo/mago: soma ≤ nível+1; num 7-9 de Conjurar a magia pode ser perdida — tire o nível dela), veneno (doses do ladrão), forma (reserva da Metamorfose do druida: o resultado do teste define 1-3).
@@ -570,6 +570,10 @@ export const pbta: Sistema = {
   limitesAtributos: { min: 1, max: 18 },
   periciasEscolhiveis: 0,
   nivelMaximo: NIVEL_MAX,
+  // Dungeon World não tem rodadas nem iniciativa: o rastreador é só para os PV dos inimigos
+  combate: { modelo: "leve", iniciativaNpc: "2d6" },
+  // DW acumula XP (marca 1 a cada falha, alinhamento, vínculo) e sobe com nível+7: o servidor faz a conta
+  progressao: "xp",
   testesSugeridos: [
     "Desafiar o Perigo (DES)",
     "Golpear e Retalhar",

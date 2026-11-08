@@ -669,6 +669,8 @@ export const osr: Sistema = {
   limitesAtributos: { min: 3, max: 18 },
   periciasEscolhiveis: 0,
   nivelMaximo: 14,
+  combate: { modelo: "rodadas", iniciativaNpc: "1d20" },
+  progressao: "xp",
   testesSugeridos: [
     "Ataque", "Ataque à distância", "Salvaguarda contra Morte", "Salvaguarda contra Magias", "Salvaguarda contra Sopro",
     "Abrir portas", "Ouvir ruídos", "Procurar portas secretas", "Procurar armadilhas", "FOR", "DES", "SAB",
@@ -714,7 +716,7 @@ COMO MESTRAR OSR
 - XP por ouro: o tesouro é guardado, escondido e pesado; tirá-lo da masmorra é o desafio (carga, carregadores, mulas).
 - Contratados são gente: têm preço, medo e lealdade; maltratados, fogem ou traem.
 - Salvaguarda é a última chance contra o desastre (veneno, sopro, petrificação): o perigo é anunciado antes, pela descrição.
-- Morte é real e rápida: não amacie dados nem salve ninguém de uma má decisão; personagem novo entra logo (contratado promovido, prisioneiro libertado).
+- Morte é real e rápida: não amacie dados nem salve ninguém de uma má decisão; personagem novo entra logo (contratado promovido, prisioneiro libertado). O único amaciante é a "Dificuldade indulgente" dos ajustes da mesa: quando ela estiver ligada, vale ela.
 - Mundo vivo: a masmorra tem facções e ecologia, e o que o grupo faz muda o que vem depois. Anote facções e rumores no diário.`,
 
   atributosIniciais(classeId, metodo) {

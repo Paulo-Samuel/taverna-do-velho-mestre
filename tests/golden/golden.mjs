@@ -29,7 +29,7 @@ process.chdir(temporario);
 
 const { definirGerador } = await import(pathToFileURL(path.join(RAIZ, "src/lib/dados.ts")).href);
 const { SISTEMAS } = await import(pathToFileURL(path.join(RAIZ, "src/lib/sistemas/index.ts")).href);
-const { definirFerramentas } = await import(pathToFileURL(path.join(RAIZ, "src/lib/mestre/ferramentas.ts")).href);
+const { definirFerramentas } = await import(pathToFileURL(path.join(RAIZ, "src/lib/mestre/ferramentas/index.ts")).href);
 const { promptDoSistema } = await import(pathToFileURL(path.join(RAIZ, "src/lib/mestre/prompt.ts")).href);
 const { semente } = await import(pathToFileURL(path.join(RAIZ, "tests/_suporte/dados-fixos.ts")).href);
 

@@ -41,8 +41,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# banco local
+# banco local, com as cópias (data/copias), a lixeira de campanhas (data/lixeira) e os logs
 /data/
+# campanhas exportadas que alguém deixou na pasta do projeto
+*.taverna.json
 !.env.example
 
 # músicas próprias de quem joga (só o LEIA-ME vai para o git)

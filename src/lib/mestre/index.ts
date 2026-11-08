@@ -31,16 +31,14 @@ import {
 } from "../db";
 import { FIM_DE_SESSAO, INICIO, RESULTADO_TESTE } from "../constantes";
 import { obterSistema } from "../sistemas";
-import type { ResultadoTeste } from "../sistemas/tipos";
-import { rerrolarComVontade, textoRerrolagemParaMestre, valeOferecerRerrolagem } from "../sistemas/vtm5/forca-de-vontade";
-import type { ResultadoVtm } from "../sistemas/vtm5/testes";
+import type { OpcaoDecisao, ResultadoTeste } from "../sistemas/tipos";
 import { publicar } from "../tempo-real";
 import { visivel } from "../visivel";
 import { arremateRedundante } from "./arremate";
 import { definirFerramentas, executarFerramenta, type ContextoFerramentas } from "./ferramentas";
 import { LIMITE_SEM_RESUMO, MANTER_LITERAIS } from "./memoria";
 import { encerrarTurno, enderecoInterno, registrarTurno } from "./ponte";
-import { nomeDoPersonagem, promptDeContinuacao, promptDoResumo, promptDoSistema, promptDoTurno, SISTEMA_RESUMO, type AcaoDoTurno, type FimDeSessao } from "./prompt";
+import { fimDeSessao, nomeDoPersonagem, promptDeContinuacao, promptDoResumo, promptDoSistema, promptDoTurno, SISTEMA_RESUMO, type AcaoDoTurno, type FimDeSessao } from "./prompt";
 import { criarProvedorApi } from "./provedor-api";
 import { criarProvedorCli } from "./provedor-cli";
 import { provedorFalso } from "./provedor-falso";
@@ -343,15 +341,8 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
     }
   };
 
-  // pedido do turno: abertura, fim de sessão (com as regras de XP do sistema e quem precisa do Remorso) ou as ações
-  const pedidoFim: FimDeSessao | null = fim
-    ? {
-        sessao: sessaoAtual(campanhaId),
-        vampiro: sistema.id === "vtm5",
-        marcos: ferramentas.some((f) => f.name === "subir_nivel"),
-        comManchas: personagens.filter((p) => (p.ficha.recursos?.mancha?.atual ?? 0) > 0).map((p) => p.ficha.nome),
-      }
-    : null;
+  // pedido do turno: abertura, fim de sessão (com as regras de XP do sistema e os passos próprios dele) ou as ações
+  const pedidoFim: FimDeSessao | null = fim ? fimDeSessao(sistema, sessaoAtual(campanhaId), personagens.map((p) => p.ficha)) : null;
 
   const pedido = promptDoTurno(recentes, personagens, inicio && !doTurno.length ? "inicio" : pedidoFim && !doTurno.length ? pedidoFim : doTurno, { recapitular });
   let concluido = false;
@@ -453,8 +444,15 @@ export function rolarTestePendente(campanhaId: number, mensagemId: number, autor
     ...(dados.opcoes && typeof dados.opcoes === "object" ? { opcoes: dados.opcoes as Record<string, unknown> } : {}),
   });
   const texto = textoDoResultado(p.ficha.nome, r);
-  // Vampiro: falhou e ainda há Força de Vontade → o cartão pergunta se rerrola antes de o mestre saber (aceita sozinho no prazo)
-  const decidir = valeOferecerRerrolagem(p.ficha, r);
+  // decisão do jogador depois do dado, se o sistema oferecer (Vampiro: falhou e ainda há Força de Vontade → rerrolar?):
+  // o cartão pergunta antes de o mestre saber e aceita sozinho no prazo
+  let opcoesDecisao: OpcaoDecisao[] = [];
+  try {
+    opcoesDecisao = sistema.decisoesAposTeste?.(p.ficha, r) ?? [];
+  } catch (e) {
+    console.warn(`[taverna] decisoesAposTeste falhou (${sistema.id}):`, e);
+  }
+  const decidir = opcoesDecisao.length > 0;
   const ate = Date.now() + PRAZO_DECISAO_MS;
   // desfazer o turno que esta rolagem vai disparar devolve o teste para "pendente"
   abrirInstantaneo(campanhaId, capturarEstado(campanhaId));
@@ -463,7 +461,7 @@ export function rolarTestePendente(campanhaId: number, mensagemId: number, autor
     status: decidir ? "decidir" : "resolvido",
     resultado: r,
     roladoPor: autor || null,
-    ...(decidir ? { decisao: { ate, campanhaId } } : {}),
+    ...(decidir ? { decisao: { ate, campanhaId, opcoes: opcoesDecisao } } : {}),
   });
   if (atualizada) publicar(campanhaId, { e: "mensagem_atualizada", mensagem: atualizada });
 
@@ -497,7 +495,7 @@ function enviarResultado(campanhaId: number, personagemId: number, autor: string
   enviarAcao(campanhaId, { personagemId, autor, acao: `${RESULTADO_TESTE}${texto}${perigoso}${aviso}` });
 }
 
-// ---------- decisão depois do teste (Vampiro: rerrolar com Força de Vontade) ----------
+// ---------- decisão depois do teste (ganchos decisoesAposTeste/aplicarDecisao; Vampiro: rerrolar com Força de Vontade) ----------
 
 /** Quanto tempo o cartão espera o jogador decidir antes de aceitar o resultado sozinho. */
 export const PRAZO_DECISAO_MS = 20_000;
@@ -532,14 +530,15 @@ function aceitarDecisoes(campanhaId: number, personagemId: number | null) {
 }
 
 /**
- * O jogador decide o teste que está esperando: aceita o resultado ou gasta 1 de Força de Vontade e rerrola até 3 dados normais
- * (`dados` = índices escolhidos; sem eles, o servidor escolhe os que falharam). Depois o resultado final vai para o mestre.
+ * O jogador decide o teste que está esperando: aceita o resultado ou escolhe a opção que o sistema ofereceu (Vampiro: gasta 1 de
+ * Força de Vontade e rerrola até 3 dados normais; `dados` = índices escolhidos, sem eles o sistema escolhe os que falharam).
+ * `opcao` é o id da opção; omitido, vale a primeira oferecida. Depois o resultado final vai para o mestre.
  * Aceitar um teste que já fechou é inofensivo (devolve null): o prazo do servidor e o do navegador podem chegar juntos.
  */
 export function decidirTeste(
   campanhaId: number,
   mensagemId: number,
-  escolha: { rerrolar: boolean; dados?: number[]; sozinho?: boolean },
+  escolha: { rerrolar: boolean; opcao?: string; dados?: number[]; sozinho?: boolean },
 ): ResultadoTeste | null {
   const m = obterMensagem(mensagemId);
   const dados = (m?.dados ?? {}) as Record<string, unknown>;
@@ -558,12 +557,16 @@ export function decidirTeste(
   const sistema = obterSistema(campanha.sistema);
   let extra = "";
   if (escolha.rerrolar) {
-    // valida tudo de novo aqui (Força de Vontade atual, uma vez por teste, só dados normais); erro deixa a decisão aberta
-    const feito = rerrolarComVontade(p.ficha, r, escolha.dados);
+    if (!sistema.aplicarDecisao) throw new Error("Este sistema não tem escolha depois do teste.");
+    const oferecidas = (dados.decisao as { opcoes?: OpcaoDecisao[] } | undefined)?.opcoes;
+    const id = escolha.opcao ?? oferecidas?.[0]?.id ?? sistema.decisoesAposTeste?.(p.ficha, r)[0]?.id;
+    if (!id) throw new Error("Não há escolha para este teste.");
+    // o sistema valida tudo de novo aqui (Vampiro: Força de Vontade atual, uma vez por teste, só dados normais); erro deixa a decisão aberta
+    const feito = sistema.aplicarDecisao(p.ficha, r, id, escolha.dados ? { dados: escolha.dados } : undefined);
     r = feito.resultado;
     salvarFicha(p.id, feito.ficha);
     publicar(campanhaId, { e: "personagem", personagem: visivel(sistema, { ...p, ficha: feito.ficha }) });
-    extra = textoRerrolagemParaMestre(feito.resultado as ResultadoVtm);
+    extra = feito.textoMestre;
   }
   clearTimeout(prazos.get(m.id));
   prazos.delete(m.id);

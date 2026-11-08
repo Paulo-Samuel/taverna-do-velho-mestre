@@ -5,6 +5,9 @@ import type { SementesSistema } from "./index";
 
 const lista = (itens: string[]) => (c: { sortear: <T>(l: readonly T[]) => T }) => c.sortear(itens);
 
+/** Cenário em branco na fantasia (e no Dungeon World): um ponto de partida concreto para o mestre ancorar a campanha. */
+export const FRONTEIRA = "livre: reino de fronteira da casa com uma vila-base nomeada e uma ruína a um dia de viagem";
+
 export const DND5E: SementesSistema = {
   cenarios: [
     "Uma cidade-estado em festa pela coroação, com um rei de doze anos, três regentes e um veneno já servido.",
@@ -37,6 +40,7 @@ export const DND5E: SementesSistema = {
   exemploNome: "Ex.: Brunhilda Pé-de-Ferro",
   exemploHistoria: "De onde veio, o que quer, de quem foge…",
   exemploCenario: "Em branco, o mestre inventa. Ele adora inventar.",
+  cenarioVazio: FRONTEIRA,
   campos: {
     divindade: {
       exemplo: "Ex.: Tharn, deus das forjas e dos juramentos",
@@ -85,6 +89,7 @@ export const PF2E: SementesSistema = {
   exemploNome: "Ex.: Mirabel Cantaforte",
   exemploHistoria: "Sua aldeia, sua ordem, o que te empurrou para a estrada…",
   exemploCenario: "Em branco, o mestre escolhe o canto do mundo e a primeira masmorra.",
+  cenarioVazio: FRONTEIRA,
   campos: {
     divindade: {
       exemplo: "Ex.: a Senhora da Aurora, que cura e não pergunta",
@@ -135,6 +140,7 @@ export const PF1E: SementesSistema = {
   exemploNome: "Ex.: Rowena Valcourt",
   exemploHistoria: "De onde veio, quem treinou você, o que procura…",
   exemploCenario: "Em branco, o mestre escolhe o reino e o primeiro problema.",
+  cenarioVazio: FRONTEIRA,
   campos: {
     divindade: {
       exemplo: "Ex.: Seraph, deusa da justiça cega",
@@ -188,6 +194,7 @@ export const OSR: SementesSistema = {
   exemploNome: "Ex.: Gertrudes Três-Dedos",
   exemploHistoria: "Por que alguém em sã consciência desce numa masmorra…",
   exemploCenario: "Em branco, o mestre rola na tabela de masmorras. Boa sorte.",
+  cenarioVazio: FRONTEIRA,
   campos: {
     divindade: {
       exemplo: "Ex.: o Deus das Estradas Esburacadas",

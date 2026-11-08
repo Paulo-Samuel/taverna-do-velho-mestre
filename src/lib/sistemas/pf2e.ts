@@ -23,6 +23,24 @@ function grauEm(prog: string, nivel: number): number {
   return grau;
 }
 
+/** Valor N de uma condição "nome N" ("ferido 2" → 2); 0 quando ausente, 1 quando sem número. */
+function valorCondicao(condicoes: string[], prefixo: string): number {
+  const c = condicoes.find((x) => normalizar(x).startsWith(prefixo));
+  return c ? Number(c.match(/(\d+)/)?.[1] ?? 1) : 0;
+}
+
+/** Caiu a 0 PV → moribundo 1 + ferido; voltou a ter PV → sai do moribundo e ganha (ou sobe) ferido. Muta a ficha. */
+function condicoesMoribundo(ficha: Ficha, pvAntes: number) {
+  const ferido = valorCondicao(ficha.condicoes, "ferid");
+  const moribundo = valorCondicao(ficha.condicoes, "moribund");
+  const sem = (prefixo: string) => ficha.condicoes.filter((x) => !normalizar(x).startsWith(prefixo));
+  if (ficha.pv === 0 && pvAntes > 0 && !moribundo) {
+    ficha.condicoes = [...ficha.condicoes, `moribundo ${Math.min(4, 1 + ferido)}`];
+  } else if (ficha.pv > 0 && moribundo) {
+    ficha.condicoes = [...sem("moribund").filter((x) => !normalizar(x).startsWith("ferid")), `ferido ${ferido + 1}`];
+  }
+}
+
 function proficiencia(grau: number, nivel: number): number {
   return grau > 0 ? 2 * grau + nivel : 0;
 }
@@ -665,6 +683,8 @@ export const pf2e: Sistema = {
   limitesAtributos: { min: -1, max: 4 },
   periciasEscolhiveis: 4,
   nivelMaximo: 20,
+  combate: { modelo: "rodadas", iniciativaNpc: "1d20" },
+  progressao: "xp",
   testesSugeridos: ["Percepção", "Atletismo", "Acrobatismo", "Furtividade", "Diplomacia", "Dissimulação", "Intimidação", "Medicina", "Fortitude", "Reflexos", "Vontade", "Ataque", "Ataque 2", "Magia", "Iniciativa", "Recordar Conhecimento", "Teste simples", "Recuperação"],
   regrasParaMestre: REGRAS_PF2E,
 
@@ -910,6 +930,12 @@ export const pf2e: Sistema = {
       .filter(Boolean)
       .join(" ");
     return { ficha, resumo };
+  },
+
+  aposMudancaDePv(ficha, pvAntes, origem) {
+    condicoesMoribundo(ficha, pvAntes);
+    // descanso que encheu o PV: o ferido sai junto (a regra do descanso vale também para quem saiu do moribundo agora)
+    if (origem.startsWith("descanso") && ficha.pv >= ficha.pvMax) ficha.condicoes = ficha.condicoes.filter((c) => !/^ferid/.test(normalizar(c)));
   },
 
   descansar(original, tipo) {

@@ -586,6 +586,8 @@ export const pf1e: Sistema = {
   limitesAtributos: LIMITES,
   periciasEscolhiveis: 8,
   nivelMaximo: 20,
+  combate: { modelo: "rodadas", iniciativaNpc: "1d20" },
+  progressao: "xp",
   testesSugeridos: ["Percepção", "Furtividade", "Diplomacia", "Sentir Motivação", "Acrobacia", "Escalar", "Conhecimento (Arcano)", "Fortitude", "Reflexos", "Vontade", "Ataque", "Manobra", "Iniciativa", "Concentração"],
   regrasParaMestre: `Sistema: Pathfinder 1ª edição (PRD, OGL).
 - Teste = d20 + bônus contra CD. CDs típicas: 5 trivial, 10 fácil, 15 médio, 20 difícil, 25 muito difícil, 30 heroico, 40 quase impossível.

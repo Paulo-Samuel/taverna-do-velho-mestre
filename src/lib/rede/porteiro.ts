@@ -19,8 +19,11 @@ const LIBERADAS: RegExp[] = [
   /^\/[^/]*\.(ico|png|jpe?g|svg|webp|gif|txt|webmanifest|woff2?)$/i,
 ];
 
+// Dentro das rotas de mesa, as que levam a campanha inteira para fora (chat, fichas e anotações de todos) ficam só aqui.
+const SO_DA_MAQUINA: RegExp[] = [/^\/api\/campanhas\/\d+\/exportar\/?$/];
+
 export function rotaLiberadaParaRede(caminho: string): boolean {
-  return LIBERADAS.some((r) => r.test(caminho));
+  return LIBERADAS.some((r) => r.test(caminho)) && !SO_DA_MAQUINA.some((r) => r.test(caminho));
 }
 
 export function porteiro(request: NextRequest): NextResponse {

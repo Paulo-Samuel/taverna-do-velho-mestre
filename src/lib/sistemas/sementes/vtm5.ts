@@ -205,6 +205,8 @@ export const VTM5: SementesSistema = {
   exemploNome: "Ex.: Juliana Cavalcanti",
   exemploHistoria: "Quem você era antes do Abraço, quem te Abraçou, o que ainda te prende aos vivos…",
   exemploCenario: "Em branco, o mestre escolhe a cidade e a noite. Ele adora um Elysium tenso.",
+  cenarioVazio:
+    "livre: escolha UMA cidade brasileira real (capital ou cidade grande) e diga o nome nas primeiras linhas; nomeie o Príncipe ou Barão, o Xerife, o Elysium e o domínio do personagem na abertura ou no diário; toda cena ancorada em bairro, rua ou lugar reconhecível; a política da noite (favores, Máscara, seitas) é pano de fundo mesmo em histórias íntimas",
   campos: {
     conceito: { exemplo: (c) => `Ex.: ${CONCEITOS[c.classe]?.[0] ?? "ex-policial afogado em culpa"}`, gerar: doCla(CONCEITOS) },
     ambicao: { exemplo: "Ex.: descobrir quem me Abraçou e por quê", gerar: doCla(AMBICOES_CLA, AMBICOES) },

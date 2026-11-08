@@ -1,16 +1,36 @@
 import "server-only";
 import { listarDiario, listarFatos, mensagensDepois, type Campanha, type Mensagem, type Personagem } from "../db";
 import { quantosEntram } from "../../components/fatos/limites";
-import type { Cena, EntradaDiario, Sistema, TipoDiario } from "../sistemas/tipos";
+import type { Cena, EntradaDiario, Ficha, Sistema, TipoDiario } from "../sistemas/tipos";
 import { DIFICULDADES, dificuldadeDe, FOCOS, MAX_FOCO_LIVRE, MAX_INSTRUCOES, TAMANHOS, tamanhoDe } from "./estilo";
 import { jogadorRolaOsDados } from "./ferramentas";
 import { JANELA_RECENTE } from "./memoria";
 import { aventuraDoSistema, roteiroParaMestre } from "../aventuras";
+import { sementesDe } from "../sistemas/sementes";
 
 export { JANELA_RECENTE };
 
+/**
+ * O que as regras gerais dizem sobre combate, pelo modelo do sistema (campo `combate` do contrato): "rodadas" tem
+ * iniciativa e rastreador em toda luta; "leve" segue a ordem da ficção e o rastreador só guarda o PV dos inimigos.
+ */
+const COMBATE_GERAL = {
+  rodadas: {
+    ordem: "Resolva as ações na ordem da ficção (em combate, na da iniciativa).",
+    rastreador:
+      'Todo combate passa pelo rastreador: combate.acao "iniciar" com os inimigos (nome único, PV, defesa; o servidor rola a iniciativa e devolve a ordem, narre nela). Dano e condições de INIMIGOS em "atualizar"; nos personagens, `alterar_ficha`. "proximo" quando o combatente da vez termina; "encerrar" quando o último inimigo cai, foge ou se rende.',
+    checklist: "Inimigo ferido, caído, em fuga, ou a vez passou? → `atualizar_cena` (combate).",
+  },
+  leve: {
+    ordem: "Resolva as ações na ordem da ficção, também em combate (sem rodadas nem iniciativa).",
+    rastreador:
+      'O rastreador é opcional (as regras do sistema dizem quando abrir) e serve para ter o PV dos inimigos à vista: combate.acao "iniciar" com os inimigos (nome único, PV); dano e condições de INIMIGOS em "atualizar"; nos personagens, `alterar_ficha`; "encerrar" quando o último inimigo cai, foge ou se rende.',
+    checklist: "Rastreador aberto e um inimigo foi ferido, caiu ou fugiu? → `atualizar_cena` (combate).",
+  },
+} as const;
+
 /** Regras gerais. `tamanho` vem do estilo da mesa e é o único lugar do prompt que fixa quantos parágrafos narrar. */
-const regrasDoMestre = (tamanho: string) => `Você é o Velho Mestre da Taverna: o narrador e juiz de uma aventura de RPG, em português do Brasil, para um ou mais jogadores.
+const regrasDoMestre = (tamanho: string, combate: (typeof COMBATE_GERAL)[keyof typeof COMBATE_GERAL]) => `Você é o Velho Mestre da Taverna: o narrador e juiz de uma aventura de RPG, em português do Brasil, para um ou mais jogadores.
 
 ## Estilo
 - Segunda pessoa ("você"/"vocês"), presente, frases vivas e concretas: um detalhe sensorial bom vale mais que três adjetivos. Siga o tom da campanha (humor ácido só quando o tom deixa); o perigo é real e o mundo não protege ninguém.
@@ -23,7 +43,7 @@ const regrasDoMestre = (tamanho: string) => `Você é o Velho Mestre da Taverna:
 
 ## Turno
 - Ordem (a tela mostra nessa ordem): 1) \`atualizar_cena\` se mudou o lugar, a hora ou o clima; 2) a narração; 3) o teste, se precisar, só DEPOIS da narração; 4) \`sugerir_acoes\` por último, se existir. Registros (\`alterar_ficha\`, \`anotar_diario\`, \`conceder_xp\`) entram quando o fato acontece. A narração completa vem ANTES de \`sugerir_acoes\`, como texto da resposta ou pela ferramenta \`narrar\` (use \`narrar\` sempre que a narração vier depois de outras ferramentas; o raciocínio interno não aparece para o jogador: nunca narre só nele) (pode vir depois de outras ferramentas, mas nunca é trocada por elas). Depois das ferramentas finais (\`pedir_teste\`, \`sugerir_acoes\`, registros) NÃO escreva mais NADA: nem "a vez é sua", nem "o dado é seu", nem resumo do que mudou, nem comentário sobre o que você fez ("a abertura está pronta"). O turno acaba na última ferramenta; se ainda precisar responder algo depois dela, responda só "—".
-- Resolva as ações na ordem da ficção (em combate, na da iniciativa). Com vários personagens, divida o holofote: quem agiu pouco ganha uma pergunta direta ou um gancho pessoal; ninguém domina duas respostas seguidas.
+- ${combate.ordem} Com vários personagens, divida o holofote: quem agiu pouco ganha uma pergunta direta ou um gancho pessoal; ninguém domina duas respostas seguidas.
 - A própria narração termina dizendo de quem é a vez e o que está em jogo, UMA vez, no fim do texto narrado (com teste: no momento antes do dado). Nunca repita a passagem de vez numa frase à parte depois das ferramentas.
 
 ## Ritmo e consequência
@@ -34,16 +54,16 @@ const regrasDoMestre = (tamanho: string) => `Você é o Velho Mestre da Taverna:
 ## Dados e ficha
 - Rolagens de inimigos, dano e tabelas: \`rolar_dados\` (secreta: true para o que os jogadores não devem ver).
 - NUNCA invente o número de um dado nem narre o resultado antes da ferramenta responder. Narre a partir do grau, da margem e do crítico, sem repetir os números crus (a tela já mostra o dado).
-- PV 0 deixa a situação desesperadora: a morte é possível, mas tem de ser merecida e dramática.
+- PV 0 deixa a situação desesperadora: a morte é possível, mas tem de ser merecida e dramática, salvo regra do sistema.
 
 ## Cena e combate (painel que todos veem)
 - \`atualizar_cena\` com titulo (como capítulo: "Salão Comum"), local, momento e musica ao abrir e sempre que o lugar ou o clima mudar; com situacao quando o foco mudar. musica.humor: taverna, calmo, exploracao, misterio, tensao, combate, triste, vitoria, sombrio (energia baixa, media, alta).
 - A trilha acompanha a história, não fica horas no mesmo humor: taverna ou calmo em cena social e descanso; exploracao na estrada; misterio na investigação; tensao só com ameaça concreta e presente (e sai quando ela passa); combate ao iniciar a luta e vitoria ao encerrá-la bem; triste no luto e na perda; sombrio para o sobrenatural pesado. A cena atual diz o que está tocando e há quantos turnos: se o clima mudou, mude a música.
-- Todo combate passa pelo rastreador: combate.acao "iniciar" com os inimigos (nome único, PV, defesa; o servidor rola a iniciativa e devolve a ordem, narre nela). Dano e condições de INIMIGOS em "atualizar"; nos personagens, \`alterar_ficha\`. "proximo" quando o combatente da vez termina; "encerrar" quando o último inimigo cai, foge ou se rende.
+- ${combate.rastreador}
 - Inimigos agem com inteligência própria: recuam, se rendem, pedem reforço; nem toda luta é até a morte. Encontros na medida do nível e do tamanho do grupo, e sempre há uma saída que não é só bater.
 
 ## Progressão e diário
-- Vitória, missão cumprida ou marco → \`conceder_xp\` (ou \`subir_nivel\` em sistemas por marcos): pouco e frequente é melhor que nada. Conceda também no meio da sessão em marcos claros (missão cumprida, vitória importante, grande revelação), uma vez por marco e sem exagero (no Vampiro, que dá 1 a 3 por sessão, no máximo 1 por marco grande; o grosso fica para o fim da noite). Descanso só em lugar razoavelmente seguro → \`descansar\` (curto ou longo); interrompido não conta.
+- Vitória, missão cumprida ou marco → \`conceder_xp\` (ou \`subir_nivel\` em sistemas por marcos): pouco e frequente é melhor que nada. Conceda também no meio da sessão em marcos claros (missão cumprida, vitória importante, grande revelação), uma vez por marco e sem exagero (as regras do sistema dizem quanto). Descanso só em lugar razoavelmente seguro → \`descansar\` (curto ou longo); interrompido não conta.
 - \`anotar_diario\` assim que surgir um NPC com nome (aparencia, voz, jeito, desejo, temperamento), uma missão (objetivo, recompensa, pistas), um lugar, um item marcante ou uma pista; atualize o status quando mudar (missão concluída/falhou; NPC aliado, hostil, morto).
 
 ## Segurança
@@ -59,7 +79,7 @@ const regrasDoMestre = (tamanho: string) => `Você é o Velho Mestre da Taverna:
 
 ## Checklist antes de encerrar CADA turno
 1. Dano, cura, magia/recurso/munição gasto, dinheiro, item ou condição? → \`alterar_ficha\` para cada um.
-2. Inimigo ferido, caído, em fuga, ou a vez passou? → \`atualizar_cena\` (combate).
+2. ${combate.checklist}
 3. Mudou o local, a hora ou a situação? → \`atualizar_cena\`. O clima mudou (a ameaça passou, virou cena social, luto, revelação, luta começou ou acabou)? → \`atualizar_cena\` com musica.
 4. NPC, missão, lugar, item ou pista nova, ou mudança de status? → \`anotar_diario\`.
 5. Vitória ou marco? → \`conceder_xp\` (ou \`subir_nivel\`). Descanso seguro? → \`descansar\`.
@@ -85,10 +105,6 @@ const MODO_HISTORIA = `## MODO HISTÓRIA (vale mais que as regras acima quando h
 O jogador vê a aventura como um livro: texto corrido, sem fichas nem números à vista. Escreva para ser LIDO com prazer, com ritmo de romance de fantasia: nada de CD, bônus ou nome de regra na narração.
 - Chame NPCs e lugares pelo nome; cada NPC fala com a voz anotada no diário. Missões acumulam pistas a cada descoberta.
 - Escolhas morais que pesam viram \`ajustar_reputacao\` (quando existir).`;
-
-/** Vampiro: a rerrolagem com Força de Vontade é um botão do jogador no cartão do teste. */
-const REROLAGEM_VAMPIRO = `## FORÇA DE VONTADE (rerrolagem)
-- Quem rerrola com Força de Vontade é o jogador: se ele pedir ("quero rerrolar", "posso usar Força de Vontade?"), diga fora do personagem, em uma linha, para usar o botão de Força de Vontade no cartão do teste. Não rerrole por ele nem desconte a Força de Vontade.`;
 
 /** Estilo escolhido nos ajustes da mesa: linhas extras do bloco da campanha (vazio = padrão). */
 function estiloDaMesa(c: Campanha): string {
@@ -225,7 +241,8 @@ export function promptDoSistema(c: Campanha, sistema: Sistema, personagens: Pers
     c.config?.modoJogo === "historia" ? MODO_HISTORIA : "",
     jogadorRolaOsDados(c) ? DADOS_DO_JOGADOR : DADOS_DO_MESTRE,
     c.config?.sugestoes !== false ? SUGESTOES : "",
-    sistema.id === "vtm5" ? REROLAGEM_VAMPIRO : "",
+    // texto próprio do sistema sobre a decisão depois do dado (Vampiro: rerrolagem com Força de Vontade é botão do jogador)
+    sistema.textosDoMestre?.rerrolagem ?? "",
   ].filter(Boolean);
   const tamanho = TAMANHOS.find((t) => t.id === tamanhoDe(c.config?.narracao))!.prompt;
   // aventura pronta: o roteiro secreto vai em todo turno; a cena de abertura, só enquanto ainda não há resumo
@@ -233,13 +250,13 @@ export function promptDoSistema(c: Campanha, sistema: Sistema, personagens: Pers
   const aventura = pronta
     ? `\n\n## AVENTURA EM ANDAMENTO (roteiro secreto: nunca revele ao jogador; improvise em cima, deixe o jogador mudar o rumo)\n${roteiroParaMestre(pronta, !c.resumo, sistema.id)}`
     : "";
-  return `${regrasDoMestre(tamanho)}\n\n${extras.join("\n\n")}
+  return `${regrasDoMestre(tamanho, COMBATE_GERAL[sistema.combate?.modelo ?? "rodadas"])}\n\n${extras.join("\n\n")}
 
-## Regras do sistema
+## Regras do sistema (quando conflitam com as gerais, valem estas)
 ${sistema.regrasParaMestre}
 
 ## Campanha: ${c.nome}
-- Cenário pedido: ${c.cenario || "livre, surpreenda"}
+- Cenário pedido: ${c.cenario || sementesDe(sistema.id).cenarioVazio}
 - Tom: ${c.tom}
 - Grupo: ${grupo}
 - ${MODOS[c.config?.modo ?? "livre"]}${estiloDaMesa(c)}${aventura}
@@ -300,22 +317,31 @@ export function promptDeContinuacao(promptOriginal: string, ferramentasUsadas: s
 ${feitas} O que você escreveu no raciocínio interno não apareceu para ele. NÃO repita cena, diário, teste nem sugestões: chame AGORA a ferramenta narrar com a narração completa deste turno, no tamanho combinado, e termine. Nada de texto fora da ferramenta.)`;
 }
 
-/** Pedido do turno de fim de sessão: fechamento curto, XP pelas regras do sistema, Remorso no Vampiro, diário, sem sugestões. */
-export type FimDeSessao = { sessao: number; vampiro: boolean; marcos: boolean; comManchas: string[] };
+/**
+ * Pedido do turno de fim de sessão: fechamento curto, XP pelas regras do sistema, passos próprios do sistema antes do
+ * fechamento (Remorso no Vampiro), diário, sem sugestões. Monte com `fimDeSessao`.
+ */
+export type FimDeSessao = { sessao: number; xp: string; passosExtras: string[] };
+
+/** XP do fim da noite quando o sistema não declara o próprio (campo `fimDeSessao` do contrato), pela progressão. */
+const XP_FIM_GENERICO = {
+  marcos: "subir_nivel só se esta sessão fechou um arco ou uma missão importante; senão, conceder_xp como registro dos marcos da noite, com o motivo",
+  xp: "conceder_xp pelos marcos desta sessão (encontros vencidos, missões cumpridas, descobertas, boas ideias), na medida das regras do sistema, com o motivo",
+};
+
+/** O pedido de fim de sessão deste sistema, para estas fichas. */
+export function fimDeSessao(sistema: Sistema, sessao: number, fichas: Ficha[]): FimDeSessao {
+  const proprio = sistema.fimDeSessao;
+  const xp = proprio?.xp ?? (sistema.progressao === "xp" ? XP_FIM_GENERICO.xp : XP_FIM_GENERICO.marcos);
+  return { sessao, xp, passosExtras: proprio?.passosExtras?.(fichas) ?? [] };
+}
 
 function pedidoDeFim(f: FimDeSessao): string {
-  const xp = f.vampiro
-    ? "conceder_xp de 1 a 3 para cada personagem, com o motivo: 1 pela noite jogada, +1 se perseguiu a Ambição ou pôs as Convicções à prova, +1 por uma cena memorável"
-    : f.marcos
-      ? "subir_nivel só se esta sessão fechou um arco ou uma missão importante; senão, conceder_xp como registro dos marcos da noite, com o motivo"
-      : "conceder_xp pelos marcos desta sessão (encontros vencidos, missões cumpridas, descobertas, boas ideias), na medida das regras do sistema, com o motivo";
   const passos = [
-    f.vampiro && f.comManchas.length
-      ? `teste_de_remorso para ${f.comManchas.join(", ")} (tem Manchas); o resultado entra no fechamento (a consciência pesa ou cede)`
-      : "",
+    ...f.passosExtras,
     "narrar com o FECHAMENTO da noite, curto (1 a 2 parágrafos): onde o personagem fica (sem decidir escolhas novas por ele: corte para o amanhecer ou o refúgio), o peso do que aconteceu e um gancho para a próxima sessão. Sem pedir teste, sem perguntar o que ele faz, sem passar a vez",
     "anotar_diario para atualizar missões (status, pistas novas) e NPCs que mudaram",
-    xp,
+    f.xp,
   ].filter(Boolean);
   return `[fim da sessão]\n\nA mesa está encerrando a noite de jogo (fim da sessão ${f.sessao}). Faça nesta ordem:\n${passos.map((p, i) => `${i + 1}) ${p};`).join("\n")}\n${passos.length + 1}) e PARE: NÃO chame sugerir_acoes, não peça teste e não escreva nada depois das ferramentas, no máximo "—" (a tela mostra o XP e o marcador de fim de sessão).`;
 }

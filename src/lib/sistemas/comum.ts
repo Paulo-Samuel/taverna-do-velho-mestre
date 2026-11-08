@@ -155,7 +155,10 @@ export function clonar(ficha: Ficha): Ficha {
   return structuredClone(ficha);
 }
 
-/** Versão só-dados do sistema para mandar ao cliente. */
+/**
+ * Versão só-dados do sistema para mandar ao cliente. Lista campo a campo (nada de espalhar o objeto): funções e textos só do
+ * servidor (fimDeSessao, textosDoMestre, decisoesAposTeste, aposMudancaDePv...) nunca vazam para o navegador.
+ */
 export function publico(s: Sistema): SistemaPublico {
   return {
     id: s.id,
@@ -175,9 +178,12 @@ export function publico(s: Sistema): SistemaPublico {
     metodosAtributos: s.metodosAtributos,
     limitesAtributos: s.limitesAtributos,
     periciasEscolhiveis: s.periciasEscolhiveis,
+    ...(s.limitePericias ? { limitePericias: structuredClone(s.limitePericias) } : {}),
     nivelMaximo: s.nivelMaximo,
     testesSugeridos: s.testesSugeridos,
     regrasParaMestre: s.regrasParaMestre,
+    combate: { ...s.combate },
+    progressao: s.progressao,
   };
 }
 
@@ -207,6 +213,8 @@ export function sistemaEmConstrucao(id: string, nome: string, descricao: string,
     nivelMaximo: 20,
     testesSugeridos: [],
     regrasParaMestre: "",
+    combate: { modelo: "rodadas" },
+    progressao: "xp",
     atributosIniciais: () => ({}),
     criarFicha: erro,
     resolverTeste: erro,

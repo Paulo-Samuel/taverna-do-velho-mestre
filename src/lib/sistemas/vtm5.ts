@@ -35,6 +35,8 @@ import {
   type ResultadoVtm,
 } from "./vtm5/testes";
 import { CONDICAO_FAMINTO, INTENSIDADES, RESSONANCIAS } from "./vtm5/sangue";
+import { aplicarDecisao, decisoesAposTeste, opcoesAntesDeRolar } from "./vtm5/decisoes";
+import { FIM_DE_SESSAO_VTM } from "./vtm5/fim";
 import type { BlocoFicha, Ficha, OpcaoCriacao, Sistema } from "./tipos";
 
 // Vampiro: A Máscara 5ª edição — fã-conteúdo gratuito e não oficial sob a política Dark Pack da Paradox.
@@ -289,38 +291,92 @@ const OPCOES: OpcaoCriacao[] = [
 
 // ---------- regras para o mestre ----------
 
-const REGRAS = `Sistema: Vampiro: A Máscara 5ª edição (V5). Fã-conteúdo; mecânica resumida.
-TESTES — parada de d10 = atributo + perícia (ou atributo + atributo, ou atributo + disciplina). Cada dado 6+ é um sucesso; cada PAR de 10 vale 4 sucessos no total. Ao testar (teste ou pedir_teste):
-- teste: "Destreza + Furtividade", "Raciocínio + Percepção", "Carisma + Persuasão"; só a perícia ("Furtividade") usa o atributo usual; só o atributo ("Força") faz par com outro atributo; disciplina ("Dominação", "Presença", "Auspícios", "Celeridade"...) soma o atributo usual (pode dizer "Carisma + Dominação"). Especialidade: escreva o foco entre parênteses ("Lábia (sedução)") e, se a ficha tiver, ganha +1 dado.
-- PODERES: disciplina na parada ("Destreza + Celeridade", "Raciocínio + Auspícios") já rola o Despertar do poder junto (1 por padrão) e sobe a Fome sozinho. Poder que não custa sangue (vários de nível 1, passivos): custo_despertar 0; poder que custa 2: custo_despertar 2; nivel_poder ajuda a Potência de Sangue a rerrolar. Poder usado SEM teste (Celeridade para correr, Fortitude para aguentar, Ofuscação para sumir): despertar_sangue com o motivo. Nunca faça a conta da Fome de cabeça.
-- Especiais: "Ataque" (escolhe Briga, Armas Brancas ou Armas de Fogo pela arma citada), "Iniciativa" (Raciocínio + Percepção, sem dificuldade), "Força de Vontade". Caça, Despertar, Surto, Frenesi e Remorso têm ferramentas próprias (abaixo).
+/**
+ * Regras do V5 para o mestre, em seções. Cada regra mora em UMA seção (as descrições das ferramentas dizem só QUANDO chamar;
+ * a mecânica está aqui) e cada seção tem um teto de caracteres que tests/regras-teto.test.ts confere, junto com o total.
+ */
+export type SecaoRegras = { id: string; teto: number; texto: string };
+
+export const SECOES_REGRAS: SecaoRegras[] = [
+  {
+    id: "TESTES",
+    teto: 2000,
+    texto: `TESTES — parada de d10 = atributo + perícia (ou atributo + atributo, ou atributo + disciplina). Cada dado 6+ é um sucesso; cada PAR de 10 vale 4 sucessos no total.
+- Nome do teste (teste ou pedir_teste): "Destreza + Furtividade", "Raciocínio + Percepção", "Carisma + Persuasão"; só a perícia ("Furtividade") usa o atributo usual; só o atributo ("Força") faz par com outro atributo; disciplina ("Dominação", "Presença", "Auspícios", "Celeridade"...) soma o atributo usual (pode dizer "Carisma + Dominação"). Especialidade: o foco entre parênteses ("Lábia (sedução)") dá +1 dado se a ficha tiver.
+- Especiais: "Ataque" (Briga, Armas Brancas ou Armas de Fogo pela arma citada), "Iniciativa" (Raciocínio + Percepção, sem dificuldade), "Força de Vontade".
 - alvo = DIFICULDADE em sucessos (padrão 1): 1 rotineiro, 2 direto, 3 moderado, 4 desafiador, 5 muito difícil, 6+ quase impossível. Em disputa, role o NPC com rolar_dados (Nd10, conte 6+) e use os sucessos dele como alvo.
-- Ajuda ou atrapalho = ±2 dados (modificador ±2 no teste ou no pedir_teste, mínimo 1 dado).
-- Resultado: total ≥ alvo = Sucesso; com par de 10 = Crítico. Se faltar pouco (0 < sucessos < alvo), ofereça VITÓRIA A UM CUSTO (dano, Mancha, barulho, testemunha, Fome).
-FOME (0 a 5, recurso "fome") — cada ponto troca um dado da parada por um dado de Fome (o servidor faz isso; não vale em Despertar, Frenesi, Remorso e Força de Vontade). Crítico Sujo (um 10 de Fome no par): consegue, e além da conta, do jeito da Besta — brutal, exagerado, à vista de alguém. Falha Bestial (falhou com um 1 de Fome): a Besta escapa — compulsão, violência ou vexame. Nunca narre os dois como sucesso ou falha comuns.
-- DESPERTAR (1d10: 6+ nada; 1–5 = +1 de Fome; o servidor rola e aplica): poder em teste já vem junto; fora de teste use despertar_sangue (poder sem teste, corar e comer para parecer vivo). descansar já faz o da cura e o do acordar. Com Fome 5 a falha não sobe: o sangue não responde, o poder não sai e a Besta cobra — chame testar_frenesi tipo "fome".
-- SURTO DE SANGUE: surto_de_sangue rola o Despertar e guarda +dados (Potência) para o PRÓXIMO teste do personagem, que os gasta sozinho (não vale em disciplina).
-- Fome 4–5: descreva a Besta arranhando por dentro; o personagem fica irritadiço, distraído pelo pulso alheio.
-ALIMENTAÇÃO — cacar (dificuldade 2–4 conforme o lugar; parada do Tipo de Predador). O servidor baixa a Fome (1, ou 2 com folga; sem matar não desce de 1), aplica a Potência, grava a Ressonância (sorteada ou a que você der: colérica, melancólica, fleumática, sanguínea, vazia) e marca compulsão na Falha Bestial. matar: true zera a Fome e dá Manchas (manchas: N; padrão 2). Ressonância intensa ou aguda = +1 dado nas disciplinas ligadas até a próxima caça (automático). Falha: complicação (vítima foge, testemunha, briga, Máscara em risco).
-MASCARADA — esconder a existência dos vampiros é a lei de todas as seitas. Quebras chamam caçadores, a Segunda Inquisição e a ira do Príncipe ou do Barão. Câmeras, celulares e testemunhas importam.
-HUMANIDADE (recurso "humanidade", 0–10) e MANCHAS (recurso "mancha") — atos monstruosos ou contra as Convicções dão Manchas: alterar_ficha recursos {"mancha": 1 a 3} (matar inocente vale 3+). Manchas que preenchem todas as caixas vazias deixam o personagem atormentado (−2 dados, o servidor aplica). Ao fechar a noite ou o capítulo (amanhecer, fim de arco), quem tem Manchas faz teste_de_remorso (10 − Humanidade − Manchas dados, mínimo 1): sucesso limpa as Manchas; falha tira 1 de Humanidade e limpa as Manchas (o servidor aplica). Humanidade baixa = mais monstro: menos parece humano, dorme mais, frenesis mais fáceis. Humanidade 0 = perdido para a Besta (vira NPC). Pedras de Toque feridas ou mortas doem: Manchas e perda de Convicção.
-FRENESI E COMPULSÕES — provocação, fogo, sol ou fome extrema pedem testar_frenesi (Força de Vontade + Humanidade/3; tipo fúria, fome ou terror; dificuldade 2 leve a 4–5 fogo na cara ou Fome 5 diante de sangue). Falha = a Besta age até o fim da cena (o servidor marca "Frenesi (tipo)"; tire com alterar_ficha quando a cena acabar). Gastar 1 de Força de Vontade (alterar_ficha recursos {"vontade": -1}) pode adiar um turno. Compulsão ativa: −2 dados em tudo que não a sirva.
-FORÇA DE VONTADE (recurso "vontade") — rerrolar até 3 dados normais (−1 FV) é do JOGADOR: no teste que ele rola (pedir_teste), se falhou e há FV, o cartão oferece rerrolar antes de o resultado chegar a você, e o servidor já aplica o gasto. Não faça a conta nem simule com rolar_dados; se ele pedir rerrolagem num teste que você rolou, diga que vale só nos testes que ele mesmo rola. Dano mental/social também tira Força de Vontade.
-DANO — Saúde = Vigor + 3 (pv). Superficial: vampiros dividem por 2 (arredonde para cima) ANTES de aplicar com alterar_ficha pv −N. Agravado (fogo, sol, garras e presas de lobisomem, alguns poderes) entra inteiro: aplique e anote a condição "agravado N" (só cura com noites de descanso e muito sangue). Armas somam dano à margem de sucesso do ataque (soco +0, faca +1, espada/taco +2, pistola +2, espingarda +4). Mortais e lacaios caem rápido (Saúde 3–7).
-TORPOR E MORTE FINAL — Saúde 0 por dano superficial = torpor (o servidor marca "inconsciente": trate como torpor, dias a anos). Saúde 0 por dano agravado, estaca no coração + fogo/sol, decapitação = Morte Final. Estaca no coração paralisa, não mata.
-CONFLITO — sem rodadas rígidas: descreva a situação, cada um declara, resolva por ordem lógica (atirador antes do soco, Celeridade antes de todos). "Iniciativa" só se a mesa pedir ordem. Ataque: atacante vs. defesa do alvo (Destreza + Atletismo para esquivar, Força + Briga para bloquear); margem = dano.
-POTÊNCIA DE SANGUE (nível da ficha) — dá dados de Surto, cura por Despertar, bônus em disciplinas e gravidade da perdição (veja a ficha). Sobe com o tempo e a diablerie (subir_nivel, sem custo) ou com XP que o jogador gasta.
-XP — você só CONCEDE (conceder_xp): 1 a 3 por sessão (o máximo quando o personagem perseguiu a Ambição, pôs as Convicções à prova ou fez uma cena memorável), um pouco mais no fim de um arco. O jogador GASTA sozinho na ficha (botão "Gastar XP"), pela tabela do livro: atributo novo nível ×5, perícia ×3, especialidade 3, disciplina do clã ×5, de fora ×7 (Caitiff ×6), ritual/fórmula nível ×3, vantagem 3 por ponto, Potência ×10. Cada compra vira uma linha no chat e a ficha nova chega no próximo turno; não altere a ficha para "aplicar" XP. Pode lembrar o jogador de gastar, e disciplina de fora do clã pede justificativa na história (beber o sangue de quem a tem, um mentor): cobre isso em cena.
-VITAE E LAÇOS — beber sangue de vampiro três vezes, em noites diferentes, cria Laço de Sangue: devoção artificial ao doador. Vitae dada a mortais cria carniçais. Diablerie (beber a alma de outro vampiro) é crime capital e mancha a aura.
-COMO MESTRAR V5
+- Ajuda ou atrapalho = ±2 dados (modificador, mínimo 1 dado).
+- Total ≥ alvo = Sucesso; com par de 10 = Crítico. Se faltar pouco (0 < sucessos < alvo), ofereça VITÓRIA A UM CUSTO (dano, Mancha, barulho, testemunha, Fome).`,
+  },
+  {
+    id: "SANGUE",
+    teto: 1500,
+    texto: `SANGUE — FOME (recurso "fome", 0 a 5): cada ponto troca um dado da parada por um dado de Fome (o servidor troca; não vale em Despertar, Frenesi, Remorso e Força de Vontade). Crítico Sujo (um 10 de Fome no par): consegue além da conta, do jeito da Besta — brutal, exagerado, à vista de alguém. Falha Bestial (falhou com um 1 de Fome): a Besta escapa — compulsão, violência ou vexame. Nunca narre os dois como resultado comum. Fome 4–5 aparece na narração: o pulso alheio, o cheiro, a irritação.
+- DESPERTAR (1d10: 6+ nada; 1–5 = +1 de Fome; o servidor rola e aplica): disciplina na parada já desperta o poder junto (custo_despertar 1 por padrão, 0 para poder que não custa sangue, 2–3 para os caros; nivel_poder deixa a Potência rerrolar). Poder SEM teste, corar ou comer para parecer vivo: despertar_sangue. descansar já faz o da cura e o do acordar. Com Fome 5 a falha não sobe: o poder não sai e a Besta cobra (testar_frenesi tipo "fome"). Nunca faça a conta da Fome de cabeça.
+- SURTO DE SANGUE: soma dados (pela Potência) no PRÓXIMO teste comum do personagem, que os gasta sozinho; nunca em parada de disciplina, Frenesi, Remorso ou Força de Vontade.`,
+  },
+  {
+    id: "ALIMENTAÇÃO",
+    teto: 900,
+    texto: `ALIMENTAÇÃO — cacar com dificuldade 2 (lugar fácil), 3 (comum) ou 4 (vigiado, alvo atento), na parada do Tipo de Predador. Sucesso baixa a Fome em 1 (2 com folga); sem matar não desce de 1; Potência alta sacia menos. A Ressonância (colérica, melancólica, fleumática, sanguínea, vazia: sorteada ou a que você der) intensa ou aguda dá +1 dado nas disciplinas ligadas até a próxima caça. matar: true zera a Fome e dá Manchas (padrão 2). Falha: complicação (vítima foge, testemunha, briga, Máscara em risco). Caça é cena, não teste solto: o Tipo de Predador diz onde e como, e a vítima tem rosto.`,
+  },
+  {
+    id: "HUMANIDADE",
+    teto: 1200,
+    texto: `HUMANIDADE (recurso "humanidade", 0–10), MANCHAS (recurso "mancha") E REMORSO — ato monstruoso ou contra as Convicções dá Manchas: alterar_ficha recursos {"mancha": 1 a 3} (matar inocente vale 3+). Manchas que enchem as caixas livres deixam o personagem atormentado (−2 dados, o servidor aplica). Ao fechar a noite ou o arco, quem tem Manchas faz teste_de_remorso: 10 − Humanidade − Manchas dados (mínimo 1); um sucesso limpa as Manchas, nenhum tira 1 de Humanidade e limpa as Manchas. Humanidade baixa = mais monstro (parece menos humano, dorme mais, entra em frenesi mais fácil); 0 = perdido para a Besta (vira NPC). Pedra de Toque ferida ou morta por culpa dele = Manchas, e a Convicção perde o freio.`,
+  },
+  {
+    id: "FRENESI",
+    teto: 900,
+    texto: `FRENESI E COMPULSÕES — testar_frenesi rola Força de Vontade atual + Humanidade/3 (Brujah perde dados na fúria): fúria (provocação, humilhação), fome (sangue à vista com Fome alta), terror (fogo, sol). Dificuldade 2 leve, 3 sério, 4–5 extremo (fogo na cara, Fome 5 diante de sangue). Falha: a Besta age até o fim da cena (o servidor marca "Frenesi (tipo)"; tire com alterar_ficha quando a cena acabar); gastar 1 de Força de Vontade adia um turno. Depois de Crítico Sujo ou Falha Bestial, marque a compulsão do clã (ou Fome, Dominação, Agressão, Arrogância) como condição: −2 dados em tudo que não a sirva; sai quando satisfeita ou quando a cena muda.`,
+  },
+  {
+    id: "FORÇA DE VONTADE",
+    teto: 500,
+    texto: `FORÇA DE VONTADE (recurso "vontade") — paga a rerrolagem de até 3 dados normais, que é do JOGADOR e só nos testes que ele rola (o cartão oferece e o servidor desconta); não simule com rolar_dados. Dano mental ou social tira Força de Vontade (alterar_ficha recursos {"vontade": -N}).`,
+  },
+  {
+    id: "DANO",
+    teto: 1000,
+    texto: `DANO — Saúde = Vigor + 3 (pv). Ataque: atacante vs. defesa do alvo (Destreza + Atletismo para esquivar, Força + Briga para bloquear); dano = margem + arma (soco +0, faca +1, espada ou taco +2, pistola +2, espingarda +4). Superficial: vampiro divide por 2 (para cima) ANTES do alterar_ficha pv −N. Agravado (fogo, sol, garras e presas de lobisomem, alguns poderes) entra inteiro, com a condição "agravado N" (cura só com noites de descanso e muito sangue). Mortais e lacaios caem rápido (Saúde 3–7).
+TORPOR E MORTE FINAL — Saúde 0 por dano superficial = torpor (o servidor marca "inconsciente": trate como torpor, de dias a anos). Saúde 0 por agravado, estaca no coração + fogo ou sol, ou decapitação = Morte Final. Estaca no coração paralisa, não mata.`,
+  },
+  {
+    id: "CONFLITO",
+    teto: 600,
+    texto: `CONFLITO — Use o rastreador (iniciar) só quando houver mais de uma troca de golpes, para ter a Saúde dos inimigos à vista; a ordem é a lógica da ficção e a narração não conta rodadas nem PV; emboscada ou estacada de surpresa se resolve com um teste e pronto. Cada um declara e você resolve na ordem lógica (atirador antes do soco, Celeridade antes de todos); "Iniciativa" só se a mesa pedir.`,
+  },
+  {
+    id: "POTÊNCIA E XP",
+    teto: 1000,
+    texto: `POTÊNCIA DE SANGUE (nível da ficha) — dá os dados de Surto, a cura por Despertar, bônus em disciplinas e o peso da Perdição (veja a ficha). Sobe com o tempo e a diablerie (subir_nivel, sem custo) ou com XP que o jogador gasta.
+XP — você só CONCEDE (conceder_xp; no meio da sessão, no máximo 1 por marco grande, o resto no fim da noite). O jogador GASTA sozinho na ficha (botão "Gastar XP"): atributo nível novo ×5, perícia ×3, especialidade 3, disciplina do clã ×5, de fora ×7 (Caitiff ×6), ritual ou fórmula nível ×3, vantagem 3 por ponto, Potência ×10. A compra vira uma linha no chat e a ficha nova chega no próximo turno: não altere a ficha para "aplicar" XP. Disciplina de fora do clã pede motivo na história (o sangue de quem a tem, um mentor): cobre em cena.`,
+  },
+  {
+    id: "MASCARADA",
+    teto: 900,
+    texto: `MASCARADA, POLÍTICA E VITAE — esconder os vampiros é a lei de todas as seitas; câmeras, celulares e testemunhas importam. Quebra tem efeito em cadeia: o Xerife cobra, o Príncipe (ou o Barão) pede favor ou cabeça, as Harpias espalham, a Segunda Inquisição aparece (vigilância, batida de dia, fogo); registre no diário. Camarilla (Príncipe, Xerife, Harpias, tradição), Anarquistas (Barões, liberdade cara), Sabá e caçadores à margem. Favor é moeda: anote cada dívida com anotar_diario e cobre na pior hora. Beber de um mesmo vampiro em três noites diferentes cria Laço de Sangue (devoção artificial ao doador); Vitae dada a mortais cria carniçais; diablerie é crime capital e mancha a aura.`,
+  },
+  {
+    id: "COMO MESTRAR",
+    teto: 1500,
+    texto: `COMO MESTRAR V5
 - Horror pessoal: o monstro é o personagem. Cada noite traz uma tentação e um preço; deixe-o escolher e cobre depois. O caminho humano custa caro; o fácil é monstruoso.
-- Convicções e Pedras de Toque no centro: ponha as Pedras em risco (doença, polícia, um Membro curioso) e confronte as Convicções com dilemas sem saída limpa. Pedra ferida ou morta por culpa dele = Manchas, e a Convicção perde o freio. A Ambição move o arco; o Desejo da noite gera cenas.
-- A Besta tem voz: Fome alta aparece na narração (o pulso alheio, o cheiro, a mordida imaginada). Depois de Crítico Sujo ou Falha Bestial, imponha a compulsão do clã (ou uma genérica: Fome, Dominação, Agressão, Arrogância) como condição e tire quando satisfeita ou a cena mudar. A Perdição do clã também entra em cena.
-- Caça é cena, não teste solto: o Tipo de Predador diz onde e como (boate, rua, rebanho, bolsa comprada); a Ressonância do sangue (alegria, medo, raiva, melancolia) colore o momento. A vítima tem rosto.
-- Máscara: câmeras, celulares e testemunhas importam. Quebra tem efeito em cadeia: o Xerife cobra, o Príncipe (ou o Barão) pede favor ou cabeça, as Harpias espalham, a Segunda Inquisição aparece (vigilância, batida de dia, fogo). Registre no diário.
-- Política: Camarilla (Príncipe, Xerife, Harpias, tradição), Anarquistas (Barões, liberdade cara), Sabá e caçadores à margem. Favor é moeda: anote cada dívida com anotar_diario e cobre na pior hora. Anciões mentem, aliados cobram, ninguém é só vilão.
+- Convicções e Pedras de Toque no centro: ponha as Pedras em risco (doença, polícia, um Membro curioso) e confronte as Convicções com dilemas sem saída limpa. A Ambição move o arco; o Desejo da noite gera cenas; a Perdição do clã entra em cena.
+- Anciões mentem, aliados cobram, ninguém é só vilão.
 - Relógio: o sol nasce. Marque a hora com atualizar_cena e aperte quando a noite acaba; o refúgio é a única segurança e pode cair.
-- Tom: íntimo, urbano, sensual e sujo; violência rápida e feia; o horror vem do que o personagem faz e do que perde, não de sustos. Anote todo NPC relevante (Príncipe, Xerife, Barão, senhor, Pedras de Toque, rivais).`;
+- Tom: íntimo, urbano, sensual e sujo; violência rápida e feia; o horror vem do que o personagem faz e do que perde, não de sustos. A cidade é personagem: bairros, transporte, polícia e imprensa locais. Anote todo NPC relevante (Príncipe, Xerife, Barão, senhor, Pedras de Toque, rivais).`,
+  },
+];
+
+/** Teto do bloco inteiro de regras do V5 (todas as seções juntas). */
+export const TETO_REGRAS = 12_000;
+
+const REGRAS = ["Sistema: Vampiro: A Máscara 5ª edição (V5). Fã-conteúdo; mecânica resumida.", ...SECOES_REGRAS.map((s) => s.texto)].join("\n");
+
+/** Bloco do prompt sobre rerrolar (textosDoMestre.rerrolagem): o botão é do jogador, no cartão do teste. */
+const TEXTO_REROLAGEM = `## FORÇA DE VONTADE (rerrolagem)
+- Quem rerrola com Força de Vontade é o jogador: se ele pedir ("quero rerrolar", "posso usar Força de Vontade?"), diga fora do personagem, em uma linha, para usar o botão de Força de Vontade no cartão do teste. Não rerrole por ele nem desconte a Força de Vontade.`;
 
 // ---------- o sistema ----------
 
@@ -371,6 +427,17 @@ export const vtm5: Sistema = {
     "Inteligência + Investigação", "Ataque", "Caça", "Dominação", "Presença", "Despertar", "Frenesi", "Remorso", "Força de Vontade", "Iniciativa",
   ],
   regrasParaMestre: REGRAS,
+  // sem rodadas rígidas: a ordem é a da ficção (CONFLITO no REGRAS). Iniciativa de NPC sem ficha: ainda o padrão do servidor.
+  combate: { modelo: "leve" },
+  // XP é moeda que o jogador gasta na ficha (vtm5/xp.ts); a Potência de Sangue sobe por subir_nivel
+  progressao: "compra",
+  fimDeSessao: FIM_DE_SESSAO_VTM,
+  textosDoMestre: { rerrolagem: TEXTO_REROLAGEM },
+  // ferramentas de sangue do mestre (despertar, surto, frenesi, caça, remorso): src/lib/mestre/ferramentas/vampiro.ts
+  extensoesMestre: ["sangue"],
+  decisoesAposTeste,
+  aplicarDecisao,
+  opcoesAntesDeRolar,
 
   atributosIniciais(classeId) {
     return distribuir(MATRIZ_ATRIBUTOS, claPorId(classeId).ordem);

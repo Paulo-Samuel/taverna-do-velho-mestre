@@ -124,6 +124,25 @@ export default async function AjustesMesa(props: PageProps<"/mesa/[id]/ajustes">
         <FormularioDuplicar acao={duplicarCampanhaAcao.bind(null, campanha.id)} nome={campanha.nome} personagens={grupo.map((p) => p.ficha.nome)} bloqueado={!local} />
       </Secao>
 
+      <Secao titulo="Exportar e cópias">
+        <p className="mb-3 text-sm text-muted">
+          Leve esta campanha para outro computador num arquivo só: fichas, anotações, chat, diário e fatos (sem o PIN). Na outra taverna, importe pela
+          página Cópias e lixeira, que também guarda uma cópia do banco por dia e as campanhas excluídas.
+        </p>
+        {local ? (
+          <div className="flex flex-wrap gap-2">
+            <a href={`/api/campanhas/${campanha.id}/exportar`} download className="btn-borda">
+              Exportar campanha
+            </a>
+            <Link href="/backup" className="btn-borda">
+              Cópias e lixeira
+            </Link>
+          </div>
+        ) : (
+          <p className="text-sm text-muted">Só na máquina da taverna.</p>
+        )}
+      </Secao>
+
       <Secao titulo="Excluir campanha" perigo>
         <FormularioExcluir acao={excluirCampanhaAcao.bind(null, campanha.id)} nome={campanha.nome} bloqueado={!local} />
       </Secao>

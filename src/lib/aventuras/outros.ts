@@ -45,6 +45,35 @@ export const OUTROS: Aventura[] = [
         "a linha religada: a mensagem chega ao litoral e o grupo vê os jornais mudarem",
       ],
       recompensas: "O pagamento da Repartição, o diário de Anselmo (conhecimento proibido, custa Sanidade), Dona Zulmira como aliada e um inimigo estrangeiro.",
+      sessoes: [
+        "Chegada, estação, fita e diário; casas vazias e Dona Zulmira. Gancho: o zumbido nos fios à noite.",
+        "Capela e alçapão, Anselmo no mato. Gancho: o vapor traz Weber.",
+        "Weber religa a linha; descida à gruta e a coisa enterrada.",
+      ],
+      encontros: [
+        {
+          nome: "Escavadores",
+          onde: "capela e gruta",
+          inimigos: "6 moradores chamados (PV 10, Lutar 40%, enxada 1d6; não sentem dor) e Padre Benedito (PV 12, Lutar 45%; sua reza custa 0/1d4 de Sanidade)",
+          tatica: "cercam em silêncio e pedem que o investigador desça",
+          saida: "as rezas de Zulmira ou o fio cortado os despertam",
+        },
+        {
+          nome: "Homens de Weber",
+          onde: "estação",
+          inimigos: "Weber (PV 12, Revólver 55%, 1d10) e 2 capangas (PV 13, Rifle 45%, 2d6)",
+          tatica: "protegem o religamento",
+          saida: "Weber negocia se a linha cair",
+        },
+      ],
+      complicacoes: [
+        "o telégrafo bate sozinho",
+        "a canoa some do barranco",
+        "um investigador sonha com o símbolo (Sanidade 0/1)",
+        "Zulmira desmaia rezando",
+        "a fita imprime o nome de um investigador",
+        "a chuva corta o caminho de volta",
+      ],
     },
   },
   {
@@ -88,6 +117,34 @@ export const OUTROS: Aventura[] = [
         "o grupo fica com o livro de encomendas: poder enorme e uma confraria no encalço",
       ],
       recompensas: "Pagamento do jornal ou da Irmandade, o livro de encomendas (conhecimento proibido), uma aliada repórter e a gratidão de almas antigas.",
+      sessoes: [
+        "Igreja, cripta e santos de costas; arquivo e Irmã Glória. Gancho: mais uma imagem se vira.",
+        "Solar do Provedor, a confraria em ritual e o fogo de cera benta na cripta.",
+      ],
+      encontros: [
+        {
+          nome: "Confrades",
+          onde: "solar do Provedor",
+          inimigos: "4 confrades (PV 11, Lutar 45%, faca 1d4+2) e o Provedor (PV 12, Revólver 50%, 1d10)",
+          tatica: "lutam encapuzados e apagam as velas",
+          saida: "fogem se o Provedor cair ou a polícia chegar",
+        },
+        {
+          nome: "Santos vivos",
+          onde: "cripta",
+          inimigos: "imagens de madeira (PV 15, armadura 2, Lutar 50%, 1d6; ver uma se mover: Sanidade 1/1d6)",
+          tatica: "só se movem quando ninguém olha",
+          saida: "cera benta acesa liberta a alma e a imagem cai",
+        },
+      ],
+      complicacoes: [
+        "Cecília publica cedo demais",
+        "a Irmandade suspende a obra",
+        "Joaquim some",
+        "uma vela apaga sozinha na cripta",
+        "o Provedor convida para jantar",
+        "um santo tem o rosto de um investigador",
+      ],
     },
   },
 
@@ -133,6 +190,34 @@ export const OUTROS: Aventura[] = [
         "o grupo foge com o mapa: a próxima aventura é na Amazônia",
       ],
       recompensas: "Fama (um aspecto novo), uma invenção da Sociedade Ômega, uma vilã que respeita o grupo e o mapa para a próxima aventura.",
+      sessoes: [
+        "Baile, apagão e anúncio; Corcovado e ganchos; Zé Pequeno e Mauro. Gancho: robôs atacam a polícia.",
+        "Invasão do dirigível, sala do mapa, a traição de Krüger e a estátua no ar.",
+      ],
+      encontros: [
+        {
+          nome: "Robôs da Sociedade",
+          onde: "Corcovado",
+          inimigos: "capangas em trio (Lutar +2, 1 caixa de estresse; aspecto Blindado mas Lento)",
+          tatica: "descem por cabos e cercam",
+          saida: "um curto-circuito derruba todos",
+        },
+        {
+          nome: "Barão Krüger",
+          onde: "ponte do dirigível",
+          inimigos: "vilão (Atirar +4, Ofícios +4, Lutar +3, 3 caixas, consequências suave e moderada; aspecto Engenheiro de Guerra sem Pátria)",
+          tatica: "usa reféns e o próprio dirigível como arma",
+          saida: "Vesper vira contra ele se a traição for provada",
+        },
+      ],
+      complicacoes: [
+        "um fotógrafo flagra os heróis no lugar errado",
+        "o hidroavião de Zé engasga",
+        "Mauro prende um herói por engano",
+        "a estátua balança presa nos ganchos",
+        "Vesper propõe trégua em público",
+        "o mapa cai no mar",
+      ],
     },
   },
   {
@@ -176,6 +261,35 @@ export const OUTROS: Aventura[] = [
         "o grupo foge com um pouco de ouro e muitos inimigos: Biggs paga bem pela história",
       ],
       recompensas: "Ouro do templo (um aspecto de riqueza temporária), um ídolo mágico, fama e a amizade (ou a inimizade) de um magnata.",
+      sessoes: [
+        "Porto de Manaus, tiro e mapa; o vapor Iara e a perseguição no rio. Gancho: sabotagem à noite.",
+        "Seringal abandonado e rivais; Escada das Cobras. Gancho: Ilse toca o fragmento.",
+        "Paititi: guardiões, o meteorito e a escolha antes do desabamento.",
+      ],
+      encontros: [
+        {
+          nome: "Expedição de Ilse",
+          onde: "rio e seringal",
+          inimigos: "capangas em trios (Atirar +2, 1 caixa) e Ilse (Atirar +3, Conhecimento +4, 3 caixas; aspecto O Fragmento Me Consome)",
+          tatica: "atacam de lancha e de hidroavião",
+          saida: "recuam se perderem o mapa",
+        },
+        {
+          nome: "Escada das Cobras",
+          onde: "penhasco",
+          inimigos: "armadilha (oposição Ótimo +3; falhar: consequência suave ou queda)",
+          tatica: "degraus que afundam e dardos",
+          saida: "Tainá mostra a passagem a quem respeita o lugar",
+        },
+      ],
+      complicacoes: [
+        "uma corredeira vira o barco",
+        "Biggs oferece dinheiro por uma traição",
+        "o barqueiro some e reaparece adiante",
+        "febre derruba um herói (aspecto)",
+        "o mapa molha e borra",
+        "Tainá testa o grupo com uma mentira",
+      ],
     },
   },
 ];

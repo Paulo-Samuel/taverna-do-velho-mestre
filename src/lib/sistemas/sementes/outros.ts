@@ -1,3 +1,4 @@
+import { FRONTEIRA } from "./fantasia";
 import type { SementesSistema } from "./index";
 
 // Fate Acelerado (pulp) e Dungeon World (fronteira).
@@ -36,6 +37,7 @@ export const FATE: SementesSistema = {
   exemploNome: "Ex.: Lola Faísca",
   exemploHistoria: "Quem te persegue, o que você já explodiu, quem te deve uma…",
   exemploCenario: "Em branco, o mestre escolhe o vilão e a primeira explosão.",
+  cenarioVazio: "livre: o vilão e a primeira explosão",
   prontoAncestralidades: ["pulp", "espionagem", "noir", "steampunk"],
   campos: {
     conceito: {
@@ -97,6 +99,7 @@ export const PBTA: SementesSistema = {
   exemploNome: "Ex.: Isolda Pé-Ligeiro",
   exemploHistoria: "De onde veio, por que está na fronteira, o que deixou para trás…",
   exemploCenario: "Em branco, o mestre desenha o mapa com vocês (e deixa buracos de propósito).",
+  cenarioVazio: FRONTEIRA,
   campos: {
     vinculos: {
       exemplo: "Ex.: Fulano me deve a vida (troque pelo nome do colega)",

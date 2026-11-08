@@ -53,6 +53,11 @@ export type PedidoTeste = {
   opcoes?: Record<string, unknown>;
   /** só uma prévia (cartão do pedido de teste): o sistema não rola custos nem sorteia nada além da parada */
   previa?: boolean;
+  /**
+   * Teste oposto: o servidor rola o lado do NPC e usa o resultado como alvo (V5: parada de d10 do NPC; d20: 1d20 + bônus).
+   * Opcional: só os sistemas que implementam leem; os outros ignoram e usam `alvo`.
+   */
+  oposicao?: { nome?: string; parada?: number; bonus?: number };
 };
 
 export type ResultadoTeste = {
@@ -81,6 +86,69 @@ export type ResultadoTeste = {
   margem: number | null;
   /** opcional: o que o teste mudou na ficha e o que narrar (vai junto com o resultado para o mestre) */
   avisoMestre?: string;
+  /** opcional: o lado do NPC num teste oposto, como o servidor rolou */
+  oposicao?: { nome: string; expressao: string; dados: number[]; total: number };
+  /** opcional: dano sugerido pelo teste (margem + arma), para o mestre aplicar */
+  dano?: { valor: number; tipo?: string; texto?: string };
+};
+
+/** Como o sistema joga a luta: "rodadas" (iniciativa, vez, rodada) ou "leve" (a ordem é a da ficção; o rastreador é opcional). */
+export type CombateSistema = {
+  modelo: "rodadas" | "leve";
+  /** dado de iniciativa de quem não tem ficha ("1d20", "1d100", "4dF"...); ausente = o servidor deduz pelo dado principal */
+  iniciativaNpc?: string;
+};
+
+/**
+ * Como o personagem progride: "xp" (tabela de XP, o servidor sobe de nível), "marcos" (o mestre decide quando subir; XP é
+ * só registro) ou "compra" (XP é moeda que o jogador gasta na ficha, como no Vampiro).
+ */
+export type ProgressaoSistema = "xp" | "marcos" | "compra";
+
+/** Fechamento da noite pelas regras do sistema (pedido do turno de fim de sessão). */
+export type FimDeSessaoSistema = {
+  /** como conceder XP no fechamento (o passo de XP do pedido) */
+  xp: string;
+  /** passos antes do fechamento narrado, conforme as fichas (Vampiro: Remorso para quem tem Manchas) */
+  passosExtras?: (fichas: Ficha[]) => string[];
+  /** XP mínimo da noite quando o mestre esquece de conceder (0 ou ausente = nenhum) */
+  xpMinimo?: number;
+};
+
+/** Uma escolha que o jogador pode fazer depois de ver o dado (Vampiro: rerrolar com Força de Vontade). */
+export type OpcaoDecisao = {
+  id: string;
+  rotulo: string;
+  /** o preço, legível: "1 de Força de Vontade" */
+  custo?: string;
+  /** quando a opção escolhe dados: até quantos e quais índices de `dados` valem; `padrao` é a escolha do servidor */
+  dados?: { max: number; elegiveis: number[]; padrao?: number[] };
+};
+
+/** Uma escolha antes de rolar (Vampiro: Surto de Sangue na parada). */
+export type OpcaoAntesDeRolar = {
+  id: string;
+  rotulo: string;
+  custo?: string;
+  /** texto curto do efeito: "+2 dados" */
+  efeito?: string;
+};
+
+/** Textos que o prompt geral inclui quando o sistema tem (ficam no arquivo do sistema, não em prompt.ts). */
+export type TextosDoMestre = {
+  /** bloco sobre rerrolar um teste (Vampiro: o botão de Força de Vontade no cartão) */
+  rerrolagem?: string;
+};
+
+/**
+ * Limite de perícias escolhidas na criação, como dado (vai ao navegador): `base` ou o valor da classe, somado ao atributo
+ * `somaAtributo` (valor da ficha; com `modD20`, o modificador d20 dele). Sem isto vale `periciasEscolhiveis`.
+ */
+export type LimitePericias = {
+  base: number;
+  porClasse?: Record<string, number>;
+  somaAtributo?: string;
+  modD20?: boolean;
 };
 
 export type AtributoDef = { id: string; nome: string; abrev: string; descricao?: string };
@@ -199,11 +267,23 @@ export interface Sistema {
   limitesAtributos: { min: number; max: number };
   /** quantas perícias o jogador escolhe além das da classe (0 = nenhuma) */
   periciasEscolhiveis?: number;
+  /** limite real de perícias da criação (classe + atributo); ausente = `periciasEscolhiveis` */
+  limitePericias?: LimitePericias;
   nivelMaximo: number;
   /** nomes curtos de testes comuns, mostrados ao mestre e no rolador */
   testesSugeridos: string[];
   /** texto para o prompt do mestre explicando a mecânica deste sistema (como pedir testes, CDs típicas, combate) */
   regrasParaMestre: string;
+  /** como o sistema joga a luta (o prompt geral e o rastreador seguem isto) */
+  combate: CombateSistema;
+  /** como o personagem progride (ferramentas de XP e nível, pedido de fim de sessão) */
+  progressao: ProgressaoSistema;
+  /** fechamento da noite próprio do sistema; ausente = o pedido genérico pela `progressao` */
+  fimDeSessao?: FimDeSessaoSistema;
+  /** textos do sistema que o prompt geral inclui (só no servidor) */
+  textosDoMestre?: TextosDoMestre;
+  /** extensões de ferramentas do mestre que este sistema liga (ex.: "sangue"); o mestre nunca testa o id do sistema */
+  extensoesMestre?: string[];
 
   /** valores iniciais sugeridos (pode rolar dados, conforme o método) */
   atributosIniciais(classeId: string, metodo: string): Record<string, number>;
@@ -226,11 +306,29 @@ export interface Sistema {
    * Devolve a ficha alterada para salvar, ou null quando não muda nada.
    */
   aposTeste?(ficha: Ficha, resultado: ResultadoTeste): Ficha | null;
+  /**
+   * Opcional: escolhas depois de ver o dado (o cartão pausa e pergunta). Lista vazia = nada a decidir.
+   * O Vampiro oferece rerrolar com Força de Vontade.
+   */
+  decisoesAposTeste?(ficha: Ficha, resultado: ResultadoTeste): OpcaoDecisao[];
+  /**
+   * Opcional: aplica a escolha `id` (validando de novo). Devolve a ficha e o resultado novos e a frase para o mestre.
+   * Lança Error com mensagem amigável quando a regra não deixa.
+   */
+  aplicarDecisao?(ficha: Ficha, resultado: ResultadoTeste, id: string, escolha?: { dados?: number[] }): { ficha: Ficha; resultado: ResultadoTeste; textoMestre: string };
+  /** Opcional: escolhas antes de rolar um teste pedido (Vampiro: Surto de Sangue). */
+  opcoesAntesDeRolar?(ficha: Ficha, pedido: PedidoTeste): OpcaoAntesDeRolar[];
+  /**
+   * Opcional: coerência das condições quando o PV muda (PF2e: moribundo e ferido). Muta a ficha.
+   * Chamado por alterar_ficha, pelo ajuste manual e pelo descanso; `pvAntes` é o PV antes da mudança.
+   */
+  aposMudancaDePv?(ficha: Ficha, pvAntes: number, origem: "alterar_ficha" | "ajuste" | "descanso_curto" | "descanso_longo"): void;
+  /** Opcional: avisos (não bloqueiam) sobre uma ficha fora das regras de criação do livro. */
+  avisosCriacao?(entrada: EntradaCriacao): string[];
 }
 
-/** Só dados, sem funções: o que vai para os componentes de cliente. */
-export type SistemaPublico = Omit<
-  Sistema,
+/** Campos do Sistema que nunca vão ao navegador: funções e textos que só o prompt usa. */
+type SoServidor =
   | "atributosIniciais"
   | "criarFicha"
   | "resolverTeste"
@@ -240,7 +338,17 @@ export type SistemaPublico = Omit<
   | "subirNivel"
   | "descansar"
   | "aposTeste"
->;
+  | "fimDeSessao"
+  | "textosDoMestre"
+  | "extensoesMestre"
+  | "decisoesAposTeste"
+  | "aplicarDecisao"
+  | "opcoesAntesDeRolar"
+  | "aposMudancaDePv"
+  | "avisosCriacao";
+
+/** Só dados, sem funções: o que vai para os componentes de cliente. */
+export type SistemaPublico = Omit<Sistema, SoServidor>;
 
 /** Estado da cena, mantido pelo mestre via ferramenta e mostrado no painel de cena. */
 export type Combatente = {

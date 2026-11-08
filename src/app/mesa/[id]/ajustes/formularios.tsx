@@ -437,8 +437,8 @@ export function FormularioExcluir({ acao, nome, bloqueado }: { acao: Acao; nome:
   return (
     <form action={enviar} className="space-y-3">
       <p className="text-sm">
-        Isso apaga personagens, chat, diário e cena. Não tem ressurreição, nem pagando o clérigo. Digite <strong className="text-pergaminho">{nome}</strong> para
-        confirmar:
+        Isso tira da mesa personagens, chat, diário e cena. A campanha inteira vai para a lixeira da taverna (em “Cópias e lixeira”), de onde dá para
+        restaurar; as mais antigas da lixeira saem sozinhas com o tempo. Digite <strong className="text-pergaminho">{nome}</strong> para confirmar:
       </p>
       <input name="confirmacao" value={texto} onChange={(e) => setTexto(e.target.value)} className="campo" autoComplete="off" aria-label="Nome da campanha" />
       <Aviso estado={estado} />
@@ -447,7 +447,7 @@ export function FormularioExcluir({ acao, nome, bloqueado }: { acao: Acao; nome:
           className="btn bg-sangue text-foreground hover:bg-sangue/80"
           disabled={enviando || texto.trim().toLowerCase() !== nome.trim().toLowerCase()}
         >
-          {enviando ? "Apagando…" : "Apagar para sempre"}
+          {enviando ? "Apagando…" : "Excluir campanha"}
         </button>
         <button type="button" className="btn-borda" onClick={() => setAberto(false)}>
           Melhor não

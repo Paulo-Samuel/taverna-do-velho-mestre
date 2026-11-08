@@ -1,6 +1,7 @@
 import "server-only";
 import { obterCampanha, obterPersonagem } from "@/lib/db";
 import { acessoPermitido } from "@/lib/rede/acesso";
+import { obterSistema } from "@/lib/sistemas";
 import { limitar, normalizar } from "@/lib/sistemas/comum";
 import type { Ficha, RotulosSistema } from "@/lib/sistemas/tipos";
 
@@ -111,6 +112,13 @@ export function aplicarAjuste(ficha: Ficha, p: PedidoAjuste, rotulos: RotulosSis
   if (ficha.pv !== pvAntes && ficha.sistema !== "fate") {
     if (ficha.pv === 0 && !ficha.condicoes.includes("inconsciente")) ficha.condicoes.push("inconsciente");
     if (ficha.pv > 0) ficha.condicoes = ficha.condicoes.filter((c) => c !== "inconsciente");
+  }
+  // o que a regra do sistema diz quando o PV muda (PF2e: moribundo e ferido), como no alterar_ficha do mestre
+  if (ficha.pv !== pvAntes) {
+    const antes = [...ficha.condicoes];
+    obterSistema(ficha.sistema).aposMudancaDePv?.(ficha, pvAntes, "ajuste");
+    for (const c of ficha.condicoes) if (!antes.includes(c)) mudancas.push(`+ ${c}`);
+    for (const c of antes) if (!ficha.condicoes.includes(c)) mudancas.push(`− ${c}`);
   }
   return { mudancas, pvAntes };
 }

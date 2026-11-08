@@ -41,6 +41,7 @@ export const D100: SementesSistema = {
   exemploNome: "Ex.: Celeste Bittencourt",
   exemploHistoria: "Profissão, cidade, o que você viu e ninguém acreditou…",
   exemploCenario: "Em branco, o mestre escolhe a cidade e o primeiro cadáver.",
+  cenarioVazio: "livre: uma cidade brasileira dos anos 1920",
   // o personagem pronto nasce nos anos 1920, como os cenários sugeridos (dá para trocar a era depois)
   prontoAncestralidades: ["anos20"],
   campos: {

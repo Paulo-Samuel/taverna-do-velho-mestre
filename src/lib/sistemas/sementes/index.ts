@@ -54,6 +54,8 @@ export type SementesSistema = {
   exemploNome: string;
   exemploHistoria: string;
   exemploCenario: string;
+  /** o que o mestre recebe como "Cenário pedido" quando a campanha deixa o cenário em branco (âncora concreta, não "surpreenda") */
+  cenarioVazio: string;
   /** sugestões por id de Sistema.opcoesCriacao */
   campos?: Record<string, CampoSemente>;
   pares?: ParSemente[];

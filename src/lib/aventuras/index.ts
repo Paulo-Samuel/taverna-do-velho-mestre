@@ -1,5 +1,5 @@
 import "server-only";
-import type { Aventura, AventuraPublica, Recompensas } from "./tipos";
+import type { Aventura, AventuraPublica, PorSistema, Recompensas, Roteiro } from "./tipos";
 import { FANTASIA } from "./fantasia";
 import { HISTORIA } from "./historia";
 import { OUTROS } from "./outros";
@@ -27,7 +27,8 @@ export const aventurasDoSistema = (sistemaId: string) => AVENTURAS.filter((a) =>
 
 export function aventuraPublica(a: Aventura): AventuraPublica {
   const { id, sistemas, titulo, chamada, duracao, recomendado, tom, cenario } = a;
-  return { id, sistemas, titulo, chamada, duracao, ...(recomendado ? { recomendado } : {}), tom, cenario };
+  // do solo só sai o "pode": o aliado é coisa do roteiro
+  return { id, sistemas, titulo, chamada, duracao, ...(recomendado ? { recomendado } : {}), tom, cenario, ...(a.solo ? { soloOk: true as const } : {}) };
 }
 
 /** Lista pública (para as páginas mandarem ao navegador), de um sistema ou de todos. */
@@ -40,8 +41,45 @@ export function aventurasPublicas(sistemaId?: string): AventuraPublica[] {
  * primeira que houver). Uma aventura aberta a vários sistemas fala em ouro = XP só para o OSR e em runas só para o PF2e.
  */
 export function recompensaDoSistema(recompensas: Recompensas, sistemaId?: string): string {
-  if (typeof recompensas === "string") return recompensas;
-  return (sistemaId && recompensas[sistemaId]) || recompensas.padrao || Object.values(recompensas)[0] || "";
+  return textoDoSistema(recompensas, sistemaId);
+}
+
+/** O texto de um campo por sistema (recompensa, linha de stats): o único, o do sistema, o "padrao" ou o primeiro. */
+export function textoDoSistema(texto: PorSistema, sistemaId?: string): string {
+  if (typeof texto === "string") return texto;
+  return (sistemaId && texto[sistemaId]) || texto.padrao || Object.values(texto)[0] || "";
+}
+
+/**
+ * Os blocos de apoio do roteiro (sessões, encontros e complicações), impressos depois das recompensas. O teto combinado é
+ * ~1.200 caracteres somados por aventura, contando as linhas de solo e Pedra de Toque (o roteiro entra em todo turno);
+ * tests/w14-roteiros.test.ts mede em cada sistema. A Forja Afundada (masmorra de PF2e) é a exceção: os encontros são o jogo.
+ */
+export function blocosDeApoio(r: Roteiro, sistemaId?: string): string[] {
+  return [
+    r.sessoes?.length ? `- Sessões (cada noite fecha num gancho):\n${r.sessoes.map((s, i) => `  ${i + 1}. ${s}`).join("\n")}` : "",
+    r.encontros?.length
+      ? `- Encontros preparados (escala do sistema; ajuste ao grupo):\n${r.encontros
+          .map((e) => `  - ${e.nome} (${e.onde}): ${textoDoSistema(e.inimigos, sistemaId)}. Tática: ${e.tatica}. Saída: ${e.saida}`)
+          .join("\n")}`
+      : "",
+    r.complicacoes?.length ? `- Complicações (o grupo enrolou ou falhou: use uma): ${r.complicacoes.map((c, i) => `${i + 1}) ${c}`).join(" ")}` : "",
+  ].filter(Boolean);
+}
+
+/**
+ * Linhas da mesa solo e da Pedra de Toque. A frase do solo é condicional de propósito: o mestre vê as fichas no prompt e
+ * decide; o código não precisa contar personagens.
+ */
+export function linhasPessoais(a: Aventura): string[] {
+  return [
+    a.solo
+      ? `- Solo: se a mesa tiver um só personagem, ${a.solo.aliado}${a.solo.aliado.includes(",") ? "," : ""} acompanha e ${
+          a.sistemas.every((s) => s === "historia") ? "pode se meter em apuros (nada de morte)" : "pode morrer"
+        }.`
+      : "",
+    a.pedraEmJogo ? `- Amarre a Pedra de Toque (nome da ficha): ${a.pedraEmJogo}.` : "",
+  ].filter(Boolean);
 }
 
 /**
@@ -63,12 +101,8 @@ export function roteiroParaMestre(a: Aventura, comAbertura = true, sistemaId?: s
     `- Relógio (avança quando o grupo enrola ou falha feio): ${r.relogio.map((t, i) => `${i + 1}. ${t}`).join(" ")}`,
     `- Finais: ${r.finais.join(" | ")}`,
     `- Recompensas: ${recompensaDoSistema(r.recompensas, sistemaId)}`,
-    r.sessoes?.length ? `- Sessões (ritmo sugerido; a noite acaba num gancho):\n${r.sessoes.map((s, i) => `  ${i + 1}. ${s}`).join("\n")}` : "",
-    r.encontros?.length
-      ? `- Encontros preparados (números na escala do sistema; ajuste ao nível real do grupo):\n${r.encontros
-          .map((e) => `  - ${e.nome} (${e.onde}): ${e.inimigos}. Tática: ${e.tatica}. Saída: ${e.saida}`)
-          .join("\n")}`
-      : "",
+    ...blocosDeApoio(r, sistemaId),
+    ...linhasPessoais(a),
   ]
     .filter(Boolean)
     .join("\n");

@@ -87,8 +87,15 @@ export async function excluirCampanhaAcao(campanhaId: number, _anterior: EstadoA
   }
   // para o mestre no meio da frase e avisa quem está conectado antes de sumir com tudo
   cancelarTurno(campanha.id);
+  // vai inteira para a lixeira (data/lixeira) antes do DELETE; se não der para gravar, nada é apagado
+  let arquivo: string | null;
+  try {
+    arquivo = excluirCampanha(campanha.id);
+  } catch (erro) {
+    console.error("[taverna] excluir campanha:", erro);
+    return { erro: "Não deu para guardar a campanha na lixeira (disco cheio?), então nada foi apagado." };
+  }
   publicar(campanha.id, { e: "erro", erro: "Esta campanha foi apagada na máquina da taverna. Hora de procurar outra mesa." });
-  excluirCampanha(campanha.id);
   revalidatePath("/");
-  redirect("/");
+  redirect(arquivo ? `/backup?excluida=${encodeURIComponent(arquivo)}` : "/");
 }

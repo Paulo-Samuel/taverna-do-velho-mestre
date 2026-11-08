@@ -182,6 +182,8 @@ export const historia: Sistema = {
   limitesAtributos: { min: 0, max: 0 },
   periciasEscolhiveis: 0,
   nivelMaximo: 20,
+  combate: { modelo: "leve", iniciativaNpc: "1d20" },
+  progressao: "xp",
   testesSugeridos: ["Luta", "Pontaria", "Furtividade", "Percepção", "Persuasão", "Intimidação", "Barganha", "Investigação", "Magia", "Vontade"],
   regrasParaMestre: `Sistema: Modo História (regras leves; o jogador não vê números a não ser no dado).
 - Teste = d20 + bônus da perícia contra uma Dificuldade (CD): 8 fácil, 12 médio, 15 difícil, 18 muito difícil, 22 heroico.

@@ -214,7 +214,15 @@ function AventurasProntas() {
                 </span>
                 <span className="titulo mt-2 text-lg leading-tight text-pergaminho group-hover:text-ambar">{a.titulo}</span>
                 <span className="mt-1 line-clamp-3 text-xs leading-snug text-muted">{a.chamada}</span>
-                <span className="mt-auto pt-2 text-[11px] text-muted/80">{a.duracao}</span>
+                <span className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-2 text-[11px] text-muted/80">
+                  <span>{a.duracao}</span>
+                  {a.soloOk && (
+                    <span className="rounded-full border border-ambar/50 px-1.5 leading-4 text-ambar-forte" title="Roda com um personagem só: um aliado do mestre divide as cenas">
+                      solo ok
+                    </span>
+                  )}
+                </span>
+                {a.recomendado && <span className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted/70">{a.recomendado}</span>}
               </Link>
             </li>
           );

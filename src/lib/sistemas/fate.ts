@@ -269,6 +269,8 @@ export const fate: Sistema = {
   limitesAtributos: { min: 0, max: LIMITE_ABORDAGEM },
   periciasEscolhiveis: 0,
   nivelMaximo: NIVEL_MAXIMO,
+  combate: { modelo: "rodadas", iniciativaNpc: "4dF" },
+  progressao: "marcos",
   testesSugeridos: [
     "Cuidadoso", "Esperto", "Estiloso", "Poderoso", "Ágil", "Sorrateiro",
     "Atacar (Poderoso)", "Defender (Ágil)", "Criar vantagem (Esperto)", "Superar (Sorrateiro)", "Iniciativa",
