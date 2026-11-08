@@ -926,3 +926,146 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
     </div>
   );
 }
+
+// ---------- editar um herói que já está na mesa ----------
+
+export type PropsEdicaoHistoria = {
+  /** semente vinda do servidor para a grade de rostos (como na criação) */
+  semente: string;
+  inicial: { nome: string; aparencia: string; historia: string; sexo: string; origem: string; origemNome: string; classe: string; classeNome: string; retrato: DadosRetrato | null };
+  /** server action editarPersonagemAcao, com campanha e personagem amarrados */
+  acao: (estado: EstadoHistoria, form: FormData) => Promise<EstadoHistoria>;
+  mesa: { id: number; nome: string };
+  /** o mestre está narrando agora: dá para escrever, mas salvar só depois */
+  ocupado?: boolean;
+};
+
+/**
+ * Página /mesa/[id]/personagens/[pid]/editar no modo história: nome, rosto, detalhe de aparência e história. Sexo, origem e
+ * ofício ficam (o rosto novo sai da mesma grade da criação, com a mesma origem e o mesmo ofício).
+ */
+export function EdicaoHistoria({ semente, inicial, acao, mesa, ocupado }: PropsEdicaoHistoria) {
+  const [nome, setNome] = useState(inicial.nome);
+  const [aparencia, setAparencia] = useState(inicial.aparencia);
+  const [historia, setHistoria] = useState(inicial.historia);
+  const [rodada, setRodada] = useState(0);
+  /** semente do rosto novo escolhido na grade ("" = fica o atual) */
+  const [rosto, setRosto] = useState("");
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [estado, enviar, enviando] = useActionState<EstadoHistoria, FormData>(acao, { erro: null });
+
+  const sexo = (SEXOS.some((s) => s.id === inicial.sexo) ? inicial.sexo : "outro") as Sexo;
+  const base = useMemo(() => ({ sexo, origem: inicial.origem, classe: inicial.classe }), [sexo, inicial.origem, inicial.classe]);
+  const grade = useMemo(
+    () => Array.from({ length: ROSTOS_POR_RODADA }, (_, i) => `${semente}:editar:${rodada}:${i}`).map((s) => ({ semente: s, dados: gerarRetrato(s, base) })),
+    [semente, rodada, base],
+  );
+  const novo = useMemo(() => (rosto ? gerarRetrato(rosto, base) : null), [rosto, base]);
+  const retrato = novo ?? inicial.retrato;
+
+  function aoEnviar(form: FormData) {
+    if (nome.trim().length < 2) {
+      setAviso("Todo herói tem nome. Até os que morrem na primeira cena.");
+      return;
+    }
+    form.set("editor", apelidoSalvo());
+    enviar(form);
+  }
+
+  return (
+    <div className="relative min-h-[calc(100dvh-3.5rem)] overflow-clip">
+      <style href="taverna-criacao-historia" precedence="default">
+        {CSS_CRIACAO}
+      </style>
+      <div className="criacao-ceu" aria-hidden>
+        <div className="criacao-estrelas" />
+      </div>
+      <main className="relative z-10 mx-auto w-full max-w-lg px-4 pb-16 pt-6 sm:pt-10">
+        <Link href={`/mesa/${mesa.id}`} className="-my-2 mb-3 inline-block py-2 text-xs text-muted hover:text-ambar">
+          ← voltar para {mesa.nome}
+        </Link>
+        <form action={aoEnviar} className="cartao relative overflow-clip border-ambar/25 bg-surface/85 px-5 pt-6 backdrop-blur-sm sm:px-8 sm:pt-8">
+          <h1 className={`${gotica.className} text-center text-[2.1rem] leading-tight text-pergaminho sm:text-5xl`}>Quem você é agora?</h1>
+          <p className="mt-2 text-center text-sm italic text-muted">A estrada muda as pessoas. Às vezes, o nome também.</p>
+
+          <div className="mt-6 space-y-6">
+            <CartaoHeroi retrato={retrato} nome={nome.trim()} linhas={[[inicial.origemNome, inicial.classeNome].filter(Boolean).join(" · "), novo ? "Rosto novo (salve para ficar)" : ""]} />
+
+            <div>
+              <Rotulo>Nome</Rotulo>
+              <input className="campo" value={nome} onChange={(e) => (setNome(e.target.value.slice(0, 40)), setAviso(null))} aria-label="Nome do personagem" autoComplete="off" />
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-baseline justify-between gap-2">
+                <Rotulo>Outro rosto? (opcional)</Rotulo>
+                <button type="button" onClick={() => (setRodada((n) => n + 1), setRosto(""))} className="text-sm text-ambar hover:underline">
+                  ↻ Outros rostos
+                </button>
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {grade.map((f) => (
+                  <button
+                    key={f.semente}
+                    type="button"
+                    onClick={() => setRosto(rosto === f.semente ? "" : f.semente)}
+                    aria-pressed={rosto === f.semente}
+                    aria-label="Escolher este rosto"
+                    title={rosto === f.semente ? "Clique de novo para manter o rosto atual" : undefined}
+                    className={`relative rounded-[14px] p-[3px] transition ${rosto === f.semente ? "scale-105 bg-ambar shadow-[0_0_22px_-2px_var(--ambar)]" : "bg-transparent opacity-75 hover:opacity-100"}`}
+                  >
+                    <RetratoSVG dados={f.dados} className="block h-auto w-full" />
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs italic text-muted">Sem escolher nenhum, fica o rosto de sempre. Origem e ofício não mudam aqui.</p>
+            </div>
+
+            <div>
+              <Rotulo>Algum detalhe? (opcional)</Rotulo>
+              <input
+                className="campo"
+                value={aparencia}
+                onChange={(e) => setAparencia(e.target.value.slice(0, 200))}
+                placeholder="cicatriz nova no queixo, capa chamuscada"
+                aria-label="Detalhe de aparência"
+              />
+            </div>
+
+            <div>
+              <Rotulo>Sua história</Rotulo>
+              <textarea
+                className="campo min-h-28 resize-y leading-relaxed"
+                value={historia}
+                onChange={(e) => setHistoria(e.target.value.slice(0, 1500))}
+                placeholder="De onde veio, o que deixou para trás, quem quer sua cabeça…"
+                aria-label="História do personagem"
+              />
+            </div>
+          </div>
+
+          <div className="sticky bottom-0 z-10 -mx-5 mt-7 border-t border-border/50 bg-surface/95 px-5 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3 backdrop-blur sm:-mx-8 sm:px-8">
+            {(aviso || estado.erro || ocupado) && (
+              <p role="alert" className="surgir mb-3 rounded-md border border-sangue/50 bg-sangue/10 px-3 py-2 text-sm text-pergaminho">
+                {aviso ?? estado.erro ?? "O Velho Mestre está contando a história agora. Pode escrever; guarde quando ele terminar."}
+              </p>
+            )}
+            <div className="flex items-center gap-3">
+              <Link href={`/mesa/${mesa.id}`} className="btn-borda min-h-12 px-4">
+                Cancelar
+              </Link>
+              <button type="submit" className="btn-ambar min-h-12 flex-1 py-3 text-base" disabled={enviando}>
+                {enviando ? "Guardando…" : "Guardar"}
+              </button>
+            </div>
+          </div>
+
+          <input type="hidden" name="nome" value={nome.trim()} />
+          <input type="hidden" name="aparencia" value={aparencia.trim()} />
+          <input type="hidden" name="historia" value={historia.trim()} />
+          <input type="hidden" name="retrato" value={novo ? JSON.stringify(novo) : ""} />
+        </form>
+      </main>
+    </div>
+  );
+}

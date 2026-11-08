@@ -46,6 +46,9 @@ instalação está aqui, não em erros de código.
      cabeçalho, quem respondeu foi outro programa;
    - abra http://localhost:3300/config: a página mostra se o Claude Code foi encontrado e logado, com **Verificar de novo**
      e **Testar conexão**.
+   - **Antes de cada passo acima e sempre que algo falhar, rode `npm run doutor`** (termina sozinho, funciona com a taverna
+     desligada) e resolva o que estiver em FALHOU antes de seguir; a seta → de cada linha diz como. ATENÇÃO não impede de
+     jogar. A saída fica em `data\logs\doutor-<data>.txt`.
 4. **Nunca**, nem para "consertar": editar `package.json` ou `package-lock.json`; `npm update`; `npm audit fix` (com ou sem
    `--force`); `npm install <pacote>`; trocar a porta 3300; apagar ou mexer em `data/` (são as campanhas da pessoa); apagar
    `.env.local`; `git commit`, `git push`, `git reset --hard`, `git checkout -- .`. Se parecer que só isso resolve, pare e
@@ -54,16 +57,20 @@ instalação está aqui, não em erros de código.
    `powershell -NoProfile -ExecutionPolicy Bypass -File atualizar-taverna.ps1`). Ele puxa do GitHub com `git pull --ff-only`,
    reinstala o que mudou e recompila; recusa-se com a taverna no ar; com arquivo alterado à mão, diz qual é e sugere
    `git stash`; sem `.git`, mostra como migrar para o Git. Depois é só abrir o atalho de sempre.
-6. **Deu errado:** a janela do atalho fica aberta com a explicação e o código de saída, e tudo o que apareceu está em
-   `data\logs\atalho-<data>.log` (atualização: `data\logs\atualizar-<data>.log`; guardados por 14 dias). Em `/config`, use
-   **Verificar de novo** e **Testar conexão**. O relatório que vai para quem instalou é o log mais recente mais a saída de
-   `node -v`, `claude --version` e `git log -1 --oneline`. Para testar a interface sem gastar nada do plano:
-   `TAVERNA_PROVEDOR=falso` no `.env.local` (mestre de teste sem IA).
+6. **Deu errado:** a janela do atalho fica aberta com a explicação e o código de saída (e a saída do doutor), e tudo o que
+   apareceu está em `data\logs\atalho-<data>.log` (atualização: `data\logs\atualizar-<data>.log`; guardados por 14 dias).
+   Rode `npm run doutor`. Em `/config`, use **Verificar de novo** e **Testar conexão**.
+   **Pedindo ajuda:** mande o relatório de **/config → Diagnóstico** (botão **Copiar relatório**, ou o `.txt` de
+   `http://localhost:3300/api/diagnostico?baixar=1`), ou, se a taverna nem sobe, o `data\logs\doutor-<data>.txt` e o
+   `data\logs\taverna-<data>.log` do dia. Nenhum deles leva a chave de API nem e-mail. Para testar a interface sem gastar
+   nada do plano: `TAVERNA_PROVEDOR=falso` no `.env.local` (mestre de teste sem IA).
 7. **macOS e Linux:** não há atalho; siga "Pelo terminal (qualquer sistema)" no README.md, com os mesmos cuidados: nada de
    servidor dentro da sua sessão. A pessoa roda `npm run build && npm start` num terminal dela.
-8. **Rede local** (cada um no próprio celular): a pessoa roda `npm run rede` num terminal dela (servidor em 0.0.0.0:3300) e
-   libera o Node.js no firewall do Windows para redes privadas (README, "Abrindo o firewall do Windows"). Na mesa, o botão
-   **Convidar** mostra o link e o QR code.
+8. **Rede local** (cada um no próprio celular): o atalho já atende a rede (o `next start` escuta em todas as interfaces; não
+   precisa de `-H`). Ele mostra "No Wi-Fi de casa: http://<ip>:3300", confere o firewall do Windows e, se nada libera a
+   porta, pergunta se deve criar a regra (UAC uma vez, só redes privadas). Não crie regra de firewall pela sua sessão sem a
+   pessoa pedir; `GET /api/rede` diz `firewall: "ok" | "bloqueado" | "desconhecido"`. Na mesa, o botão **Convidar** mostra o
+   link e o QR code.
 
 ## Regras importantes
 
@@ -88,7 +95,15 @@ mestre chama `pedir_teste` e o jogador rola pela rota `/api/campanhas/[id]/rolar
   ponte MCP que o Claude Code usa para chamar as ferramentas.
 - `src/lib/dados.ts` — motor de dados (o código decide o número; o modelo só decide quando rolar).
 - `src/lib/tempo-real.ts`, `src/app/api/campanhas/[id]/eventos` — eventos em tempo real (SSE) para todos os aparelhos.
-- `src/lib/rede/` — PIN, porteiro (quem vem pela rede só acessa as mesas) e endereços da rede local; `src/proxy.ts` chama o
+- `src/lib/log.ts` — log em disco: `registrar(nivel, origem, dados)` grava uma linha JSON em `data/logs/taverna-<data>.log`
+  (14 dias), espelha no console e tira chave de API e e-mail. Nunca passe prompt, sistema, contexto ou narração. Os
+  `console.*` antigos de outros arquivos migram aos poucos, quando alguém mexer neles; código novo do servidor usa
+  `registrar`. Hoje registram: `provedor-cli.ts` (início/fim de cada `claude -p`: versão, flags, duração, código, stderr,
+  nº de eventos, subtype) e `tempo-real.ts` (todo evento de erro da mesa). `src/lib/diagnostico.ts` monta o relatório de
+  `/config → Diagnóstico` e de `/api/diagnostico?baixar=1`; `scripts/doutor.mjs` (JS puro, `npm run doutor`) examina a
+  instalação sem o servidor no ar e reaproveita `claude-bin.ts` e `rede/enderecos.ts` pelo type stripping do Node 24.
+- `src/lib/rede/` — PIN, porteiro (quem vem pela rede só acessa as mesas), endereços da rede local e estado do firewall
+  (`estadoFirewall`, só leitura); `src/proxy.ts` chama o
   porteiro e marca toda resposta com `x-taverna: 1` (é assim que os scripts sabem que quem respondeu na porta foi a taverna).
 - `src/lib/cliente/musica/` — trilha: estilo por sistema (`estilos.ts`), motor Web Audio e tocador das músicas próprias da
   pasta `musica/` (fora do git, ver `musica/LEIA-ME.md`; rotas `src/app/api/musica/`).

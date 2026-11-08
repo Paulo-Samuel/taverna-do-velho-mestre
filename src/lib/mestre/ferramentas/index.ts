@@ -1,4 +1,5 @@
 import "server-only";
+import { extensaoConsulta } from "./consulta";
 import { registrarExtensao } from "./contexto";
 import { extensaoVampiro } from "./vampiro";
 
@@ -11,6 +12,7 @@ import { extensaoVampiro } from "./vampiro";
 // Ferramenta própria de um sistema novo = um arquivo com uma ExtensaoFerramentas + uma linha registrarExtensao aqui.
 
 registrarExtensao(extensaoVampiro);
+registrarExtensao(extensaoConsulta);
 
 export { definirFerramentas } from "./definicoes";
 export { executarFerramenta } from "./executar";

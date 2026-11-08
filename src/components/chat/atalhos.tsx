@@ -4,7 +4,8 @@ import { useEffect, useRef } from "react";
 
 // Atalhos de teclado das mesas (só quando o foco NÃO está num campo de texto):
 // 1/2/3 escolhem a sugestão, R rola o teste pendente deste aparelho, / foca o campo de ação, Esc fecha, ? mostra a lista.
-// Vampiro, teste em decisão: F rerrola com Força de Vontade e Enter aceita (clicam nos botões do cartão; Enter num botão focado é dele).
+// Teste em decisão: F rerrola (Força de Vontade, Ponto de Herói, Inspiração) e Enter aceita só com o foco dentro do cartão
+// ([data-decisao]); Enter num botão focado é dele, e o Enter do leitor cena a cena nunca aceita.
 // A tecla C (códex do modo história) continua com a mesa-historia.
 
 export type OpcoesAtalhos = {
@@ -51,8 +52,12 @@ export function useAtalhos(opcoes: OpcoesAtalhos) {
         if (o.rolarTeste()) e.preventDefault();
       } else if (k === "f" || k === "F") {
         if (clicarDecisao("rerrolar")) e.preventDefault();
-      } else if (k === "Enter" && !(e.target as HTMLElement | null)?.closest?.("button, a, summary, [role=button]")) {
-        if (clicarDecisao("aceitar")) e.preventDefault();
+      } else if (k === "Enter") {
+        // Enter só aceita com o foco dentro do cartão da decisão (o Enter do leitor cena a cena, ou de um botão focado, é deles)
+        const alvo = e.target as HTMLElement | null;
+        const cartao = (alvo?.closest?.("[data-decisao]") ?? null) as HTMLElement | null;
+        if (!cartao || e.defaultPrevented || alvo?.closest?.("button, a, summary, [role=button]")) return;
+        if (clicarDecisao("aceitar", cartao)) e.preventDefault();
       } else if (k === "/") {
         e.preventDefault();
         o.focarCampo();
@@ -77,9 +82,11 @@ export function rolarPedido(mensagemId: number | null | undefined, rolarAte = tr
   return true;
 }
 
-/** Clica no "Rerrolar com Força de Vontade" ou no "Aceitar o resultado" de um teste em decisão à vista (só aparece para quem controla). */
-function clicarDecisao(qual: "rerrolar" | "aceitar"): boolean {
-  const botoes = [...document.querySelectorAll<HTMLButtonElement>(`[data-decisao] button[data-${qual}]`)];
+/** Clica no "Rerrolar" ou no "Aceitar o resultado" de um teste em decisão à vista (os botões só aparecem para o dono). */
+function clicarDecisao(qual: "rerrolar" | "aceitar", dentro?: HTMLElement): boolean {
+  const botoes = dentro
+    ? [...dentro.querySelectorAll<HTMLButtonElement>(`button[data-${qual}]`)]
+    : [...document.querySelectorAll<HTMLButtonElement>(`[data-decisao] button[data-${qual}]`)];
   const botao = botoes.find((b) => !b.disabled && b.getClientRects().length > 0);
   if (!botao) return false;
   botao.click();
@@ -89,8 +96,8 @@ function clicarDecisao(qual: "rerrolar" | "aceitar"): boolean {
 const LISTA: [string, string][] = [
   ["1 2 3", "escolhe a sugestão do mestre"],
   ["R", "rola o teste que o mestre pediu"],
-  ["F", "rerrola com Força de Vontade (Vampiro, teste em decisão)"],
-  ["Enter", "aceita o resultado do teste em decisão"],
+  ["F", "rerrola o teste em decisão (Força de Vontade, Ponto de Herói, Inspiração)"],
+  ["Enter", "aceita o resultado, com o foco no cartão da decisão"],
   ["/", "vai para o campo de ação"],
   ["Esc", "fecha painéis e janelas"],
   ["?", "mostra esta lista"],

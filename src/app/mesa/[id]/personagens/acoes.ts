@@ -5,10 +5,26 @@ import { revalidatePath } from "next/cache";
 import type { EstadoHistoria } from "@/app/nova/historia-acoes";
 import type { EstadoFormulario } from "@/components/ficha/formulario-personagem";
 import { fichaHistoriaDoFormulario } from "@/components/historia/criacao/ficha-formulario";
-import { adicionarMensagem, copiarPersonagem, criarPersonagem, listarMensagens, obterCampanha, obterPersonagem, type Campanha, type Personagem } from "@/lib/db";
+import {
+  adicionarMensagem,
+  copiarPersonagem,
+  criarPersonagem,
+  definirJogador,
+  listarMensagens,
+  obterCampanha,
+  obterPersonagem,
+  salvarCena,
+  salvarFicha,
+  type Campanha,
+  type Personagem,
+} from "@/lib/db";
+import { aplicarEdicao, aplicarEdicaoHistoria, linhaDaEdicao, opcoesEditaveis } from "@/lib/editar-ficha";
 import { fichaDoFormulario } from "@/lib/formulario-ficha";
+import { registrar } from "@/lib/log";
 import { publicarPersonagem } from "@/lib/mesa";
+import { mesaOcupada } from "@/lib/mestre";
 import { acessoNaPagina, daMaquinaNaPagina } from "@/lib/rede/acesso";
+import { obterSistema } from "@/lib/sistemas";
 import { publicar } from "@/lib/tempo-real";
 
 /** A mesa existe e quem chegou pode entrar nela (a porta do PIN é a mesma da página). */
@@ -76,4 +92,62 @@ export async function criarPersonagemHistoriaAcao(campanhaId: number, _anterior:
     return { erro: "A taverna tropeçou ao puxar o banco (o banco de dados não colaborou). Nada do que você escolheu se perdeu; tente de novo." };
   }
   return sentarNaMesa(mesa.campanha, p);
+}
+
+const mesmoNome = (a: string, b: string) => a.trim().toLocaleLowerCase("pt-BR") === b.trim().toLocaleLowerCase("pt-BR");
+
+/**
+ * Editar um personagem que já está na mesa (página /mesa/[id]/personagens/[pid]/editar; campanha e personagem vêm com .bind).
+ * Só a parte narrativa (lib/editar-ficha.ts): nome, jogador, história e as opções de criação sem número; no modo história,
+ * nome, aparência, história e rosto. Atributos, perícias, disciplinas e o que o mestre grava em extras ficam intactos.
+ * Mesmas portas das outras mexidas na ficha: PIN da mesa, nada com o mestre narrando (o turno grava a ficha que leu por
+ * cima) e, pela rede, só o dono do personagem (pelo apelido, como no reivindicar) ou um personagem sem dono.
+ */
+export async function editarPersonagemAcao(campanhaId: number, personagemId: number, _anterior: EstadoFormulario, form: FormData): Promise<EstadoFormulario> {
+  const mesa = await mesaAberta(campanhaId);
+  if ("erro" in mesa) return { erro: mesa.erro };
+  const { campanha } = mesa;
+  const p = obterPersonagem(personagemId);
+  if (!p || p.campanhaId !== campanha.id) return { erro: "Esse personagem não está nesta mesa." };
+  if (mesaOcupada(campanha.id)) return { erro: "O mestre está narrando. Salve a ficha quando ele terminar (nada do que você escreveu se perdeu)." };
+
+  const editor = String(form.get("editor") ?? "").trim();
+  if (p.jogador && !mesmoNome(editor, p.jogador) && !(await daMaquinaNaPagina())) {
+    return { erro: `${p.ficha.nome} é de ${p.jogador}. Pela rede, só o dono edita a ficha (ou a máquina da taverna).` };
+  }
+
+  const r =
+    campanha.sistema === "historia"
+      ? aplicarEdicaoHistoria(p.ficha, form, p.jogador)
+      : aplicarEdicao(p.ficha, opcoesEditaveis(obterSistema(campanha.sistema).opcoesCriacao, p.ficha), form, p.jogador);
+  if (!r.ok) return { erro: r.erro };
+
+  if (r.mudancas.length) {
+    try {
+      salvarFicha(p.id, r.ficha);
+      if (r.jogador !== p.jogador) definirJogador(p.id, r.jogador);
+    } catch (e) {
+      registrar("erro", "editar-personagem", { campanha: campanha.id, personagem: p.id, erro: e instanceof Error ? e.message : String(e) });
+      return { erro: "A taverna tropeçou ao guardar a ficha (o banco de dados não colaborou). Tente de novo." };
+    }
+
+    // nome novo: a linha do personagem no rastreador de combate acompanha (ela é achada pelo nome)
+    const combate = campanha.cena?.combate;
+    const linha = r.ficha.nome !== p.ficha.nome ? combate?.ordem.find((c) => c.aliado && c.nome === p.ficha.nome) : undefined;
+    if (combate && linha) {
+      linha.nome = r.ficha.nome;
+      salvarCena(campanha.id, campanha.cena);
+      publicar(campanha.id, { e: "cena", cena: campanha.cena });
+    }
+
+    const atualizado = obterPersonagem(p.id)!;
+    publicarPersonagem(campanha.id, atualizado);
+    // linha curta no chat (e no histórico que o mestre lê): ele fica sabendo que a ficha mudou e o que mudou
+    if (listarMensagens(campanha.id, 1).length) {
+      const m = adicionarMensagem(campanha.id, "sistema", linhaDaEdicao(p.ficha.nome, r.ficha.nome, r.mudancas), { personagemId: p.id });
+      publicar(campanha.id, { e: "mensagem", mensagem: m });
+    }
+    revalidatePath("/");
+  }
+  redirect(`/mesa/${campanha.id}?personagem=${p.id}`);
 }

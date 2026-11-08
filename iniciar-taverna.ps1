@@ -66,6 +66,12 @@ function Parar($mensagem) {
   Get-Job -ErrorAction SilentlyContinue | Stop-Job -ErrorAction SilentlyContinue
   Write-Host ""
   Write-Host $mensagem -ForegroundColor Red
+  # O doutor (npm run doutor) examina a instalação inteira e diz o que está vermelho; a saída fica no registro também.
+  if ((Get-Command node -ErrorAction SilentlyContinue) -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot "scripts\doutor.mjs"))) {
+    Write-Host ""
+    Write-Host "Examinando a instalação (npm run doutor)..." -ForegroundColor Yellow
+    try { & node (Join-Path $PSScriptRoot "scripts\doutor.mjs") 2>&1 | ForEach-Object { Write-Host $_ } } catch {}
+  }
   if ($log) {
     Write-Host ""
     Write-Host "Tudo o que apareceu aqui ficou gravado em:" -ForegroundColor Yellow
@@ -106,6 +112,106 @@ function DependenciasMudaram {
   if ($null -eq $hash) { return $false }
   if (-not (Test-Path $marcaLock)) { return $true }
   return ((Get-Content -Raw $marcaLock).Trim() -ne $hash)
+}
+
+# IPv4 que os celulares do Wi-Fi de casa conseguem usar: sem 169.254 (sem DHCP), loopback e adaptadores virtuais
+# (Hyper-V/WSL, VPN, Bluetooth...). Mesma ideia de src/lib/rede/enderecos.ts.
+function EnderecosDaRede {
+  $virtuais = 'Loopback|vEthernet|WSL|Hyper-V|VirtualBox|VMware|Docker|Bluetooth|OpenVPN|TAP-Windows|Wintun|WireGuard|Tailscale|ZeroTier|Hamachi|Npcap'
+  try {
+    return @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
+      Where-Object { $_.IPAddress -notlike '169.254.*' -and $_.IPAddress -ne '127.0.0.1' -and $_.InterfaceAlias -notmatch $virtuais } |
+      Sort-Object { if ($_.InterfaceAlias -match 'Wi-?Fi|WLAN|Ethernet') { 0 } else { 1 } } |
+      ForEach-Object { [pscustomobject]@{ Ip = $_.IPAddress; Interface = $_.InterfaceAlias } })
+  } catch { return @() }
+}
+
+# O firewall do Windows deixa os celulares entrarem na porta? "ok" | "bloqueado" | "desconhecido" (só leitura).
+# Vale a regra da taverna ou uma regra do node.exe (a que o Windows cria quando a pessoa aceita o aviso), para a categoria
+# da rede conectada (Privada/Pública); bloqueio vence liberação. Mesmo raciocínio de scriptFirewall() em src/lib/rede/enderecos.ts.
+$nomeRegra = "Taverna do Velho Mestre ($porta)"
+function EstadoFirewall {
+  $r = [pscustomobject]@{ Estado = "desconhecido"; Motivo = ""; Categorias = @() }
+  try {
+    $cats = @(Get-NetConnectionProfile -ErrorAction Stop | ForEach-Object { ("" + $_.NetworkCategory) -replace 'DomainAuthenticated', 'Domain' } | Select-Object -Unique)
+    $r.Categorias = $cats
+    if ($cats.Count -eq 0) { $r.Motivo = "sem rede conectada"; return $r }
+    $ligados = @(Get-NetFirewallProfile -ErrorAction Stop | Where-Object { $cats -contains ("" + $_.Name) -and ("" + $_.Enabled) -eq 'True' })
+    if ($ligados.Count -eq 0) { $r.Estado = "ok"; $r.Motivo = "firewall desligado nesta rede"; return $r }
+    $daTaverna = @(Get-NetFirewallRule -DisplayName $nomeRegra -ErrorAction SilentlyContinue)
+    $doNode = @(Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | Where-Object { ("" + $_.Program) -like '*\node.exe' } | Get-NetFirewallRule -ErrorAction SilentlyContinue)
+    $valem = @(@($daTaverna + $doNode) | Where-Object {
+        $p = "" + $_.Profile
+        $cobre = ($p -eq 'Any') -or (@($cats | Where-Object { $p -match $_ }).Count -gt 0)
+        ("" + $_.Enabled) -eq 'True' -and ("" + $_.Direction) -eq 'Inbound' -and $cobre
+      })
+    if (@($valem | Where-Object { ("" + $_.Action) -eq 'Block' }).Count -gt 0) { $r.Estado = "bloqueado"; $r.Motivo = "regra bloqueando o node.exe"; return $r }
+    if (@($valem | Where-Object { ("" + $_.Action) -eq 'Allow' }).Count -gt 0) { $r.Estado = "ok"; $r.Motivo = "liberado"; return $r }
+    $r.Estado = "bloqueado"; $r.Motivo = "nenhuma regra libera a porta $porta"
+  } catch { $r.Motivo = "não deu para conferir" }
+  return $r
+}
+
+# Cria a regra (só redes privadas) numa janela de administrador: o Windows mostra o aviso do UAC uma vez.
+function LiberarFirewall {
+  $comando = "New-NetFirewallRule -DisplayName '$nomeRegra' -Direction Inbound -Protocol TCP -LocalPort $porta -Action Allow -Profile Private | Out-Null"
+  try {
+    Start-Process powershell.exe -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $comando
+    return $true
+  } catch {
+    Write-Host "O Windows não deixou criar a regra (o aviso de administrador foi recusado?)." -ForegroundColor DarkYellow
+    return $false
+  }
+}
+
+# Pergunta s/n sem travar a taverna para sempre: sem resposta em $segundos, vale "não".
+function PerguntarSimNao($pergunta, $segundos) {
+  Write-Host "$pergunta (s/n; $segundos s para responder) " -NoNewline
+  try {
+    $fim = (Get-Date).AddSeconds($segundos)
+    while ((Get-Date) -lt $fim) {
+      if ([Console]::KeyAvailable) {
+        $tecla = [Console]::ReadKey($true)
+        Write-Host $tecla.KeyChar
+        return ("$($tecla.KeyChar)" -match '^[sS]$')
+      }
+      Start-Sleep -Milliseconds 100
+    }
+    Write-Host ""
+    return $false
+  } catch {
+    # sem console de verdade (janela estranha): pergunta do jeito simples
+    return ((Read-Host) -match '^\s*[sS]')
+  }
+}
+
+function MostrarRedeEFirewall {
+  $ips = EnderecosDaRede
+  if ($ips.Count -eq 0) {
+    Write-Host "Nenhum Wi-Fi ou cabo conectado: os celulares não vão achar a taverna." -ForegroundColor DarkYellow
+    return
+  }
+  foreach ($e in $ips) { Write-Host ("No Wi-Fi de casa: http://{0}:{1}  ({2})" -f $e.Ip, $porta, $e.Interface) -ForegroundColor Green }
+  $fw = EstadoFirewall
+  if ($fw.Estado -ne "bloqueado") { return }
+  Write-Host ""
+  Write-Host "O firewall do Windows ainda não deixa os celulares entrarem na porta $porta ($($fw.Motivo))." -ForegroundColor Yellow
+  if ($fw.Categorias -contains "Public") {
+    Write-Host "O Windows marcou esta rede como Pública: em Configurações > Rede, marque a rede de casa como Privada." -ForegroundColor Yellow
+  }
+  if ($semPessoa) {
+    Write-Host "Para liberar (PowerShell como administrador): New-NetFirewallRule -DisplayName `"$nomeRegra`" -Direction Inbound -Protocol TCP -LocalPort $porta -Action Allow -Profile Private"
+    return
+  }
+  if (-not (PerguntarSimNao "Liberar a taverna para o Wi-Fi de casa?" 30)) {
+    Write-Host "Tudo bem: a taverna funciona neste computador. Para os celulares, abra o atalho de novo e responda s."
+    return
+  }
+  if (LiberarFirewall) {
+    $depois = EstadoFirewall
+    if ($depois.Estado -eq "ok") { Write-Host "Pronto: os celulares do Wi-Fi de casa já podem entrar." -ForegroundColor Green }
+    else { Write-Host "A regra foi criada, mas a rede ainda parece bloqueada ($($depois.Motivo))." -ForegroundColor DarkYellow }
+  }
 }
 
 # ---------- já está no ar? ----------
@@ -186,7 +292,9 @@ Start-Job -ArgumentList $endereco -ScriptBlock {
 
 Write-Host ""
 Write-Host "Taverna aberta em $endereco" -ForegroundColor Green
-Write-Host "Para jogar com amigos no mesmo Wi-Fi, use o botão Convidar dentro da mesa."
+# o next start já atende a rede inteira (todas as interfaces); o que barra os celulares é só o firewall
+if ($env:TAVERNA_SEM_FIREWALL -ne "1") { MostrarRedeEFirewall }
+Write-Host "Para jogar com amigos no mesmo Wi-Fi, use o botão Convidar dentro da mesa (link e QR code)."
 Write-Host "Feche esta janela para desligar a taverna."
 Write-Host ""
 

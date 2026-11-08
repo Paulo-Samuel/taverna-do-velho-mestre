@@ -45,7 +45,24 @@ só considera a taverna "já aberta" quando quem responde na porta 3300 é ela m
 `x-taverna: 1`, posto em `src/proxy.ts`), nunca outro programa que esteja na porta. Se algo der errado, a janela fica aberta
 com a explicação e o código de saída, e tudo o que apareceu nela está em `data\logs\atalho-<data>.log` (guardado por 14
 dias; abre no Bloco de Notas ao apertar Enter). É esse arquivo que você manda para quem instalou. Porta 3300 ocupada por
-outro programa, banco travado por outra taverna aberta e módulo faltando têm dicas próprias.
+outro programa, banco travado por outra taverna aberta e módulo faltando têm dicas próprias. Quando algo falha, o atalho
+também roda o doutor (abaixo) e a saída dele vai junto no mesmo registro.
+
+Depois de ligar, o atalho mostra o endereço para os celulares ("No Wi-Fi de casa: http://192.168.x.x:3300") e confere o
+firewall do Windows; se nada libera a porta, pergunta "Liberar a taverna para o Wi-Fi de casa? (s/n)" e, com um **s**, cria a
+regra (só redes privadas) numa janela de administrador: o Windows mostra o aviso uma vez e nunca mais.
+
+### Pedindo ajuda
+
+- **A taverna abre, mas o mestre não responde:** em **Configurações → Diagnóstico** (`/config#diagnostico`), clique em
+  **Copiar relatório** (ou **Baixar .txt**) e mande para quem instalou. Vão versões (Node, Next, taverna/commit, Claude Code),
+  o mestre em uso, porta, pasta, tamanho do banco, firewall e as últimas 100 linhas do log; nunca a chave de API nem e-mail.
+  O log de cada dia fica em `data\logs\taverna-<data>.log` (uma linha JSON por acontecimento, guardado por 14 dias): cada
+  chamada ao Claude Code registra versão, flags, duração, código de saída, o stderr inteiro e o resultado, mas nunca o prompt.
+- **A taverna nem sobe:** rode `npm run doutor` na pasta da taverna (funciona com ela desligada). Ele imprime uma linha
+  OK / ATENÇÃO / FALHOU por item (Node, `node:sqlite`, `.env.local`, Claude Code achado/versão/login, porta 3300, OneDrive,
+  dependências × `package-lock`, build antigo, git atrás do GitHub, rede e firewall), diz como resolver cada um e grava a
+  mesma saída em `data\logs\doutor-<data>.txt`. Mande esse arquivo.
 
 ### Pelo terminal (qualquer sistema)
 
@@ -204,8 +221,10 @@ declarando a ação. Nos ajustes da mesa (`/mesa/[id]/ajustes`) escolha o modo:
 
 ## Rede local (cada um no seu aparelho)
 
-1. Na máquina da taverna: `npm run rede` (faz o build e sobe em `0.0.0.0:3300`). Para jogar em modo de desenvolvimento,
-   `npx next dev -p 3300 -H 0.0.0.0` também funciona.
+1. Na máquina da taverna, ligue pelo atalho (ou `npm start` / `npm run rede` / `npm run dev`). Todos já atendem a rede
+   inteira: sem `-H`, o Next escuta em todas as interfaces, e o `-H 0.0.0.0` do `npm run rede` é só redundante. O passo que
+   importa é o **firewall do Windows** (abaixo); o atalho confere e oferece liberar, e o `/api/rede` responde
+   `firewall: "ok" | "bloqueado" | "desconhecido"`.
 2. Abra a mesa e toque em **Convidar**: aparecem o link (`http://<ip-da-máquina>:3300/mesa/<id>/entrar`) e o QR code para
    quem está no mesmo Wi-Fi.
 3. Cada um escolhe um apelido e reivindica o próprio personagem. A presença mostra quem está conectado.
@@ -218,8 +237,9 @@ por `localhost` forjando cabeçalho (só vale depois de reiniciar o servidor; n�
 
 ### Abrindo o firewall do Windows
 
-Na primeira vez que o Node escuta na rede, o Windows pergunta se deve liberar: marque **Redes privadas**. Se não perguntou
-(ou se você negou), abra o PowerShell **como administrador** e rode:
+Na primeira vez que o Node escuta na rede, o Windows pergunta se deve liberar: marque **Redes privadas**. O atalho confere a
+cada vez (regra da taverna ou regra do `node.exe` para a categoria da rede conectada; bloqueio vence liberação) e pergunta se
+deve criar a regra quando nada libera. Para fazer à mão (ou se você negou), abra o PowerShell **como administrador** e rode:
 
 ```powershell
 New-NetFirewallRule -DisplayName "Taverna do Velho Mestre (3300)" -Direction Inbound -Protocol TCP -LocalPort 3300 -Action Allow -Profile Private
@@ -237,7 +257,9 @@ para a sala de casa, não para a internet.
 - `src/lib/tempo-real.ts` — eventos por mesa (publicar/assinar) e presença; `src/lib/mesa.ts` monta o estado enviado ao cliente.
 - `src/lib/mestre/` — fila de ações e turnos (`index.ts`), ferramentas do mestre (`ferramentas.ts`), prompts e os provedores
   `cli`, `api` e `falso`.
-- `src/lib/rede/` — endereços da rede local, porteiro e PIN das mesas.
+- `src/lib/rede/` — endereços da rede local, estado do firewall do Windows, porteiro e PIN das mesas.
+- `src/lib/log.ts` — log em `data/logs/taverna-<data>.log` (`registrar(nivel, origem, dados)`); `src/lib/diagnostico.ts`
+  monta o relatório de `/config → Diagnóstico` e de `GET /api/diagnostico?baixar=1`; `scripts/doutor.mjs` é o `npm run doutor`.
 - `src/lib/cliente/` — hook `useMesa` (SSE + ações) e identidade do aparelho.
 - `src/app/` — páginas: início, `/nova`, `/sistemas`, `/config`, `/mesa/[id]` (mesa, ajustes, entrar, personagens).
 - `src/app/api/campanhas/[id]/` — `eventos` (SSE), `acao`, `controle`, `presenca`, `rolagem`, `reivindicar`, `pin`, `personagens`.

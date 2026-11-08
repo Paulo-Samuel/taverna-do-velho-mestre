@@ -23,6 +23,11 @@ export type PropsRolador = {
   autor: string;
   /** rolagem pública aceita: entra no chat na hora, mesmo que o SSE esteja engasgado (sem duplicar) */
   aoRolar?: (m: Mensagem) => void;
+  /**
+   * O mestre pediu um teste deste personagem e ele ainda não foi rolado: o painel mostra o pedido com o atalho para o cartão
+   * (é ele que resolve o teste) e esconde o "Teste da ficha", que só faria uma rolagem solta que o mestre não lê como resposta.
+   */
+  pendente?: { teste: string; alvo: number | null; irPara: () => void } | null;
 };
 
 type Aba = "dados" | "teste" | "manual";
@@ -145,7 +150,7 @@ function Campo({ rotulo, children, ajuda }: { rotulo: string; children: ReactNod
   );
 }
 
-export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar }: PropsRolador) {
+export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar, pendente = null }: PropsRolador) {
   const inicial = dadoPadrao(sistema);
   const [aberto, setAberto] = useState(false);
   const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
@@ -180,6 +185,9 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar }
   const botao = useRef<HTMLButtonElement>(null);
   const painel = useRef<HTMLDivElement>(null);
   const desktop = useSyncExternalStore(assinarTela, () => window.matchMedia(consultaDesktop).matches, () => false);
+
+  // chegou um pedido do mestre com o "Teste da ficha" aberto: a aba some, então volta para os dados (ajuste durante a renderização)
+  if (pendente && aba === "teste") setAba("dados");
 
   const expressao = livre ?? montarExpressao(qtd, lados, mod, modo);
   const problema = livre !== null ? validarExpressao(livre) : null;
@@ -411,6 +419,24 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar }
           </button>
         </div>
 
+        {pendente && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-ambar/40 bg-ambar/10 px-4 py-2.5 text-xs" data-rolador-pendente>
+            <p className="min-w-0 flex-1 text-ambar">
+              O mestre pediu <span className="font-semibold">{pendente.teste}</span>
+              {typeof pendente.alvo === "number" ? ` (dif. ${pendente.alvo})` : ""}.
+            </p>
+            <button
+              type="button"
+              className="btn-ambar min-h-9 shrink-0 px-3 text-xs"
+              onClick={() => {
+                fechar(false);
+                pendente.irPara();
+              }}
+            >
+              🎲 Rolar esse teste
+            </button>
+          </div>
+        )}
         <div className="flex gap-1 border-b border-border px-3 text-xs" role="tablist">
           {(
             [
@@ -418,7 +444,9 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar }
               ["teste", "Teste da ficha"],
               ["manual", "Dados físicos"],
             ] as [Aba, string][]
-          ).map(([id, rotulo]) => (
+          )
+            .filter(([id]) => !(pendente && id === "teste"))
+            .map(([id, rotulo]) => (
             <button
               key={id}
               type="button"
@@ -669,6 +697,7 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar }
             <span className="truncate">{enviando ? "Rolando…" : rotuloRolar}</span>
           </button>
         </div>
+        {pendente && <p className="px-4 pb-1 text-[11px] text-sangue">⚠ Rolagem solta: isso não resolve o teste pedido pelo mestre.</p>}
         <p className="hidden px-4 pb-2 text-[10px] text-muted sm:block">Enter rola · 1–8 escolhe o dado · +/− quantidade · A/Z vantagem/desvantagem · P privada · Esc fecha</p>
       </div>
     </>
@@ -682,10 +711,13 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar }
         onClick={() => (aberto ? fechar() : abrir())}
         aria-haspopup="dialog"
         aria-expanded={aberto}
-        title="Rolar dados (tecla D)"
-        className={`min-h-10 rounded-md border px-2.5 py-1 text-xs transition focus-visible:outline-2 focus-visible:outline-ambar sm:min-h-0 sm:px-2 ${aberto ? "border-ambar bg-ambar/10 text-ambar" : "border-border text-foreground/90 hover:border-ambar hover:text-ambar"}`}
+        title={pendente ? `Rolar dados (tecla D) · o mestre pediu ${pendente.teste}` : "Rolar dados (tecla D)"}
+        className={`relative min-h-10 rounded-md border px-2.5 py-1 text-xs transition focus-visible:outline-2 focus-visible:outline-ambar sm:min-h-0 sm:px-2 ${aberto ? "border-ambar bg-ambar/10 text-ambar" : "border-border text-foreground/90 hover:border-ambar hover:text-ambar"}`}
       >
         🎲 Dados
+        {pendente && (
+          <span className="absolute -right-1 -top-1 size-2.5 rounded-full bg-ambar ring-2 ring-surface" data-rolador-ponto aria-label="há um teste pedido pelo mestre" />
+        )}
       </button>
       {aberto && createPortal(conteudoPainel, document.body)}
     </>

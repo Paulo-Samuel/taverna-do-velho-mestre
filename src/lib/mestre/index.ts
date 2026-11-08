@@ -28,11 +28,23 @@ import {
   type AcaoPendente,
   type ConfigCampanha,
   type Mensagem,
+  type Personagem,
 } from "../db";
-import { FIM_DE_SESSAO, INICIO, RESULTADO_TESTE } from "../constantes";
+import {
+  FIM_DE_SESSAO,
+  INICIO,
+  mesaSolo,
+  pausaDecisao,
+  podeDecidir,
+  PRAZO_DECISAO_MS,
+  PRAZO_DISCRETO_MS,
+  RERROLAGEM,
+  RESULTADO_TESTE,
+  type DecisaoDoTeste,
+} from "../constantes";
 import { obterSistema } from "../sistemas";
 import type { OpcaoDecisao, ResultadoTeste } from "../sistemas/tipos";
-import { publicar } from "../tempo-real";
+import { listarPresenca, publicar } from "../tempo-real";
 import { visivel } from "../visivel";
 import { arremateRedundante } from "./arremate";
 import { definirFerramentas, executarFerramenta, type ContextoFerramentas } from "./ferramentas";
@@ -184,8 +196,12 @@ function recadoDeSistema(campanhaId: number, texto: string, tipo: "aviso" | "div
  * (juntando as ações que chegaram enquanto ele falava); no modo "rodada" espera todos os personagens agirem.
  */
 export function enviarAcao(campanhaId: number, acao: { personagemId: number | null; autor: string; acao: string }): AcaoPendente {
-  // quem estava decidindo uma rerrolagem e mandou outra ação aceitou o resultado (e decisões vencidas fecham aqui também)
-  if (!acao.acao.startsWith(RESULTADO_TESTE)) aceitarDecisoes(campanhaId, acao.personagemId);
+  // quem estava decidindo uma rerrolagem e mandou outra ação aceitou o resultado (e decisões vencidas fecham aqui também).
+  // Pergunta fora do jogo, entre (( )), não é ação: a decisão continua aberta (só as vencidas fecham).
+  if (!acao.acao.startsWith(RESULTADO_TESTE)) {
+    const pergunta = /^\s*\(\(/.test(acao.acao);
+    aceitarDecisoes(campanhaId, pergunta ? null : acao.personagemId, { soVencidas: pergunta });
+  }
   const pendente = enfileirarAcao(campanhaId, acao);
   publicarEstado(campanhaId);
   agendar(campanhaId);
@@ -277,7 +293,8 @@ function prontoParaNarrar(campanhaId: number, forcar: boolean): boolean {
     fila,
     personagens: listarPersonagens(campanhaId).map((p) => p.id),
     modo: obterCampanha(campanhaId)?.config.modo,
-    testePendente: testesPendentes(campanhaId).length > 0,
+    // só perguntas fora do jogo na fila ("não é essa parada?"): o mestre responde mesmo com o teste esperando o dado
+    testePendente: testesPendentes(campanhaId).length > 0 && !fila.every((a) => a.acao.trim().startsWith("((")),
     forcar,
   });
 }
@@ -370,6 +387,14 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
   }
   for (const a of acoes.filter((x) => x.acao !== INICIO && x.acao !== FIM_DE_SESSAO)) {
     // resultado de teste rolado pelo jogador: o cartão do dado já está no chat, vai só para o mestre
+    if (a.acao.startsWith(RERROLAGEM)) {
+      doTurno.push({
+        personagem: nomeDoPersonagem(personagens, a.personagemId),
+        autor: a.autor,
+        acao: `(rerrolagem depois do teste que você já narrou: corrija a narração com o resultado novo, sem rolar de novo) ${a.acao.slice(RERROLAGEM.length)}`,
+      });
+      continue;
+    }
     if (a.acao.startsWith(RESULTADO_TESTE)) {
       doTurno.push({ personagem: nomeDoPersonagem(personagens, a.personagemId), autor: a.autor, acao: `(resultado do teste pedido) ${a.acao.slice(RESULTADO_TESTE.length)}` });
       continue;
@@ -577,7 +602,12 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
  * O jogador rola um teste que o mestre pediu (modo história). O servidor sorteia o dado, atualiza o cartão para
  * todos e, quando não sobra nenhum teste pendente, manda os resultados para o mestre continuar a narração.
  */
-export function rolarTestePendente(campanhaId: number, mensagemId: number, autor: string): ResultadoTeste {
+export function rolarTestePendente(
+  campanhaId: number,
+  mensagemId: number,
+  autor: string,
+  extra: { clienteId?: string | null; surto?: boolean } = {},
+): ResultadoTeste {
   const m = obterMensagem(mensagemId);
   const dados = (m?.dados ?? {}) as Record<string, unknown>;
   if (!m || dados.tipo !== "pedido_teste") throw new Error("Esse teste não existe.");
@@ -587,8 +617,16 @@ export function rolarTestePendente(campanhaId: number, mensagemId: number, autor
   if (!campanha || !p || p.campanhaId !== campanhaId) throw new Error("Esse teste não é desta mesa.");
 
   const sistema = obterSistema(campanha.sistema);
+  const testeBase = String(dados.testePedido ?? dados.teste);
+  // escolha antes de rolar (Vampiro: Surto de Sangue): revalidada agora, porque a Fome pode ter mudado desde o pedido
+  let comSurto = false;
+  if (extra.surto) {
+    const antes = sistema.opcoesAntesDeRolar?.(p.ficha, { teste: testeBase, alvo: null, motivo: String(dados.motivo ?? "") }) ?? [];
+    if (!antes.some((o) => o.id === "surto")) throw new Error("O Surto de Sangue não vale mais neste teste (a Fome mudou ou já há um Surto guardado).");
+    comSurto = true;
+  }
   const r = sistema.resolverTeste(p.ficha, {
-    teste: String(dados.testePedido ?? dados.teste),
+    teste: comSurto ? `${testeBase} com Surto de Sangue` : testeBase,
     alvo: typeof dados.alvo === "number" ? dados.alvo : null,
     modo: dados.modo === "vantagem" || dados.modo === "desvantagem" ? dados.modo : undefined,
     modificador: typeof dados.modificador === "number" ? dados.modificador : undefined,
@@ -597,24 +635,30 @@ export function rolarTestePendente(campanhaId: number, mensagemId: number, autor
     ...(dados.opcoes && typeof dados.opcoes === "object" ? { opcoes: dados.opcoes as Record<string, unknown> } : {}),
   });
   const texto = textoDoResultado(p.ficha.nome, r);
-  // decisão do jogador depois do dado, se o sistema oferecer (Vampiro: falhou e ainda há Força de Vontade → rerrolar?):
-  // o cartão pergunta antes de o mestre saber e aceita sozinho no prazo
-  let opcoesDecisao: OpcaoDecisao[] = [];
-  try {
-    opcoesDecisao = sistema.decisoesAposTeste?.(p.ficha, r) ?? [];
-  } catch (e) {
-    console.warn(`[taverna] decisoesAposTeste falhou (${sistema.id}):`, e);
-  }
-  const decidir = opcoesDecisao.length > 0;
-  const ate = Date.now() + PRAZO_DECISAO_MS;
+  // decisão do jogador depois do dado, se o sistema oferecer (Vampiro: rerrolar com Força de Vontade; PF2e: Ponto de Herói…).
+  // Falha, teste perigoso ou ataque PAUSAM: o cartão pergunta antes de o mestre saber (mesa solo espera sem prazo; com mais
+  // aparelhos, 45 s). Num sucesso comum o mestre já recebe o resultado e o botão fica discreto por alguns segundos.
+  const opcoesDecisao = opcoesDepoisDoTeste(sistema, p.ficha, r);
+  const pausar = opcoesDecisao.length > 0 && pausaDecisao(r, Boolean(dados.perigoso));
+  const discreta = opcoesDecisao.length > 0 && !pausar;
+  const solo = mesaSolo(listarPresenca(campanhaId));
+  const decisao: DecisaoDoTeste | null = opcoesDecisao.length
+    ? {
+        ate: discreta ? Date.now() + PRAZO_DISCRETO_MS : solo ? null : Date.now() + PRAZO_DECISAO_MS,
+        clienteId: extra.clienteId || null,
+        campanhaId,
+        opcoes: opcoesDecisao,
+        ...(discreta ? { discreta: true } : {}),
+      }
+    : null;
   // desfazer o turno que esta rolagem vai disparar devolve o teste para "pendente"
   abrirInstantaneo(campanhaId, capturarEstado(campanhaId));
   const atualizada = atualizarMensagem(m.id, texto, {
     ...dados,
-    status: decidir ? "decidir" : "resolvido",
+    status: pausar ? "decidir" : "resolvido",
     resultado: r,
     roladoPor: autor || null,
-    ...(decidir ? { decisao: { ate, campanhaId, opcoes: opcoesDecisao } } : {}),
+    ...(decisao ? { decisao } : {}),
   });
   if (atualizada) publicar(campanhaId, { e: "mensagem_atualizada", mensagem: atualizada });
 
@@ -629,13 +673,24 @@ export function rolarTestePendente(campanhaId: number, mensagemId: number, autor
     console.warn(`[taverna] aposTeste falhou (${sistema.id}):`, e);
   }
 
-  if (decidir) {
-    armarPrazo(campanhaId, m.id, ate);
+  if (pausar && decisao) {
+    armarPrazo(campanhaId, m.id, decisao.ate);
     return r;
   }
   enviarResultado(campanhaId, p.id, autor, texto, dados, r);
   return r;
 }
+
+/** As opções que o sistema oferece depois deste resultado (erro do gancho = nenhuma; o teste nunca trava por isso). */
+function opcoesDepoisDoTeste(sistema: ReturnType<typeof obterSistema>, ficha: Personagem["ficha"], r: ResultadoTeste): OpcaoDecisao[] {
+  try {
+    return sistema.decisoesAposTeste?.(ficha, r) ?? [];
+  } catch (e) {
+    console.warn(`[taverna] decisoesAposTeste falhou (${sistema.id}):`, e);
+    return [];
+  }
+}
+
 
 const textoDoResultado = (nome: string, r: ResultadoTeste) =>
   `${nome} · ${r.teste} — ${r.motivo}: ${r.expressao} → ${r.total}${r.alvo !== null ? ` vs ${r.alvo}` : ""} · ${r.rotuloGrau}`;
@@ -650,14 +705,41 @@ function enviarResultado(campanhaId: number, personagemId: number, autor: string
 
 // ---------- decisão depois do teste (ganchos decisoesAposTeste/aplicarDecisao; Vampiro: rerrolar com Força de Vontade) ----------
 
-/** Quanto tempo o cartão espera o jogador decidir antes de aceitar o resultado sozinho. */
-export const PRAZO_DECISAO_MS = 20_000;
+/** Prazo da decisão com mais de um aparelho (mesa solo espera sem prazo); o navegador não aceita sozinho, só o servidor. */
+export { PRAZO_DECISAO_MS };
 
 const gd = globalThis as unknown as { __tavernaPrazos?: Map<number, ReturnType<typeof setTimeout>> };
 const prazos = (gd.__tavernaPrazos ??= new Map());
 
-function armarPrazo(campanhaId: number, mensagemId: number, ate: number) {
+/** De quanto em quanto a decisão sem prazo (mesa solo) confere se chegou gente: aí ganha os 45 s. */
+const VIGIA_SOLO_MS = 3_000;
+
+/**
+ * Arma o fim da decisão. `ate` null (mesa solo): nada vence, mas uma vigia confere a presença e, se a mesa deixar de ser solo,
+ * grava o prazo de 45 s no cartão (todos veem a barrinha) e arma o fim.
+ */
+function armarPrazo(campanhaId: number, mensagemId: number, ate: number | null) {
   clearTimeout(prazos.get(mensagemId));
+  if (ate === null) {
+    const vigia = setInterval(() => {
+      const m = obterMensagem(mensagemId);
+      const d = (m?.dados ?? {}) as Record<string, unknown>;
+      const decisao = d.decisao as DecisaoDoTeste | undefined;
+      if (!m || d.status !== "decidir" || !decisao) {
+        clearInterval(vigia);
+        prazos.delete(mensagemId);
+        return;
+      }
+      if (decisao.ate !== null || mesaSolo(listarPresenca(campanhaId))) return;
+      clearInterval(vigia);
+      const novoAte = Date.now() + PRAZO_DECISAO_MS;
+      const atualizada = atualizarMensagem(m.id, m.texto, { ...d, decisao: { ...decisao, ate: novoAte } });
+      if (atualizada) publicar(campanhaId, { e: "mensagem_atualizada", mensagem: atualizada });
+      armarPrazo(campanhaId, mensagemId, novoAte);
+    }, VIGIA_SOLO_MS);
+    prazos.set(mensagemId, vigia);
+    return;
+  }
   const t = setTimeout(
     () => {
       prazos.delete(mensagemId);
@@ -673,31 +755,115 @@ function armarPrazo(campanhaId: number, mensagemId: number, ate: number) {
 }
 
 /** Fecha as decisões em aberto: as deste personagem (ele já mandou outra ação) e as vencidas (servidor reiniciado no meio). */
-function aceitarDecisoes(campanhaId: number, personagemId: number | null) {
+function aceitarDecisoes(campanhaId: number, personagemId: number | null, opcoes: { soVencidas?: boolean } = {}) {
   for (const m of testesPendentes(campanhaId)) {
-    const d = (m.dados ?? {}) as { status?: string; personagemId?: number; decisao?: { ate?: number } };
+    const d = (m.dados ?? {}) as { status?: string; personagemId?: number; decisao?: { ate?: number | null } };
     if (d.status !== "decidir") continue;
     const dele = personagemId !== null && (d.personagemId ?? m.personagemId) === personagemId;
-    if (dele || (d.decisao?.ate ?? 0) < Date.now() - 1000) decidirTeste(campanhaId, m.id, { rerrolar: false, sozinho: !dele });
+    // ate null = mesa solo: só fecha quando o próprio personagem age
+    const vencida = typeof d.decisao?.ate === "number" && d.decisao.ate < Date.now() - 1000;
+    if (dele || vencida) decidirTeste(campanhaId, m.id, { rerrolar: false, sozinho: !dele });
   }
+  // rerrolagens "depois" (sucesso discreto, mestre rolou na hora): qualquer ação nova fecha o botão (pergunta fora do jogo, não)
+  if (opcoes.soVencidas) return;
+  for (const m of listarMensagens(campanhaId).slice(-40)) {
+    const d = (m.dados ?? {}) as Record<string, unknown>;
+    const decisao = d.decisao as DecisaoDoTeste | undefined;
+    if (m.tipo !== "dado" || !decisao || !(decisao.discreta || decisao.automatico) || d.status === "decidir") continue;
+    fecharDecisaoDepois(campanhaId, m);
+  }
+}
+
+/** Tira o botão de rerrolar "depois" do cartão (sem mexer no resultado). */
+function fecharDecisaoDepois(campanhaId: number, m: Mensagem) {
+  const resto = { ...((m.dados ?? {}) as Record<string, unknown>) };
+  delete resto.decisao;
+  const atualizada = atualizarMensagem(m.id, m.texto, resto);
+  if (atualizada) publicar(campanhaId, { e: "mensagem_atualizada", mensagem: atualizada });
+}
+
+/** Quem pede a decisão pela rota: o aparelho (clienteId) e se ele é a máquina da taverna. */
+export type QuemDecide = { clienteId: string; local: boolean };
+
+function conferirDono(campanhaId: number, decisao: DecisaoDoTeste | undefined, quem: QuemDecide | undefined, personagemId: number | null) {
+  if (!quem || !decisao) return;
+  if (!podeDecidir(decisao, quem, listarPresenca(campanhaId), personagemId)) throw new Error("Quem decide este teste é o aparelho que rolou o dado.");
+}
+
+/**
+ * Rerrolagem depois de o mestre já ter o resultado (sucesso discreto ou o mestre rolou na hora): aplica a opção, troca o cartão
+ * e manda a correção ao mestre (ação interna §rerrolagem). Aceitar só tira o botão.
+ */
+function decidirDepois(
+  campanhaId: number,
+  m: Mensagem,
+  escolha: { rerrolar: boolean; opcao?: string; dados?: number[] },
+  quem: QuemDecide | undefined,
+): ResultadoTeste | null {
+  const dados = (m.dados ?? {}) as Record<string, unknown>;
+  const decisao = dados.decisao as DecisaoDoTeste;
+  if (!escolha.rerrolar) {
+    fecharDecisaoDepois(campanhaId, m);
+    return null;
+  }
+  if (decisao.ate !== null && decisao.ate < Date.now() - 1000) {
+    fecharDecisaoDepois(campanhaId, m);
+    throw new Error("O tempo para rerrolar este teste acabou.");
+  }
+  const p = m.personagemId ? obterPersonagem(m.personagemId) : null;
+  const campanha = obterCampanha(campanhaId);
+  if (!campanha || !p || p.campanhaId !== campanhaId) throw new Error("Esse teste não é desta mesa.");
+  conferirDono(campanhaId, decisao, quem, p.id);
+  const sistema = obterSistema(campanha.sistema);
+  if (!sistema.aplicarDecisao) throw new Error("Este sistema não tem escolha depois do teste.");
+  const pedido = dados.tipo === "pedido_teste";
+  const antes = (pedido ? dados.resultado : dados) as ResultadoTeste;
+  const id = escolha.opcao ?? decisao.opcoes[0]?.id;
+  if (!id) throw new Error("Não há escolha para este teste.");
+  abrirInstantaneo(campanhaId, capturarEstado(campanhaId));
+  const feito = sistema.aplicarDecisao(p.ficha, antes, id, escolha.dados ? { dados: escolha.dados } : undefined);
+  salvarFicha(p.id, feito.ficha);
+  publicar(campanhaId, { e: "personagem", personagem: visivel(sistema, { ...p, ficha: feito.ficha }) });
+  const r = feito.resultado;
+  const texto = textoDoResultado(p.ficha.nome, r);
+  const resto = { ...dados };
+  delete resto.decisao;
+  const novos: Record<string, unknown> = pedido ? { ...resto, resultado: r } : { ...(r as unknown as Record<string, unknown>) };
+  // o resultado do sistema vem de `antes` (que ainda trazia a oferta): a decisão fecha aqui, nos dois caminhos
+  delete novos.decisao;
+  if (pedido && novos.resultado && typeof novos.resultado === "object") {
+    const { decisao: _semDecisao, ...limpo } = novos.resultado as Record<string, unknown>;
+    void _semDecisao;
+    novos.resultado = limpo;
+  }
+  const atualizada = atualizarMensagem(m.id, texto, novos);
+  if (atualizada) publicar(campanhaId, { e: "mensagem_atualizada", mensagem: atualizada });
+  const autor = typeof dados.roladoPor === "string" ? dados.roladoPor : "";
+  enviarAcao(campanhaId, { personagemId: p.id, autor, acao: `${RERROLAGEM}${texto}${feito.textoMestre ? ` — ${feito.textoMestre}` : ""}` });
+  return r;
 }
 
 /**
  * O jogador decide o teste que está esperando: aceita o resultado ou escolhe a opção que o sistema ofereceu (Vampiro: gasta 1 de
  * Força de Vontade e rerrola até 3 dados normais; `dados` = índices escolhidos, sem eles o sistema escolhe os que falharam).
  * `opcao` é o id da opção; omitido, vale a primeira oferecida. Depois o resultado final vai para o mestre.
- * Aceitar um teste que já fechou é inofensivo (devolve null): o prazo do servidor e o do navegador podem chegar juntos.
+ * Aceitar um teste que já fechou é inofensivo (devolve null). `quem` vem da rota: só o dono da decisão (o aparelho que rolou,
+ * ou a máquina da taverna com o dono fora da mesa) decide; o prazo do servidor não passa `quem`.
  */
 export function decidirTeste(
   campanhaId: number,
   mensagemId: number,
   escolha: { rerrolar: boolean; opcao?: string; dados?: number[]; sozinho?: boolean },
+  quem?: QuemDecide,
 ): ResultadoTeste | null {
   const m = obterMensagem(mensagemId);
   const dados = (m?.dados ?? {}) as Record<string, unknown>;
   // desfazer o turno no meio da decisão apaga o pedido: o prazo que sobrou não tem o que aceitar
   if (!m && !escolha.rerrolar) return null;
-  if (!m || dados.tipo !== "pedido_teste") throw new Error("Esse teste não existe.");
+  if (!m) throw new Error("Esse teste não existe.");
+  const aberta = dados.decisao as DecisaoDoTeste | undefined;
+  if (aberta && (aberta.discreta || aberta.automatico) && dados.status !== "decidir") return decidirDepois(campanhaId, m, escolha, quem);
+  if (dados.tipo !== "pedido_teste") throw new Error("Esse teste não existe.");
   const p = m.personagemId ? obterPersonagem(m.personagemId) : null;
   const campanha = obterCampanha(campanhaId);
   if (!campanha || !p || p.campanhaId !== campanhaId) throw new Error("Esse teste não é desta mesa.");
@@ -705,6 +871,7 @@ export function decidirTeste(
     if (!escolha.rerrolar) return null;
     throw new Error(dados.status === "resolvido" ? "Esse teste já foi decidido." : "Esse teste ainda não foi rolado.");
   }
+  conferirDono(campanhaId, aberta, quem, p.id);
 
   let r = dados.resultado as ResultadoTeste;
   const sistema = obterSistema(campanha.sistema);

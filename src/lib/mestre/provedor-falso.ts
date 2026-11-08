@@ -118,6 +118,14 @@ export const provedorFalso: Provedor = {
       if (tem("atualizar_cena")) await executar("atualizar_cena", { situacao: "O mestre de teste ficou mudo de propósito." }).catch(() => undefined);
       return;
     }
+    // Ensaio da consulta (W18): "[consulta]" consulta o bestiário (secreto) e sorteia a primeira tabela (pública)
+    if (/\[consulta\]/.test(acao)) {
+      const enumTabelas = (ferramentas.find((f) => f.name === "sortear_tabela")?.input_schema as { properties?: { tabela?: { enum?: string[] } } } | undefined)?.properties?.tabela?.enum;
+      const bloco = await usar<string>("consultar_bestiario", { nivel: 1 });
+      const sorteio = enumTabelas?.length ? await usar<string>("sortear_tabela", { tabela: enumTabelas[0], publica: true }) : null;
+      await diga(`O mestre folheia as anotações. ${bloco ? `(${bloco.split("\n")[0]}) ` : ""}${sorteio ? `Sorteado: ${sorteio}` : ""}`);
+      return;
+    }
 
     // modo história: cena com título e música, NPC com personalidade, teste rolado pelo jogador e ações sugeridas
     if (tem("pedir_teste") || tem("sugerir_acoes")) {

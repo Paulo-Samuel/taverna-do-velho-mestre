@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { EfeitosVtm, FaixaDespertar, listaDespertares } from "@/components/chat/cartao-dado";
+import { decisaoAberta, DecisaoDoTeste, EfeitosVtm, FaixaDespertar, listaDespertares, type DecisaoNoCartao } from "@/components/chat/cartao-dado";
 import type { Mensagem } from "@/lib/db";
 import type { PersonagemVisivel } from "@/lib/mesa";
 import { COR_GRAU, corDoNome, sinal } from "./cores";
@@ -14,16 +14,26 @@ import { usaD20 } from "./usa-d20";
 // Pendente → cartão grande com os dados e o botão. Rolado aqui → d20 3D gira e assenta na face do servidor; nos outros sistemas a
 // parada (d10 do Vampiro, d100, Fate, 2d6) treme e assenta dado a dado. Rolado em outro aparelho (ou ao recarregar) → resultado
 // compacto: d20 numa linha, os outros com a mesma parada assentada em tamanho pequeno.
-// Vampiro: teste que falhou com Força de Vontade sobrando fica "decidir" — o cartão oferece rerrolar até 3 dados normais (−1 FV) ou
-// aceitar; o servidor aceita sozinho no prazo (rota /rerrolar) e só então manda o resultado ao mestre.
+// Decisão depois do dado (Vampiro: rerrolar com Força de Vontade escolhendo os dados; PF2e: Ponto de Herói; 5e: Inspiração): falha,
+// teste perigoso ou ataque ficam "decidir" — só o aparelho que rolou decide; mesa solo espera sem prazo, com mais gente o servidor
+// fica com o resultado em 45 s (rota /rerrolar) e só então manda ao mestre. Num sucesso comum o botão fica discreto uns segundos.
+// Antes do dado: a composição da parada e, no Vampiro, o Surto de Sangue como escolha do jogador.
 
 export type ResultadoRolagem = { natural: number | null; total: number; dados: number[]; grau: string; rotuloGrau: string };
+
+/** Escolhas antes de rolar que o pedido traz (Vampiro: Surto de Sangue). */
+type OpcaoAntes = { id: string; rotulo: string; custo?: string; efeito?: string };
 
 type DadosPedido = {
   tipo?: string;
   status?: "pendente" | "decidir" | "resolvido" | "cancelado";
-  /** status "decidir": até quando o servidor espera (epoch ms) e a mesa (para a rota /rerrolar) */
-  decisao?: { ate?: number; campanhaId?: number };
+  /** decisão depois do dado: prazo do servidor (null = mesa solo), dono e opções */
+  decisao?: DecisaoNoCartao;
+  /** o prazo acabou sem resposta e o servidor ficou com o resultado */
+  aceitoSozinho?: boolean;
+  /** composição da parada calculada na prévia ("Carisma 4 + Lábia 4 · 1 de Fome") */
+  detalhes?: string;
+  antes?: OpcaoAntes[];
   personagem?: string;
   personagemId?: number;
   teste?: string;
@@ -48,9 +58,6 @@ type Rolagem = { fase: "girando" | "assentando" | "pronto" | "recolhido"; result
 
 /** Tempo máximo esperando o dado 3D avisar que parou (se o aviso não vier, mostra o resultado assim mesmo). */
 const ESPERA_MAXIMA_MS = 4000;
-
-/** Prazo da decisão de rerrolar (igual ao PRAZO_DECISAO_MS do servidor; só para a barrinha). */
-const PRAZO_DECISAO_MS = 20_000;
 
 /** Quanto tempo o dado grande fica na tela depois do resultado. Depois vira o resumo compacto: cada Dado3D usa um contexto
  * WebGL e o navegador só aguenta uns 16 por página, então só o teste ativo mantém o dado montado. */
@@ -230,138 +237,25 @@ function LinhaVontade({ r, centro = false }: { r: ResultadoParada; centro?: bool
   );
 }
 
-/** Os dados normais que o servidor vai rolar de novo (os menores abaixo de 6, até 3), só para o cartão mostrar. */
-function escolhaDaRerrolagem(r: ResultadoParada): number[] {
-  const dados = r.dados ?? [];
-  const normais = dados.slice(0, dados.length - (Array.isArray(r.dadosFome) ? r.dadosFome.length : 0));
-  return normais
-    .map((v, i) => ({ v, i }))
-    .filter((x) => x.v < 6)
-    .sort((a, b) => a.v - b.v || a.i - b.i)
-    .slice(0, 3)
-    .map((x) => x.v);
+/** O recurso que a opção gasta, lido da ficha, para o cartão mostrar quanto sobra. */
+function recursoDaOpcao(personagem: PersonagemVisivel | null, opcaoId: string | undefined): { rotulo: string; atual: number; max: number } | null {
+  const rec = personagem?.ficha.recursos ?? {};
+  const id = opcaoId === "rerrolar_vontade" ? "vontade" : opcaoId === "ponto_de_heroi" ? "heroi" : opcaoId === "inspiracao_heroica" ? "inspiracao" : null;
+  const x = id ? rec[id] : undefined;
+  return x ? { rotulo: x.rotulo, atual: x.atual, max: x.max } : null;
 }
 
-/** Teste em decisão: quem controla o personagem rerrola ou aceita; os outros esperam. Prazo vencido sem resposta do servidor
- * (reiniciou no meio) → o navegador aceita (o servidor ignora se já fechou). */
-function DecisaoVontade({
-  mensagemId,
-  d,
-  r,
-  podeRolar,
-  quem,
-  vontade,
-  aoRerrolar,
-}: {
-  mensagemId: number;
-  d: DadosPedido;
-  r: ResultadoParada;
-  podeRolar: boolean;
-  quem: string;
-  vontade: { atual: number; max: number } | null;
-  aoRerrolar: (novo: Resultado) => void;
-}) {
-  const ate = d.decisao?.ate ?? 0;
-  const campanhaId = d.decisao?.campanhaId;
-  const [agora, setAgora] = useState(0);
-  const [enviando, setEnviando] = useState<"rerrolar" | "aceitar" | null>(null);
-  const [erro, setErro] = useState<string | null>(null);
-
-  useEffect(() => {
-    const tique = () => setAgora(Date.now());
-    const t0 = setTimeout(tique, 0);
-    const t = setInterval(tique, 250);
-    return () => {
-      clearTimeout(t0);
-      clearInterval(t);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!ate || !campanhaId) return;
-    const t = setTimeout(
-      () => {
-        void fetch(`/api/campanhas/${campanhaId}/rerrolar`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mensagemId, aceitar: true, sozinho: true }),
-        }).catch(() => undefined);
-      },
-      Math.max(0, ate + 2500 - Date.now()),
-    );
-    return () => clearTimeout(t);
-  }, [ate, campanhaId, mensagemId]);
-
-  async function decidir(aceitar: boolean) {
-    if (enviando || !campanhaId) return;
-    setEnviando(aceitar ? "aceitar" : "rerrolar");
-    setErro(null);
-    const resp = await fetch(`/api/campanhas/${campanhaId}/rerrolar`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(aceitar ? { mensagemId, aceitar: true } : { mensagemId }),
-    }).catch(() => null);
-    const corpo = resp ? ((await resp.json().catch(() => ({}))) as { resultado?: Resultado; erro?: string }) : {};
-    if (!resp?.ok) {
-      setErro(corpo.erro ?? "Não deu certo. Tente de novo.");
-      setEnviando(null);
-      return;
-    }
-    // a mensagem atualizada chega pelo fluxo de eventos e tira os botões; o resultado já anima aqui
-    if (!aceitar && corpo.resultado) aoRerrolar(corpo.resultado);
-  }
-
-  const resta = agora ? Math.max(0, ate - agora) : PRAZO_DECISAO_MS;
-  const escolha = escolhaDaRerrolagem(r);
+/** "↻ Ponto de Herói 2 → 1 · d20 4 → 17 · antes: Falha" (PF2e) e "↻ Inspiração heroica…" (5e). */
+function LinhaRecursoD20({ r }: { r: Record<string, unknown> }) {
+  const heroi = r.heroi as { antes: number; depois: number; naturalAntes: number; naturalDepois: number; grauAntes?: string } | undefined;
+  const insp = r.inspiracao as { naturalAntes: number; naturalDepois: number; grauAntes?: string } | undefined;
+  const x = heroi ?? insp;
+  if (!x) return null;
   return (
-    <div className="surgir mx-auto mt-4 max-w-md rounded-xl border border-ambar/45 bg-background/35 px-3 py-3 text-center" data-decisao={mensagemId}>
-      <p className="text-sm text-foreground/90">
-        Gastar <span className="font-semibold text-ambar">Força de Vontade</span>?
-        {vontade && (
-          <span className="text-muted">
-            {" "}
-            ({vontade.atual}/{vontade.max})
-          </span>
-        )}
-      </p>
-      {escolha.length > 0 && (
-        <p className="mt-0.5 text-xs text-muted">
-          Rola de novo {escolha.length === 1 ? "o dado normal que falhou" : `os ${escolha.length} dados normais que falharam`} ({escolha.join(", ")}); os de Fome ficam.
-        </p>
-      )}
-      {podeRolar ? (
-        <div className="mt-3 flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:flex-wrap">
-          <button
-            type="button"
-            data-rerrolar
-            disabled={enviando !== null}
-            onClick={() => void decidir(false)}
-            className="btn-ambar min-h-11 flex-col gap-0 px-4 py-2 leading-tight focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ambar"
-          >
-            <span>{enviando === "rerrolar" ? "Rerrolando…" : "↻ Rerrolar com Força de Vontade"}</span>
-            <span className="text-[11px] font-normal opacity-80">até 3 dados normais · −1 FV</span>
-          </button>
-          <button
-            type="button"
-            data-aceitar
-            disabled={enviando !== null}
-            onClick={() => void decidir(true)}
-            className="btn-borda min-h-11 px-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ambar"
-          >
-            {enviando === "aceitar" ? "Aceitando…" : "Aceitar o resultado"}
-          </button>
-        </div>
-      ) : (
-        <p className="mt-2 text-sm italic text-muted">Aguardando {quem} decidir…</p>
-      )}
-      <div className="mx-auto mt-3 h-1 max-w-xs overflow-hidden rounded-full bg-border/60" aria-hidden>
-        <div className="h-full bg-ambar/80 transition-[width] duration-300 ease-linear" style={{ width: `${Math.min(100, (resta / PRAZO_DECISAO_MS) * 100)}%` }} />
-      </div>
-      <p className="mt-1 text-[11px] text-muted">
-        aceita sozinho em {Math.ceil(resta / 1000)} s{podeRolar ? " · F rerrola, Enter aceita" : ""}
-      </p>
-      {erro && <p className="mt-1 text-xs text-sangue">{erro}</p>}
-    </div>
+    <p className="mt-1 text-xs text-ambar" data-recurso-gasto>
+      <span className="font-semibold">↻ {heroi ? `Ponto de Herói ${heroi.antes} → ${heroi.depois}` : "Inspiração heroica gasta"}</span> · d20 {x.naturalAntes} → {x.naturalDepois}
+      {x.grauAntes && <span className="text-muted"> · antes: {x.grauAntes}</span>}
+    </p>
   );
 }
 
@@ -369,13 +263,21 @@ export function PedidoTeste({
   mensagem,
   personagem,
   podeRolar,
+  podeDecidir,
+  clienteId = "",
   rolar,
+  perguntar,
 }: {
   mensagem: Mensagem;
   personagem: PersonagemVisivel | null;
   /** este aparelho controla o personagem do teste (ou é a mesa local) */
   podeRolar: boolean;
-  rolar: (mensagemId: number) => Promise<ResultadoRolagem | null>;
+  /** este aparelho tem os botões da decisão depois do dado (o dono; sem `podeDecidir`, vale `podeRolar`) */
+  podeDecidir?: boolean;
+  clienteId?: string;
+  rolar: (mensagemId: number, opcoes?: { surto?: boolean }) => Promise<ResultadoRolagem | null>;
+  /** manda uma pergunta fora do personagem ao mestre ("não é essa parada?") */
+  perguntar?: (texto: string) => void;
 }) {
   const d = dadosDoPedido(mensagem);
   const [rolagem, setRolagem] = useState<Rolagem | null>(null);
@@ -386,7 +288,8 @@ export function PedidoTeste({
     if (d.status === "pendente" && rolagem && rolagem.fase !== "girando") setRolagem(null);
   }
   // a rerrolagem com Força de Vontade chegou com o cartão aberto (aqui ou em outro aparelho): os dados trocados rolam de novo
-  const temRerrolagem = Boolean(d.resultado?.rerrolado);
+  const rr = d.resultado as (Record<string, unknown> | undefined);
+  const temRerrolagem = Boolean(rr?.rerrolado || rr?.heroi || rr?.inspiracao);
   const [rerrolagemVista, setRerrolagemVista] = useState(temRerrolagem);
   const [rerrolagemNova, setRerrolagemNova] = useState(false);
   if (temRerrolagem !== rerrolagemVista) {
@@ -394,6 +297,8 @@ export function PedidoTeste({
     setRerrolagemNova(temRerrolagem);
   }
   const decidindo = d.status === "decidir";
+  const aberta = decisaoAberta(d);
+  const [surto, setSurto] = useState(false);
   const vontade = personagem?.ficha.recursos?.vontade ?? null;
   const nome = personagem?.ficha.nome ?? d.personagem ?? "Alguém";
   const cor = corDoNome(nome);
@@ -418,29 +323,38 @@ export function PedidoTeste({
     return () => clearTimeout(t);
   }, [fase, decidindo]);
 
-  function aoRerrolar(novo: Resultado) {
-    setRolagem((r) => (r ? { ...r, resultado: novo } : r));
+  function aoRerrolar(novo: Record<string, unknown>) {
+    setRolagem((r) => (r ? { ...r, resultado: novo as Resultado } : r));
     setRerrolagemVista(true);
     setRerrolagemNova(true);
   }
   const decisao = (r: ResultadoParada) =>
-    decidindo ? (
-      <DecisaoVontade
+    aberta ? (
+      <DecisaoDoTeste
+        key={`${mensagem.id}-${aberta.ate ?? "solo"}`}
         mensagemId={mensagem.id}
-        d={d}
+        decisao={aberta}
         r={r}
-        podeRolar={podeRolar}
+        podeDecidir={podeDecidir ?? podeRolar}
         quem={personagem?.jogador || nome}
-        vontade={vontade ? { atual: vontade.atual, max: vontade.max } : null}
+        recurso={recursoDaOpcao(personagem, aberta.opcoes[0]?.id)}
+        clienteId={clienteId}
         aoRerrolar={aoRerrolar}
       />
+    ) : d.aceitoSozinho ? (
+      <p className="mt-1 text-[11px] italic text-muted">ninguém decidiu a tempo: ficou o resultado do dado</p>
     ) : null;
+  const opcaoSurto = (Array.isArray(d.antes) ? d.antes : []).find((o) => o.id === "surto");
 
   async function clicar() {
     if (rolagem) return;
     setRolagem({ fase: "girando", resultado: null });
     const reduzido = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    const [r] = await Promise.all([rolar(mensagem.id), d20 || reduzido ? null : new Promise((ok) => setTimeout(ok, GIRO_MINIMO_MS))]);
+    const comSurto = Boolean(opcaoSurto && surto);
+    const [r] = await Promise.all([
+      comSurto ? rolar(mensagem.id, { surto: true }) : rolar(mensagem.id),
+      d20 || reduzido ? null : new Promise((ok) => setTimeout(ok, GIRO_MINIMO_MS)),
+    ]);
     if (!r) {
       setRolagem(null);
       return;
@@ -502,8 +416,13 @@ export function PedidoTeste({
       );
     }
     const grau = r.grau ?? "";
+    const gastou = Boolean((r as Record<string, unknown>).heroi || (r as Record<string, unknown>).inspiracao);
     return (
-      <div className="surgir mx-auto my-5 flex max-w-xl items-center gap-3 rounded-lg border border-border/70 bg-surface/50 px-3 py-2 text-sm">
+      <div
+        id={`pedido-${mensagem.id}`}
+        className={`surgir mx-auto my-5 max-w-xl scroll-mt-24 rounded-lg border px-3 py-2 text-sm ${decidindo ? "border-ambar/60 bg-surface/60" : "border-border/70 bg-surface/50"}`}
+      >
+      <div className="flex items-center gap-3">
         <span
           className="grid size-9 shrink-0 place-items-center rounded-md border text-base font-semibold tabular-nums"
           style={{ borderColor: COR_GRAU[grau] ?? "var(--border)", color: COR_GRAU[grau] }}
@@ -527,12 +446,16 @@ export function PedidoTeste({
           </p>
         </div>
       </div>
+        <LinhaRecursoD20 r={r as Record<string, unknown>} />
+        {gastou && r.detalhes && <p className="mt-1 line-clamp-2 text-xs text-muted">{r.detalhes}</p>}
+        {decisao(r)}
+      </div>
     );
   }
 
   // pendente (ou rolado agora neste aparelho): o cartão grande com os dados
   // depois da rerrolagem vale o resultado novo (chega pela rota ou pelo fluxo de eventos)
-  const resultado = ((d.resultado?.rerrolado ? d.resultado : null) as Resultado | null) ?? rolagem?.resultado ?? null;
+  const resultado = ((temRerrolagem ? d.resultado : null) as Resultado | null) ?? rolagem?.resultado ?? null;
   const pronto = rolagem?.fase === "pronto" && resultado;
   const natural = resultado?.natural ?? null;
   const destaque = natural === 20 ? "critico" : natural === 1 ? "falha" : null;
@@ -570,6 +493,24 @@ export function PedidoTeste({
         <p className="mx-auto mt-2.5 max-w-md text-[0.95rem] italic text-foreground/80" data-pd-motivo>
           {d.motivo}
         </p>
+      )}
+      {!rolagem && d.status === "pendente" && (d.detalhes || (d.sistema === "vtm5" && vontade)) && (
+        <p className="mx-auto mt-1.5 max-w-md text-xs italic text-muted" data-pd-detalhes>
+          {d.detalhes}
+          {d.sistema === "vtm5" && vontade && (
+            <span className="not-italic">
+              {d.detalhes ? " · " : ""}
+              Força de Vontade {vontade.atual}/{vontade.max}
+            </span>
+          )}
+        </p>
+      )}
+      {!rolagem && d.status === "pendente" && opcaoSurto && podeRolar && (
+        <label className="mx-auto mt-2.5 flex w-fit cursor-pointer items-center gap-2 rounded-full border border-sangue/50 bg-sangue/5 px-3 py-1 text-xs text-sangue" data-pd-surto>
+          <input type="checkbox" checked={surto} onChange={(e) => setSurto(e.target.checked)} className="accent-[var(--sangue)]" />⚡ {opcaoSurto.rotulo}
+          {opcaoSurto.efeito ? ` (${opcaoSurto.efeito})` : ""}{" "}
+          <span className="text-muted">· rola um Despertar antes</span>
+        </label>
       )}
 
       {d20 ? (
@@ -611,26 +552,45 @@ export function PedidoTeste({
           {decisao(resultado)}
         </div>
       ) : pronto ? (
-        <p className="surgir mt-4 text-lg tabular-nums sm:text-xl">
-          <span className="text-foreground/90">{conta(resultado.natural, bonus, resultado.total, alvo)}</span>
-          <span className="text-muted"> · </span>
-          <span className="titulo font-semibold" style={{ color: corGrau }}>
-            {rotulo(resultado)}
-          </span>
-        </p>
+        <div className="surgir mt-4">
+          <p className="text-lg tabular-nums sm:text-xl">
+            <span className="text-foreground/90">{conta(resultado.natural, bonus, resultado.total, alvo)}</span>
+            <span className="text-muted"> · </span>
+            <span className="titulo font-semibold" style={{ color: corGrau }}>
+              {rotulo(resultado)}
+            </span>
+          </p>
+          <LinhaRecursoD20 r={resultado as unknown as Record<string, unknown>} />
+          {decisao(resultado)}
+        </div>
       ) : rolagem ? (
         <p className="mt-4 text-sm italic text-muted" data-pd-rodape>
           {d20 ? "O dado corre pela mesa…" : "Os dados correm pela mesa…"}
         </p>
       ) : podeRolar ? (
-        <button
-          type="button"
-          data-rolar
-          className="btn-ambar mt-5 min-h-12 w-full max-w-xs px-8 text-base focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ambar sm:w-auto"
-          onClick={() => void clicar()}
-        >
-          🎲 {d20 ? "Rolar o dado" : "Rolar os dados"}
-        </button>
+        <>
+          <button
+            type="button"
+            data-rolar
+            className="btn-ambar mt-5 min-h-12 w-full max-w-xs px-8 text-base focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ambar sm:w-auto"
+            onClick={() => void clicar()}
+          >
+            🎲 {d20 ? "Rolar o dado" : "Rolar os dados"}
+            {opcaoSurto && surto ? " com Surto" : ""}
+          </button>
+          {perguntar && (
+            <p className="mt-2">
+              <button
+                type="button"
+                data-pd-perguntar
+                className="text-xs text-muted underline decoration-dotted underline-offset-2 hover:text-foreground"
+                onClick={() => perguntar(`(( Sobre o teste de ${tituloDoTeste(teste)}: não é essa parada? Qual atributo e perícia valem aqui? ))`)}
+              >
+                não é essa parada? pergunte ao mestre
+              </button>
+            </p>
+          )}
+        </>
       ) : (
         <p className="mt-4 text-sm italic text-muted" data-pd-rodape>
           Esperando {personagem?.jogador || nome} rolar {d20 ? "o dado" : "os dados"}…

@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { AcoesTurno, acaoParaCampo, avisoDoDesfeito, type Desfeito } from "@/components/chat/acoes-turno";
 import { AjudaAtalhos, rolarPedido, useAtalhos } from "@/components/chat/atalhos";
-import { CartaoDado } from "@/components/chat/cartao-dado";
+import { CartaoDado, decisaoAberta, DecisaoDoTeste } from "@/components/chat/cartao-dado";
 import { SugestoesCompactas } from "@/components/chat/sugestoes-compactas";
 import { Anteriormente } from "@/components/historia/anteriormente";
 import { dadosFimSessao, foraDoJogo, montarCena, paragrafosDaNarracao, rastrearMudancas, separarFecho, textoParaOuvir } from "@/components/leitor/cena";
@@ -34,7 +34,7 @@ import { BotaoVoz, Ouvir, useLeituraAutomatica, VozNoPainel } from "@/components
 import * as identidade from "@/lib/cliente/identidade";
 import { useMesa, type Mesa as EstadoVivo } from "@/lib/cliente/use-mesa";
 import { parar as pararVoz } from "@/lib/cliente/voz";
-import { INICIO } from "@/lib/constantes";
+import { INICIO, podeDecidir } from "@/lib/constantes";
 import type { Mensagem } from "@/lib/db";
 import type { EstadoMesa } from "@/lib/mesa";
 import { AvisoDarkPack } from "@/components/aviso-dark-pack";
@@ -275,6 +275,16 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
     if (cenas) leitor.current?.irParaMensagem(id, () => document.querySelector<HTMLButtonElement>(`#pedido-${id} button[data-rolar]`)?.focus({ preventScroll: true }));
     else document.getElementById(`pedido-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
+  /** Quem tem os botões da decisão depois do dado (o aparelho que rolou; com ele fora, a máquina da taverna). */
+  const decidePor = (m: (typeof mesa.mensagens)[number], pid: number | null | undefined) => {
+    const dec = decisaoAberta(m.dados as { decisao?: unknown } | null);
+    return dec ? podeDecidir(dec, { clienteId: mesa.eu.clienteId, local: euLocal }, mesa.presenca, pid ?? null) : false;
+  };
+  /** Pergunta fora do jogo direto ao mestre (o campo fica travado enquanto há dado pendente). */
+  const perguntarAoMestre = (texto: string) => {
+    if (mesa.semSinal) return;
+    void acoes.enviarAcao(texto);
+  };
 
   // ---------- rolagem da conversa ----------
 
@@ -416,6 +426,22 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
     setAviso(avisoDoDesfeito(r, refazer, Boolean(texto)));
   }
 
+  /** Erro do provedor com instantâneo: "Tentar de novo" reenfileira as ações do turno; "Reescrever" devolve a ação ao campo. */
+  async function aposErro(refazer: boolean) {
+    const resp = await fetch(`/api/campanhas/${mesa.campanha.id}/desfazer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(refazer ? { refazer: true } : {}),
+    }).catch(() => null);
+    const corpo = resp ? ((await resp.json().catch(() => ({}))) as Desfeito & { erro?: string }) : null;
+    if (!resp?.ok || !corpo) {
+      setAviso(corpo?.erro ?? "Não deu para tentar de novo. Confira a conexão.");
+      return;
+    }
+    acoes.limparErro();
+    aoDesfazer(corpo, refazer);
+  }
+
   // desfazer/refazer só com o mestre quieto e nada esperando na fila
   const ultimoMestre = mesa.mensagens.findLast((m) => m.tipo === "mestre")?.id ?? null;
   const podeDesfazer = !mesa.ocupado && !mesa.aoVivo && mesa.fila.length === 0;
@@ -478,15 +504,39 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
       return (
         // sem sinal, o cartão inteiro (Rolar, Aceitar, Rerrolar) fica inerte até a conexão voltar
         <div key={m.id} inert={mesa.semSinal || undefined} className={mesa.semSinal ? "opacity-60" : undefined}>
-          <PedidoTeste mensagem={m} personagem={personagemDe(pidDoPedido(m))} podeRolar={podeRolarPara(pidDoPedido(m))} rolar={acoes.rolarTeste} />
+          <PedidoTeste
+            mensagem={m}
+            personagem={personagemDe(pidDoPedido(m))}
+            podeRolar={podeRolarPara(pidDoPedido(m))}
+            podeDecidir={decidePor(m, pidDoPedido(m))}
+            clienteId={mesa.eu.clienteId}
+            rolar={acoes.rolarTeste}
+            perguntar={perguntarAoMestre}
+          />
         </div>
       );
-    if (m.tipo === "dado")
+    if (m.tipo === "dado") {
+      // teste do modo automático com oferta de rerrolar: o mestre já narrou e corrige se a pessoa rerrolar
+      const dt = (m.dados ?? {}) as Record<string, unknown>;
+      const decAuto = dt.tipo === "teste" ? decisaoAberta(dt) : null;
+      const pid = (dt.personagemId as number | undefined) ?? m.personagemId;
+      const p = decAuto ? personagemDe(pid ?? null) : null;
       return (
-        <div key={m.id} className="my-5">
+        <div key={m.id} className="my-5" inert={(decAuto && mesa.semSinal) || undefined}>
           <CartaoDado mensagem={m} novo={mesa.novas.has(m.id)} />
+          {decAuto && (
+            <DecisaoDoTeste
+              mensagemId={m.id}
+              decisao={decAuto}
+              r={dt as { dados?: number[]; dadosFome?: number[] }}
+              podeDecidir={decidePor(m, pid)}
+              quem={p?.jogador || p?.ficha.nome || "quem joga"}
+              clienteId={mesa.eu.clienteId}
+            />
+          )}
         </div>
       );
+    }
     return (
       <p key={m.id} className="titulo divisor-tema my-6 text-center text-sm text-muted">
         {m.texto}
@@ -600,7 +650,28 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
           <span className="mt-1.5 shrink-0 text-sangue" aria-hidden>
             ⚠
           </span>
-          <p className="min-w-0 flex-1 py-1">{mesa.erro}</p>
+          <div className="min-w-0 flex-1">
+            <p className="py-1">{mesa.erro}</p>
+            {(mesa.erroInfo?.refazer || mesa.erroInfo?.acao === "config") && (
+              <div className="mb-1 mt-1 flex flex-wrap gap-2" data-erro-acoes>
+                {mesa.erroInfo?.refazer && (
+                  <>
+                    <button type="button" data-tentar-de-novo className="btn-ambar min-h-9 px-3 text-xs" onClick={() => void aposErro(true)}>
+                      ↻ Tentar de novo
+                    </button>
+                    <button type="button" className="btn-borda min-h-9 px-3 text-xs" onClick={() => void aposErro(false)}>
+                      ✎ Reescrever a ação
+                    </button>
+                  </>
+                )}
+                {mesa.erroInfo?.acao === "config" && (
+                  <a href="/config" className="btn-borda min-h-9 px-3 text-xs">
+                    Abrir Configurações
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
           <button type="button" onClick={acoes.limparErro} className="grid size-9 shrink-0 place-items-center rounded-md text-muted hover:text-foreground" aria-label="Fechar o aviso">
             ✕
           </button>
@@ -881,7 +952,18 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
               )}
               <div className="mb-1 flex min-h-7 flex-wrap items-center gap-2 text-xs">
                 <SeletorAtivo mesa={mesa} acoes={acoes} />
-                <RoladorDados campanhaId={mesa.campanha.id} sistema={mesa.sistema} personagem={ativo} autor={mesa.eu.apelido} aoRolar={acoes.receberMensagem} />
+                <RoladorDados
+                  campanhaId={mesa.campanha.id}
+                  sistema={mesa.sistema}
+                  personagem={ativo}
+                  autor={mesa.eu.apelido}
+                  aoRolar={acoes.receberMensagem}
+                  pendente={
+                    meuPendente
+                      ? { teste: dadosDoPedido(meuPendente).teste ?? "um teste", alvo: dadosDoPedido(meuPendente).alvo ?? null, irPara: irParaDado }
+                      : null
+                  }
+                />
                 {mesa.ocupado && !ativo && (
                   <button type="button" className="ml-auto min-h-10 px-1 text-muted hover:text-sangue sm:min-h-0" onClick={() => acoes.controle("cancelar")}>
                     Interromper o mestre

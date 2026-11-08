@@ -939,7 +939,8 @@ export function resolver(ficha: Ficha, pedido: PedidoTeste): ResultadoVtm {
   const av = avaliar(normais, dadosFome, alvo);
   const expressao = `${parada}d10${qtdFome ? ` (${qtdFome} de Fome)` : ""}${alvo !== null ? ` vs ${alvo}` : ""}`;
   const b = base(ficha, pedido, rotulo, expressao, normais, dadosFome, vtm);
-  const r = concluir(b, av, alvo, [...notas, ...notasDoGrau(av, alvo, fome, qtdFome > 0)]);
+  // na prévia (cartão do pedido) os dados não valem nada: as notas são só a composição da parada e quantos são de Fome
+  const r = concluir(b, av, alvo, pedido.previa ? [...notas, qtdFome ? `${qtdFome} de Fome` : ""] : [...notas, ...notasDoGrau(av, alvo, fome, qtdFome > 0)]);
 
   const falhas = despertares.reduce((s, x) => s + x.falhas, 0);
   if (falhas) r.falhasDespertar = falhas;

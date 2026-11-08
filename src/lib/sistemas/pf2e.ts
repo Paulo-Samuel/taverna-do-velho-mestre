@@ -1,6 +1,6 @@
 import "server-only";
-import { descreverRolagem, rolar, somar } from "../dados";
-import { acharPorNome, clonar, fichaBase, limitar, normalizar, sinal, testeD20 } from "./comum";
+import { d, descreverRolagem, rolar, somar } from "../dados";
+import { acharPorNome, clonar, fichaBase, limitar, normalizar, rotuloGrauPadrao, sinal, testeD20 } from "./comum";
 import { ANCESTRALIDADES, HERANCAS, type AncestralidadePf2 } from "./pf2e/ancestralidades";
 import { acharArma, armasDoInventario, type ArmaCatalogo } from "./pf2e/armas";
 import { CLASSES, type ArmaPf2, type ArmaduraPf2, type ClassePf2, type Tradicao } from "./pf2e/classes";
@@ -49,6 +49,53 @@ function condicoesMoribundo(ficha: Ficha, pvAntes: number) {
   } else if (ficha.pv > 0 && moribundo) {
     ficha.condicoes = [...semCondicoes(ficha.condicoes, ["moribundo", "ferido"]), `ferido ${ferido + 1}`];
   }
+}
+
+// ---------- decisão depois do teste: Ponto de Herói; Recuperação aplica o grau no moribundo ----------
+
+export const PONTO_DE_HEROI = "ponto_de_heroi";
+
+/** Teste que já gastou o Ponto de Herói (uma vez por teste) e como foi. */
+type ComHeroi = ResultadoTeste & { heroi?: { naturalAntes: number; naturalDepois: number; antes: number; depois: number; max: number; grauAntes: string } };
+
+/** Quanto o moribundo muda com o grau da Recuperação (crítico −2, sucesso −1, falha +1, falha crítica +2). */
+const RECUPERACAO: Record<string, number> = { sucesso_critico: -2, sucesso: -1, falha: 1, falha_critica: 2 };
+
+/** O moribundo depois da Recuperação (null quando não se aplica). */
+function moribundoDepois(ficha: Ficha, r: ResultadoTeste): { antes: number; depois: number } | null {
+  if (r.sistema !== "pf2e" || r.teste !== "Recuperação") return null;
+  const antes = valorDaCondicao(ficha.condicoes, "moribundo");
+  if (!antes) return null;
+  return { antes, depois: limitar(antes + (RECUPERACAO[r.grau] ?? 0), 0, 4) };
+}
+
+function avisoRecuperacao(nome: string, x: { antes: number; depois: number }): string {
+  if (x.depois <= 0) return `${nome} se estabilizou: sai do moribundo e fica inconsciente (estável), já aplicado na ficha.`;
+  if (x.depois >= 4) return `${nome} chegou a moribundo 4 e MORREU (já marcado na ficha). Narre a morte com o peso que ela merece.`;
+  return `${nome}: moribundo ${x.antes} → ${x.depois} (já aplicado na ficha).`;
+}
+
+/**
+ * Ponto de Herói: rola o d20 de novo e fica com o novo. Mesma conta de testeD20 (comum.ts, críticos "pf2"): mesmo bônus, mesmo
+ * alvo, mesma sorte/infortúnio. O dano de um ataque que passou a acertar fica para o mestre rolar.
+ */
+export function rerrolarD20(r: ResultadoTeste): ResultadoTeste {
+  const modo = r.expressao.startsWith("2d20kh1") ? "vantagem" : r.expressao.startsWith("2d20kl1") ? "desvantagem" : "normal";
+  const dados = modo === "normal" ? [d(20)] : [d(20), d(20)];
+  const natural = modo === "vantagem" ? Math.max(...dados) : modo === "desvantagem" ? Math.min(...dados) : dados[0];
+  const total = natural + r.bonus;
+  const alvo = r.alvo;
+  let grau: ResultadoTeste["grau"];
+  if (alvo === null) grau = natural === 20 ? "sucesso_critico" : natural === 1 ? "falha_critica" : "sucesso";
+  else {
+    const ordem: ResultadoTeste["grau"][] = ["falha_critica", "falha", "sucesso", "sucesso_critico"];
+    let i = total >= alvo + 10 ? 3 : total >= alvo ? 2 : total <= alvo - 10 ? 0 : 1;
+    if (natural === 20) i = Math.min(3, i + 1);
+    if (natural === 1) i = Math.max(0, i - 1);
+    grau = ordem[i];
+  }
+  const sucesso = grau === "sucesso" || grau === "sucesso_critico";
+  return { ...r, dados, natural, total, grau, sucesso, rotuloGrau: rotuloGrauPadrao(grau), margem: alvo === null ? null : total - alvo, dano: undefined };
 }
 
 function proficiencia(grau: number, nivel: number): number {
@@ -858,7 +905,53 @@ export const pf2e: Sistema = {
       resultado.dano = { valor, ...(calc.dano.tipo ? { tipo: calc.dano.tipo } : {}), texto: textoDano };
       resultado.detalhes = [resultado.detalhes, textoDano].filter(Boolean).join(" · ");
     }
+    // Recuperação: o servidor aplica o grau no moribundo (aposTeste); o mestre só narra
+    const recuperacao = pedido.previa ? null : moribundoDepois(ficha, resultado);
+    if (recuperacao) resultado.avisoMestre = [resultado.avisoMestre, avisoRecuperacao(ficha.nome, recuperacao)].filter(Boolean).join(" ");
     return resultado;
+  },
+
+  // Ponto de Herói: depois de uma falha, rola o d20 de novo e fica com o novo (uma vez por teste). A Recuperação fica de fora:
+  // o moribundo já mudou com o grau, e rerrolar não desfaz isso aqui.
+  decisoesAposTeste(ficha, resultado) {
+    const r = resultado as ComHeroi;
+    if (r.sistema !== "pf2e" || r.sucesso || r.heroi || r.teste === "Recuperação" || r.natural === null) return [];
+    if ((ficha.recursos.heroi?.atual ?? 0) <= 0) return [];
+    return [{ id: PONTO_DE_HEROI, rotulo: "Rerrolar com Ponto de Herói", custo: "1 Ponto de Herói" }];
+  },
+
+  aplicarDecisao(ficha, resultado, id) {
+    if (id !== PONTO_DE_HEROI) throw new Error("Essa escolha não existe no PF2e.");
+    const r = resultado as ComHeroi;
+    if (r.heroi) throw new Error("Este teste já foi rerrolado com Ponto de Herói.");
+    const antes = ficha.recursos.heroi?.atual ?? 0;
+    if (antes <= 0) throw new Error("Os Pontos de Herói acabaram.");
+    const nova = clonar(ficha);
+    nova.recursos.heroi.atual = antes - 1;
+    const novo = rerrolarD20(r) as ComHeroi;
+    const max = nova.recursos.heroi.max;
+    novo.heroi = { naturalAntes: r.natural ?? 0, naturalDepois: novo.natural ?? 0, antes, depois: antes - 1, max, grauAntes: r.rotuloGrau };
+    const nota = `Ponto de Herói (${antes} → ${antes - 1}): d20 ${r.natural} → ${novo.natural}, antes ${r.rotuloGrau}`;
+    // as faces da sorte/infortúnio antigas não valem mais
+    const notas = (r.detalhes ?? "").split(" · ").filter((n) => n && !/^(sorte|infortúnio) \(/.test(n));
+    novo.detalhes = [...notas, nota].join(" · ");
+    const acertou = Boolean(r.ataque) && novo.sucesso;
+    return {
+      ficha: nova,
+      resultado: novo,
+      textoMestre: `${ficha.nome} gastou 1 Ponto de Herói (${antes} → ${antes - 1}, já descontado) e rerrolou o d20 (${r.natural} → ${novo.natural}): antes ${r.rotuloGrau}, agora ${novo.rotuloGrau}.${acertou ? " O ataque passou a acertar: role o dano da arma (rolar_dados)." : ""} Narre o momento heroico; não role o teste de novo.`,
+    };
+  },
+
+  aposTeste(ficha, r) {
+    const x = moribundoDepois(ficha, r);
+    if (!x) return null;
+    const nova = clonar(ficha);
+    const sem = semCondicoes(nova.condicoes, ["moribundo"]);
+    if (x.depois <= 0) nova.condicoes = [...semCondicoes(sem, ["inconsciente"]), "inconsciente (estável)"];
+    else if (x.depois >= 4) nova.condicoes = [...sem, "morto"];
+    else nova.condicoes = [...sem, `moribundo ${x.depois}`];
+    return nova;
   },
 
   descreverParaMestre(ficha) {

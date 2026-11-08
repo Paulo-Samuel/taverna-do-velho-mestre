@@ -4,8 +4,10 @@ import path from "node:path";
 import { headers } from "next/headers";
 import { chaveDaApi, lerAjustesMestre, mestreIndisponivel, provedorAtual, type IdProvedor } from "@/lib/mestre";
 import { finalDaChave, listarModelosApi } from "@/lib/mestre/provedor-api";
+import { montarDiagnostico } from "@/lib/diagnostico";
+import { portaAtual } from "@/lib/rede/enderecos";
 import { ehDestaMaquina } from "@/lib/rede/local";
-import { FormularioConfig, type PadroesEnv } from "./formulario";
+import { FormularioConfig, SecaoDiagnostico, type PadroesEnv } from "./formulario";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +51,9 @@ export default async function PaginaConfig() {
   // provedorAtual() nunca lança (sem chave ele devolve um mestre "parado"); a frase do problema vem de mestreIndisponivel()
   const problema = mestreIndisponivel();
   const mestrando = problema ? "ninguém (o mestre configurado não consegue começar)" : provedorAtual().nome;
+  // seção Diagnóstico: a porta é a do endereço que a pessoa abriu (3300 no atalho)
+  const portaDoHost = Number(/\]?:(\d+)$/.exec(h.get("host") ?? "")?.[1] ?? 0);
+  const diagnostico = await montarDiagnostico(portaDoHost || portaAtual(), { esperarFirewallMs: 0 });
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 sm:py-10">
@@ -62,6 +67,7 @@ export default async function PaginaConfig() {
       </p>
       {problema && <p className="mt-2 text-sm text-sangue">{problema}</p>}
       <FormularioConfig ajustes={ajustes} padroes={padroes} />
+      <SecaoDiagnostico inicial={diagnostico} />
     </main>
   );
 }

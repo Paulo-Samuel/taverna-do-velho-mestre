@@ -31,24 +31,34 @@ export const DIFICULDADES: { id: Dificuldade; nome: string; texto: string; promp
   },
 ];
 
-export const TAMANHOS: { id: TamanhoNarracao; nome: string; texto: string; prompt: string }[] = [
+/**
+ * `paragrafos` e `palavras` são o teto da narração de um turno (a abertura pode passar): o prompt diz os dois e, quando a
+ * última narração passou deles, o lembrete do turno avisa (muletas.ts, avisoDeTamanho).
+ */
+export const TAMANHOS: { id: TamanhoNarracao; nome: string; texto: string; prompt: string; paragrafos: [number, number]; palavras: number }[] = [
   {
     id: "curta",
     nome: "Curta",
     texto: "Um parágrafo enxuto e uma pergunta. Ritmo rápido, bom para celular.",
-    prompt: "1 parágrafo enxuto (3 a 5 frases) por turno, fechando com uma pergunta direta; a abertura pode ter 2",
+    prompt: "1 parágrafo enxuto (3 a 5 frases, até 90 palavras) por turno, fechando com uma pergunta direta; a abertura pode ter 2",
+    paragrafos: [1, 1],
+    palavras: 90,
   },
   {
     id: "media",
     nome: "Média",
     texto: "O padrão: dois ou três parágrafos por turno.",
-    prompt: "2 a 3 parágrafos de narração por turno; a abertura pode ter 4",
+    prompt: "2 a 3 parágrafos de narração por turno, até 180 palavras no total; a abertura pode ter 4",
+    paragrafos: [2, 3],
+    palavras: 180,
   },
   {
     id: "longa",
     nome: "Longa",
     texto: "Três ou quatro parágrafos ricos, com mais detalhe e falas. Para ler com calma.",
-    prompt: "3 a 4 parágrafos ricos por turno (detalhe sensorial, falas, reação do mundo); a abertura pode ter 5",
+    prompt: "3 a 4 parágrafos ricos por turno (detalhe sensorial, falas, reação do mundo), até 280 palavras no total; a abertura pode ter 5",
+    paragrafos: [3, 4],
+    palavras: 280,
   },
 ];
 

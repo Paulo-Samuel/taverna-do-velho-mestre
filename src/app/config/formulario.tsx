@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useCallback, useEffect, useRef, useState, useTransition } from "react";
+import type { Diagnostico } from "@/lib/diagnostico";
 import type { AjustesMestre, IdProvedor } from "@/lib/mestre";
 import { salvarAjustesAcao, statusLoginAcao, testarConexaoAcao, usarExecutavelAcao, type EstadoSalvar, type ResultadoTeste } from "./acoes";
 import type { AlternativaClaude, StatusClaude } from "./claude-local";
@@ -462,6 +463,107 @@ function Instalacao() {
       </li>
       <li>Reinicie a taverna (ou informe o caminho do executável acima) e verifique de novo.</li>
     </ol>
+  );
+}
+
+/**
+ * /config → Diagnóstico: versões, mestre, porta, pasta, banco, firewall e as últimas linhas do log, com "Copiar relatório"
+ * e o .txt de /api/diagnostico?baixar=1. É o que o amigo manda quando "o mestre não responde" (sem chave nem e-mail).
+ */
+export function SecaoDiagnostico({ inicial }: { inicial: Diagnostico }) {
+  const [diag, setDiag] = useState(inicial);
+  const [atualizando, setAtualizando] = useState(false);
+  const [copiado, setCopiado] = useState<string | null>(null);
+  const areaRef = useRef<HTMLTextAreaElement>(null);
+
+  const atualizar = useCallback(async () => {
+    setAtualizando(true);
+    try {
+      const r = await fetch("/api/diagnostico", { cache: "no-store" });
+      if (r.ok) setDiag((await r.json()) as Diagnostico);
+    } catch {
+      // servidor fora do ar: fica o relatório que já está na tela
+    } finally {
+      setAtualizando(false);
+    }
+  }, []);
+
+  // a página abre sem esperar o PowerShell do firewall; quando ele termina, o relatório vem de novo sozinho
+  useEffect(() => {
+    if (!inicial.firewallPendente) return;
+    const t = setTimeout(atualizar, 4000);
+    return () => clearTimeout(t);
+  }, [inicial.firewallPendente, atualizar]);
+
+  const copiar = async () => {
+    try {
+      await navigator.clipboard.writeText(diag.texto);
+      setCopiado("Relatório copiado. Cole na conversa com quem instalou a taverna.");
+    } catch {
+      // sem acesso à área de transferência: seleciona o texto para Ctrl+C
+      areaRef.current?.select();
+      setCopiado("Não consegui copiar sozinho: o texto está selecionado, aperte Ctrl+C.");
+    }
+  };
+
+  return (
+    <section id="diagnostico" className="mt-12 scroll-mt-8 space-y-4">
+      <div>
+        <h2 className="titulo text-xl text-pergaminho">Diagnóstico</h2>
+        <p className="mt-1 max-w-2xl text-sm text-muted">
+          Quando o mestre não responde, mande este relatório para quem instalou a taverna (ou o arquivo do dia em{" "}
+          <code className="text-ambar">data/logs/</code>). Vai sem a chave de API e sem e-mail.
+        </p>
+      </div>
+
+      <dl className="cartao grid gap-x-4 gap-y-2 p-4 text-sm sm:grid-cols-[max-content_1fr]">
+        {diag.itens.map((i) => (
+          <div key={i.rotulo} className="contents">
+            <dt className="text-muted">{i.rotulo}</dt>
+            <dd className={`min-w-0 break-words ${i.alerta ? "text-sangue" : "text-foreground"}`}>{i.valor}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" className="btn-ambar min-h-11" onClick={copiar}>
+          Copiar relatório
+        </button>
+        <a className="btn-borda min-h-11" href="/api/diagnostico?baixar=1" download>
+          Baixar .txt
+        </a>
+        <button type="button" className="btn-borda min-h-11" onClick={atualizar} disabled={atualizando}>
+          {atualizando ? "Atualizando…" : "Atualizar"}
+        </button>
+        <span role="status" className="text-sm text-musgo">
+          {copiado}
+        </span>
+      </div>
+
+      <details className="cartao p-4 text-sm" open={diag.linhas.length > 0}>
+        <summary className="cursor-pointer text-pergaminho">
+          Últimas {diag.linhas.length} linhas do log <span className="text-xs text-muted">(gerado em {diag.geradoEm})</span>
+        </summary>
+        {diag.linhas.length ? (
+          <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-muted">{diag.linhas.join("\n")}</pre>
+        ) : (
+          <p className="mt-2 text-muted">Nada registrado ainda. O log nasce no primeiro turno do mestre.</p>
+        )}
+      </details>
+
+      {/* o relatório inteiro, para o caso de a cópia automática não funcionar */}
+      <details className="text-xs text-muted">
+        <summary className="cursor-pointer">Ver o relatório inteiro</summary>
+        <textarea
+          ref={areaRef}
+          readOnly
+          value={diag.texto}
+          className="campo mt-2 h-64 w-full font-mono text-xs"
+          aria-label="Relatório de diagnóstico"
+          spellCheck={false}
+        />
+      </details>
+    </section>
   );
 }
 

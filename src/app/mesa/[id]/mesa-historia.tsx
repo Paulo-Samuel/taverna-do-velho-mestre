@@ -20,6 +20,7 @@ import { Musica } from "@/components/historia/musica";
 import { NarracaoLivro, montarDestaque, trecho } from "@/components/historia/narracao-livro";
 import { PainelAcao } from "@/components/historia/painel-acao";
 import { PedidoTeste, dadosDoPedido } from "@/components/historia/pedido-teste";
+import { decisaoAberta, DecisaoDoTeste } from "@/components/chat/cartao-dado";
 import { Retrato } from "@/components/historia/retrato";
 import { dadosFimSessao, montarCena, paragrafosDaNarracao, rastrearMudancas, separarFecho, textoParaOuvir } from "@/components/leitor/cena";
 import { AcaoTopo, ATALHOS_LEITOR, LeitorCenas, type BlocoCauda, type ControleLeitor, type Prosa } from "@/components/leitor/leitor-cenas";
@@ -36,7 +37,7 @@ import { BotaoVoz, Ouvir, useLeituraAutomatica } from "@/components/voz/voz";
 import * as identidade from "@/lib/cliente/identidade";
 import { parar as pararVoz } from "@/lib/cliente/voz";
 import { useMesa } from "@/lib/cliente/use-mesa";
-import { INICIO, RESULTADO_TESTE } from "@/lib/constantes";
+import { INICIO, podeDecidir, RESULTADO_TESTE } from "@/lib/constantes";
 import type { Mensagem } from "@/lib/db";
 import type { EstadoMesa } from "@/lib/mesa";
 
@@ -314,6 +315,28 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
     setAviso(avisoDoDesfeito(r, refazer, Boolean(texto)));
   }
 
+  /** Erro do provedor com instantâneo: "Tentar de novo" reenfileira as ações do turno; "Reescrever" devolve a ação ao campo. */
+  async function aposErro(refazer: boolean) {
+    const resp = await fetch(`/api/campanhas/${mesa.campanha.id}/desfazer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(refazer ? { refazer: true } : {}),
+    }).catch(() => null);
+    const corpo = resp ? ((await resp.json().catch(() => ({}))) as Desfeito & { erro?: string }) : null;
+    if (!resp?.ok || !corpo) {
+      setAviso(corpo?.erro ?? "Não deu para tentar de novo. Confira a conexão.");
+      return;
+    }
+    acoes.limparErro();
+    aoDesfazer(corpo, refazer);
+  }
+
+  /** Quem tem os botões da decisão depois do dado (o aparelho que rolou; com ele fora, a máquina da taverna). */
+  const decidePor = (m: Mensagem, pid: number | null | undefined) => {
+    const dec = decisaoAberta(m.dados as { decisao?: unknown } | null);
+    return dec ? podeDecidir(dec, { clienteId: mesa.eu.clienteId, local: euLocal }, mesa.presenca, pid ?? null) : false;
+  };
+
   // ---------- desenho ----------
 
   const vazia = total === 0 && !mesa.ocupado && !filaVisivel.length;
@@ -432,7 +455,34 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
         return (
           // sem sinal, o cartão inteiro (Rolar, Aceitar, Rerrolar) fica inerte até a conexão voltar
           <div key={m.id} inert={mesa.semSinal || undefined} className={mesa.semSinal ? "opacity-60" : undefined}>
-            <PedidoTeste mensagem={m} personagem={personagemDe(pid)} podeRolar={podeRolarPara(pid)} rolar={acoes.rolarTeste} />
+            <PedidoTeste
+              mensagem={m}
+              personagem={personagemDe(pid)}
+              podeRolar={podeRolarPara(pid)}
+              podeDecidir={decidePor(m, pid)}
+              clienteId={mesa.eu.clienteId}
+              rolar={acoes.rolarTeste}
+              perguntar={(t) => void enviar(t)}
+            />
+          </div>
+        );
+      }
+      // teste do modo automático com oferta de rerrolar (o mestre já narrou; ele corrige se a pessoa rerrolar)
+      const decAuto = d.tipo === "teste" ? decisaoAberta(d) : null;
+      if (decAuto) {
+        const pid = (d.personagemId as number | undefined) ?? m.personagemId;
+        const p = personagemDe(pid);
+        return (
+          <div key={m.id} inert={mesa.semSinal || undefined}>
+            <LinhaDado mensagem={m} novo={mesa.novas.has(m.id)} />
+            <DecisaoDoTeste
+              mensagemId={m.id}
+              decisao={decAuto}
+              r={d as { dados?: number[]; dadosFome?: number[] }}
+              podeDecidir={decidePor(m, pid)}
+              quem={p?.jogador || p?.ficha.nome || "quem joga"}
+              clienteId={mesa.eu.clienteId}
+            />
           </div>
         );
       }
@@ -510,7 +560,28 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
       chave: "erro",
       no: (
         <div className="my-4 flex items-start justify-between gap-3 rounded-md border border-sangue/60 bg-sangue/10 px-4 py-3 text-sm" role="alert">
-          <p className="py-1.5">{mesa.erro}</p>
+          <div className="min-w-0">
+            <p className="py-1.5">{mesa.erro}</p>
+            {(mesa.erroInfo?.refazer || mesa.erroInfo?.acao === "config") && (
+              <div className="mt-1 flex flex-wrap gap-2" data-erro-acoes>
+                {mesa.erroInfo?.refazer && (
+                  <>
+                    <button type="button" data-tentar-de-novo className="btn-ambar min-h-9 px-3 text-xs" onClick={() => void aposErro(true)}>
+                      ↻ Tentar de novo
+                    </button>
+                    <button type="button" className="btn-borda min-h-9 px-3 text-xs" onClick={() => void aposErro(false)}>
+                      ✎ Reescrever a ação
+                    </button>
+                  </>
+                )}
+                {mesa.erroInfo?.acao === "config" && (
+                  <a href="/config" className="btn-borda min-h-9 px-3 text-xs">
+                    Abrir Configurações
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
           <button
             onClick={acoes.limparErro}
             className="-my-1 -mr-2 grid size-9 shrink-0 place-items-center rounded-md text-muted hover:bg-sangue/20 hover:text-foreground"

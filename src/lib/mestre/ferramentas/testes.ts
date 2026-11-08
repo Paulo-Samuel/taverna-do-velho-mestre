@@ -1,5 +1,6 @@
 import "server-only";
 import { testesPendentes, type Personagem } from "../../db";
+import { pausaDecisao, PRAZO_DECISAO_MS, PRAZO_DISCRETO_MS, type DecisaoDoTeste } from "../../constantes";
 import { descreverRolagem, rolar } from "../../dados";
 import type { PedidoTeste, ResultadoTeste } from "../../sistemas/tipos";
 import type { DefFerramenta } from "../tipos";
@@ -117,7 +118,9 @@ export function testeNaHora(ctx: ContextoFerramentas, p: Personagem, pedido: Ped
   // d100 rola abaixo do valor: "43 ≤ 52" diz mais que "43 vs 52"
   const comparacao = r.alvo === null ? "" : ctx.sistema.dadoPrincipal.includes("100") ? ` (alvo ${r.alvo})` : ` vs ${r.alvo}`;
   const texto = `${p.ficha.nome} · ${r.teste} — ${r.motivo}: ${r.expressao} → ${r.total}${comparacao} · ${r.rotuloGrau}`;
-  registrarDado(ctx, texto, r, p.id);
+  // o mestre rolou: o jogador ainda pode rerrolar (Força de Vontade, Ponto de Herói...) e o mestre corrige depois (§rerrolagem)
+  const decisao = decisaoNaHora(ctx, p, r);
+  registrarDado(ctx, texto, decisao ? { ...r, decisao } : r, p.id);
   // ganchos do sistema depois do teste (d100 marca a perícia usada; Vampiro sobe a Fome, grava Ressonância, marca frenesi...)
   try {
     const nova = ctx.sistema.aposTeste?.(p.ficha, r);
@@ -130,6 +133,29 @@ export function testeNaHora(ctx: ContextoFerramentas, p: Personagem, pedido: Ped
     console.warn(`[taverna] aposTeste falhou (${ctx.sistema.id}):`, erro);
   }
   return r;
+}
+
+/**
+ * Decisão no cartão do teste que o mestre rolou na hora: falha, perigo ou ataque ficam 45 s; sucesso comum, poucos segundos e
+ * discreto. Não pausa o turno: quem aceita a rerrolagem manda a correção ao mestre (mestre/index.ts, decidirTeste).
+ */
+function decisaoNaHora(ctx: ContextoFerramentas, p: Personagem, r: ResultadoTeste): DecisaoDoTeste | null {
+  let opcoes: DecisaoDoTeste["opcoes"] = [];
+  try {
+    opcoes = ctx.sistema.decisoesAposTeste?.(p.ficha, r) ?? [];
+  } catch (e) {
+    console.warn(`[taverna] decisoesAposTeste falhou (${ctx.sistema.id}):`, e);
+  }
+  if (!opcoes.length) return null;
+  const pausar = pausaDecisao(r);
+  return {
+    ate: Date.now() + (pausar ? PRAZO_DECISAO_MS : PRAZO_DISCRETO_MS),
+    clienteId: null,
+    campanhaId: ctx.campanha.id,
+    opcoes,
+    automatico: true,
+    ...(pausar ? {} : { discreta: true }),
+  };
 }
 
 /** Resultado + como a ficha ficou (recursos e condições), para o mestre não fazer conta. */
@@ -183,6 +209,20 @@ export const executoresTestes: Record<string, Executor> = {
     // custos que o sistema anuncia antes do clique (Vampiro: "Despertar · Celeridade ●●", "Surto +2")
     const efeitos = (previa as { efeitos?: { texto?: unknown }[] }).efeitos;
     const custos = Array.isArray(efeitos) ? efeitos.map((x) => String(x.texto ?? "")).filter(Boolean) : [];
+    // a composição da parada para o jogador conferir antes do clique ("Carisma 4 + Lábia 4 · 1 de Fome"); as notas que dependem
+    // dos dados sorteados na prévia (vantagem: 14 e 7, sorte...) ficam de fora. Só nas paradas de d10 (a prévia do Vampiro já
+    // devolve só a composição); nos d20 a prévia anota o natural sorteado, que não vale nada antes do clique
+    const detalhes = (Array.isArray((previa as { dadosFome?: unknown }).dadosFome) ? (previa.detalhes ?? "") : "")
+      .split(" · ")
+      .filter((n) => n && !/^(vantagem|desvantagem|sorte|infortúnio|azar)\b/i.test(n))
+      .join(" · ");
+    // escolhas do jogador antes de rolar (Vampiro: Surto de Sangue); revalidadas no clique (mestre/index.ts, rolarTestePendente)
+    let antes: unknown[] = [];
+    try {
+      antes = ctx.sistema.opcoesAntesDeRolar?.(p.ficha, { teste: e.teste, alvo: e.alvo, motivo: e.motivo }) ?? [];
+    } catch (erro) {
+      console.warn(`[taverna] opcoesAntesDeRolar falhou (${ctx.sistema.id}):`, erro);
+    }
     const dados = {
       tipo: "pedido_teste",
       status: "pendente",
@@ -199,6 +239,8 @@ export const executoresTestes: Record<string, Executor> = {
       ...(e.modificador ? { modificador: e.modificador } : {}),
       ...(opcoes ? { opcoes } : {}),
       ...(custos.length ? { custos } : {}),
+      ...(detalhes ? { detalhes } : {}),
+      ...(antes.length ? { antes } : {}),
       perigoso: Boolean(e.perigoso),
       motivo: e.motivo,
       sistema: ctx.sistema.id,

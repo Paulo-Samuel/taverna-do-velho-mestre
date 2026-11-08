@@ -44,6 +44,8 @@ export type Mesa = {
   aoVivo: string;
   limite: Limite | null;
   erro: string | null;
+  /** o que veio junto com o erro do mestre: `refazer` = o turno pode ser tentado de novo com as mesmas ações; `acao` = o atalho */
+  erroInfo: { refazer?: boolean; acao?: "config" | "tentar"; aviso?: boolean } | null;
   conexao: Conexao;
   /** a conexão está caída há mais de ATRASO_SEM_SINAL_MS: faixa de aviso e botões de agir/rolar travados */
   semSinal: boolean;
@@ -66,7 +68,10 @@ export type AcoesMesa = {
    * O servidor sorteia o d20 e devolve o resultado (ResultadoTeste) para a animação do dado; a mensagem
    * atualizada chega a todos pelo fluxo de eventos e o mestre continua sozinho quando não houver mais testes pendentes.
    */
-  rolarTeste: (mensagemId: number) => Promise<{ natural: number | null; total: number; dados: number[]; grau: string; rotuloGrau: string } | null>;
+  rolarTeste: (
+    mensagemId: number,
+    opcoes?: { surto?: boolean },
+  ) => Promise<{ natural: number | null; total: number; dados: number[]; grau: string; rotuloGrau: string } | null>;
 };
 
 /** Ação interna da fila: não aparece no chat (resultado de teste rolado pelo jogador, o fechamento da noite). */
@@ -110,7 +115,13 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
   const [base, setBase] = useState(() => deEstado(inicial));
   const [aoVivo, setAoVivo] = useState("");
   const [limite, setLimite] = useState<Limite | null>(null);
-  const [erro, setErro] = useState<string | null>(null);
+  const [erro, setErroTexto] = useState<string | null>(null);
+  const [erroInfo, setErroInfo] = useState<Mesa["erroInfo"]>(null);
+  // erro das rotas (texto só); o do mestre chega pelo evento com refazer/acao
+  const setErro = useCallback((t: string | null, info: Mesa["erroInfo"] = null) => {
+    setErroTexto(t);
+    setErroInfo(t ? info : null);
+  }, []);
   const [conexao, setConexao] = useState<Conexao>("conectando");
   const [semSinal, setSemSinal] = useState(false);
   const [novas, setNovas] = useState<Set<number>>(new Set());
@@ -186,13 +197,13 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
         setLimite({ janela: ev.janela, uso: ev.uso, renovaEm: ev.renovaEm });
         break;
       case "erro":
-        setErro(ev.erro);
+        setErro(ev.erro, ev.refazer || ev.acao || ev.aviso ? { refazer: ev.refazer, acao: ev.acao, aviso: ev.aviso } : null);
         break;
       case "recarregar":
         // o próximo estado_inicial chega reabrindo a conexão
         break;
     }
-  }, []);
+  }, [setErro]);
 
   const avisarPresenca = useCallback(
     (mudancas: { apelido?: string; personagemId?: number | null }) => {
@@ -273,14 +284,14 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
         }
         return true;
       },
-      [id],
+      [id, setErro],
     ),
     controle: useCallback(
       async (comando, extra = {}) => {
         const r = await postarJson(`/api/campanhas/${id}/controle`, { comando, ...extra });
         if (!r.ok) setErro(r.erro);
       },
-      [id],
+      [id, setErro],
     ),
     escolherPersonagem: useCallback(
       (personagemId: number | null) => {
@@ -298,13 +309,16 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
       },
       [avisarPresenca],
     ),
-    limparErro: useCallback(() => setErro(null), []),
+    limparErro: useCallback(() => setErro(null), [setErro]),
     rolarTeste: useCallback(
-      async (mensagemId: number) => {
+      async (mensagemId: number, opcoes?: { surto?: boolean }) => {
         setErro(null);
+        // o clienteId diz ao servidor quem decide depois do dado (só este aparelho tem os botões)
         const r = await postarJson<{ resultado?: Awaited<ReturnType<AcoesMesa["rolarTeste"]>> }>(`/api/campanhas/${id}/rolar`, {
           mensagemId,
           autor: euRef.current.apelido,
+          clienteId: euRef.current.clienteId,
+          ...(opcoes ? { opcoes } : {}),
         });
         if (!r.ok) {
           setErro(r.erro);
@@ -312,10 +326,10 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
         }
         return r.corpo.resultado ?? null;
       },
-      [id],
+      [id, setErro],
     ),
     receberMensagem: useCallback((m: Mensagem) => aplicar({ e: "mensagem", mensagem: m }), [aplicar]),
   };
 
-  return [{ ...base, local: inicial.local, aoVivo, limite, erro, conexao, semSinal, novas, eu }, acoes];
+  return [{ ...base, local: inicial.local, aoVivo, limite, erro, erroInfo, conexao, semSinal, novas, eu }, acoes];
 }

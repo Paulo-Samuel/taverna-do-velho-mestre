@@ -1,5 +1,6 @@
 import "server-only";
-import { listarDiario, listarFatos, mensagensDepois, type Campanha, type Mensagem, type Personagem } from "../db";
+import { listarDiario, listarFatos, listarMensagens, mensagensDepois, obterCampanha, type Campanha, type Mensagem, type Personagem } from "../db";
+import { lembretesDoTurno } from "./muletas";
 import { quantosEntram } from "../../components/fatos/limites";
 import type { Cena, EntradaDiario, Ficha, Sistema, TipoDiario } from "../sistemas/tipos";
 import { DIFICULDADES, dificuldadeDe, FOCOS, MAX_FOCO_LIVRE, MAX_INSTRUCOES, TAMANHOS, tamanhoDe } from "./estilo";
@@ -66,12 +67,12 @@ const regrasDoMestre = (tamanho: string, combate: (typeof COMBATE_GERAL)[keyof t
 - A tela já mostra os dados, as mudanças de ficha, Manchas, Fome, Força de Vontade, PV, diário e XP: NUNCA resuma isso em texto ("gastou 1 de Força de Vontade, agora 9/10", "ganhou 1 Mancha", "o homem está com 3 de 8 PV", "anotei no diário"); fale do que acontece na ficção.
 - NUNCA fale, sinta, decida ou aja por um personagem de jogador além do que foi declarado. Descreva o mundo e as consequências; a reação é do jogador.
 - NPCs têm nome, desejo, um trejeito e voz própria: falas entre aspas, no jeito anotado no diário. Recompense criatividade, mesmo absurda, com consequências coerentes.
-- Sem repetição nem clichê: não reabra com a mesma imagem nem repita bordões; nada de "de repente" ou "um arrepio percorre sua espinha". Varie o tamanho das frases e o tipo de ameaça.
+- Sem repetição nem clichê: não reabra com a mesma imagem nem repita bordões; nada de "de repente" ou "um arrepio percorre sua espinha". Varie o tamanho das frases e o tipo de ameaça. Quando o pedido do turno listar o que você repetiu nas últimas narrações ("NÃO use: …"), troque por outra imagem, sem citar o proibido.
 
 ## Turno
 - Ordem (a tela mostra nessa ordem): 1) \`atualizar_cena\` se mudou o lugar, a hora ou o clima; 2) a narração; 3) o teste, se precisar, só DEPOIS da narração; 4) \`sugerir_acoes\` por último, se existir. Registros (\`alterar_ficha\`, \`anotar_diario\`, \`conceder_xp\`) entram quando o fato acontece. A narração completa vem ANTES de \`sugerir_acoes\`, como texto da resposta ou pela ferramenta \`narrar\` (use \`narrar\` sempre que a narração vier depois de outras ferramentas; o raciocínio interno não aparece para o jogador: nunca narre só nele) (pode vir depois de outras ferramentas, mas nunca é trocada por elas). Depois das ferramentas finais (\`pedir_teste\`, \`sugerir_acoes\`, registros) NÃO escreva mais NADA: nem "a vez é sua", nem "o dado é seu", nem resumo do que mudou, nem comentário sobre o que você fez ("a abertura está pronta"). O turno acaba na última ferramenta; se ainda precisar responder algo depois dela, responda só "—".
 - ${combate.ordem} Com vários personagens, divida o holofote: quem agiu pouco ganha uma pergunta direta ou um gancho pessoal; ninguém domina duas respostas seguidas.
-- A própria narração termina dizendo de quem é a vez e o que está em jogo, UMA vez, no fim do texto narrado (com teste: no momento antes do dado). Nunca repita a passagem de vez numa frase à parte depois das ferramentas.
+- Fecho, UMA vez, no fim do texto narrado (com teste: no momento antes do dado). Com um personagem só: termine num detalhe concreto ou numa fala que exige resposta; não recapitule a situação, não liste opções (isso é o \`sugerir_acoes\`), não diga "a vez é sua". Com vários personagens: diga de quem é a vez e o que está em jogo, sem recapitular. Nunca repita a passagem de vez numa frase à parte depois das ferramentas.
 
 ## Ritmo e consequência
 - Cenas curtas: quando a tensão cai, corte ("Três dias de estrada depois...") para o próximo momento interessante. Se o grupo empacar, empurre: um NPC aparece, o relógio avança, a ameaça se mexe.
@@ -110,7 +111,7 @@ const regrasDoMestre = (tamanho: string, combate: (typeof COMBATE_GERAL)[keyof t
 3. Mudou o local, a hora ou a situação? → \`atualizar_cena\`. O clima mudou (a ameaça passou, virou cena social, luto, revelação, luta começou ou acabou)? → \`atualizar_cena\` com musica.
 4. NPC, missão, lugar, item ou pista nova, ou mudança de status? → \`anotar_diario\`.
 5. Vitória ou marco? → \`conceder_xp\` (ou \`subir_nivel\`). Descanso seguro? → \`descansar\`.
-6. A narração (não uma frase extra no fim) já terminou dizendo de quem é a vez, sem decidir nada pelos personagens? Depois das ferramentas, nada mais.`;
+6. A narração (não uma frase extra no fim) já terminou no fecho (detalhe ou fala que pede resposta; com vários personagens, de quem é a vez), sem recapitular nem decidir nada pelos personagens? Depois das ferramentas, nada mais.`;
 
 /** Quando o servidor rola os testes na hora (ajuste "O mestre, na hora"). */
 const DADOS_DO_MESTRE = `## TESTES (o servidor rola na hora)
@@ -121,7 +122,7 @@ const DADOS_DO_JOGADOR = `## TESTES ROLADOS PELO JOGADOR
 - Onde as regras do sistema falam em \`teste\`, use \`pedir_teste\` com o mesmo nome de teste e alvo; marque perigoso quando a falha machuca. Quem rola é o JOGADOR, na tela. modo e modificador funcionam como no \`teste\`.
 - Narre ANTES de pedir: o que o personagem tenta e o que está em jogo, terminando no suspense (o instante antes do dado), sem contar o resultado nem o que vem depois. Depois de \`pedir_teste\` não escreva mais nada (no máximo chame \`sugerir_acoes\`): o cartão do dado na tela já é o "role agora". Um teste por personagem por turno.
 - Pedido para rerrolar um teste já rolado: responda fora do personagem; não rerrole você mesmo com \`rolar_dados\` nem gaste recurso com \`alterar_ficha\`.
-- "(resultado do teste pedido)" no turno seguinte é a RECOMPENSA do suspense: narre a consequência no tamanho combinado (o que o personagem consegue, percebe ou sofre e como o mundo reage), a partir do grau, e só então devolva a vez. Nunca responda a um resultado só com uma ferramenta e uma frase.`;
+- "(resultado do teste pedido)" no turno seguinte é a RECOMPENSA do suspense: narre a consequência no tamanho combinado (o que o personagem consegue, percebe ou sofre e como o mundo reage), a partir do grau, e só então feche como pede o Turno. Nunca responda a um resultado só com uma ferramenta e uma frase.`;
 
 /** Ações sugeridas em botões (padrão nos dois modos). */
 const SUGESTOES = `## AÇÕES SUGERIDAS
@@ -403,7 +404,7 @@ export type AcaoDoTurno = { personagem: string | null; autor: string; acao: stri
 
 // não pede "diga de quem é a vez": isso provocava uma frase extra depois das ferramentas
 const LEMBRETE =
-  "(Antes de encerrar: checklist de fim de turno — ficha, cena/combate e música, diário, XP. A vez do jogador vai dentro da narração; o \"se acertar / se errar\" vem ANTES do pedir_teste, nunca depois; depois das ferramentas finais não escreva mais nada (no máximo —). Se for só uma pergunta fora do jogo, responda curto, fora do personagem, sem ferramentas.)";
+  "(Antes de encerrar: checklist de fim de turno — ficha, cena/combate e música, diário, XP. O fecho vai dentro da narração, sem recapitular nem listar opções; o \"se acertar / se errar\" vem ANTES do pedir_teste, nunca depois; depois das ferramentas finais não escreva mais nada (no máximo —). Se for só uma pergunta fora do jogo, responda curto, fora do personagem, sem ferramentas.)";
 
 /**
  * Pedido da chamada de continuação: o turno terminou sem narração suficiente (o modelo narrou só no raciocínio).
@@ -481,8 +482,32 @@ export function promptDoTurno(
       ? personagens.filter((p) => !recentes.slice(-12).some((m) => m.tipo === "jogador" && m.personagemId === p.id) && !acoes.some((a) => a.personagem === p.ficha.nome))
       : [];
   const holofote = calados.length ? `\n(Holofote: ${calados.map((p) => p.ficha.nome).join(", ")} não agiu há um tempo; dê espaço.)` : "";
+  // muletas das últimas narrações e aviso de tamanho (P18): só nos turnos comuns, lidos do banco
+  const extras = especial ? [] : lembretesDaCampanha(personagens[0]?.campanhaId, acoes as AcaoDoTurno[]);
   // na abertura e no fim da sessão o lembrete do checklist distrai: o pedido já diz o que fazer
-  return `${historico ? `Cena até aqui (mais recente por último):\n\n${historico}\n\n---\n\n` : ""}${pedido}${especial ? "" : `\n\n${LEMBRETE}`}${holofote}`;
+  return `${historico ? `Cena até aqui (mais recente por último):\n\n${historico}\n\n---\n\n` : ""}${pedido}${especial ? "" : `\n\n${[LEMBRETE, ...extras].join("\n")}`}${holofote}`;
+}
+
+/** Mensagens lidas para as muletas: as 8 narrações longas (muletas.ts) vêm espaçadas por dados e falas curtas. */
+const JANELA_MULETAS = 80;
+
+/**
+ * Linhas extras do LEMBRETE (muletas.ts): o que o mestre repetiu nas últimas 5 narrações e, se a última passou do teto do
+ * tamanho da mesa, o aviso. Lê as mensagens e o estilo da campanha no banco (o turno já gravou as ações do jogador).
+ */
+function lembretesDaCampanha(campanhaId: number | undefined, acoes: AcaoDoTurno[]): string[] {
+  if (!campanhaId) return [];
+  try {
+    const campanha = obterCampanha(campanhaId);
+    const tamanho = TAMANHOS.find((t) => t.id === tamanhoDe(campanha?.config?.narracao));
+    const teto = tamanho ? { paragrafos: tamanho.paragrafos, palavras: tamanho.palavras } : null;
+    // nomes do diário (NPCs, lugares, itens) são o assunto da história, não muleta
+    const doDiario = listarDiario(campanhaId).map((e) => e.titulo);
+    return lembretesDoTurno(listarMensagens(campanhaId, JANELA_MULETAS), teto, [...acoes.map((a) => a.acao), ...doDiario]);
+  } catch (e) {
+    console.warn("[taverna] muletas indisponíveis para o prompt:", e);
+    return [];
+  }
 }
 
 /** Teto do resumo, em palavras (o diário guarda NPCs, lugares e status; o resumo, só o enredo). */

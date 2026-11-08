@@ -1,5 +1,5 @@
 import "server-only";
-import { somar } from "../dados";
+import { d, somar } from "../dados";
 import { clonar, distribuir, fichaBase, limitar, modD20, normalizar, rolar4d6, sinal } from "./comum";
 import {
   ALINHAMENTOS,
@@ -262,6 +262,65 @@ const OPCOES: OpcaoCriacao[] = [
   { id: "invocacoes", rotulo: "Invocações místicas", tipo: "lista-texto", max: 10, classes: ["bruxo"] },
 ];
 
+// ---------- decisão depois do teste: Inspiração heroica; testes contra a morte contados na ficha ----------
+
+export const INSPIRACAO_HEROICA = "inspiracao_heroica";
+
+type ComInspiracao = ResultadoTeste & { inspiracao?: { naturalAntes: number; naturalDepois: number; antes: number; depois: number; grauAntes: string } };
+
+/** "contra a morte 2S/1F": a contagem dos testes contra a morte, como condição na ficha. */
+const CONTRA_A_MORTE = /^contra a morte (\d)S\/(\d)F$/i;
+
+/** Como a contagem fica depois deste teste contra a morte (null quando não é um, ou o personagem não está a 0 PV). */
+export function contraAMorteDepois(ficha: Ficha, r: ResultadoTeste): { s: number; f: number; volta: boolean } | null {
+  if (r.sistema !== "dnd5e" || r.teste !== "Teste contra a morte" || ficha.pv > 0) return null;
+  const atual = ficha.condicoes.map((c) => CONTRA_A_MORTE.exec(c)).find(Boolean);
+  let s = atual ? Number(atual[1]) : 0;
+  let f = atual ? Number(atual[2]) : 0;
+  if (r.natural === 20) return { s: 0, f: 0, volta: true };
+  if (r.natural === 1) f += 2;
+  else if (r.sucesso) s += 1;
+  else f += 1;
+  return { s: Math.min(3, s), f: Math.min(3, f), volta: false };
+}
+
+/**
+ * A contagem dos testes contra a morte só vale enquanto o personagem está caído: voltou a ter PV (cura, descanso, ajuste)
+ * ou caiu de novo vindo de PV positivo → a contagem zera (e "estabilizado" sai quando há PV). Muta a ficha.
+ */
+export function zerarContraAMorte(ficha: Ficha, pvAntes: number): void {
+  if (ficha.pv > 0 || pvAntes > 0) ficha.condicoes = ficha.condicoes.filter((c) => !CONTRA_A_MORTE.test(c) && normalizar(c) !== "estabilizado");
+}
+
+function avisoContraAMorte(nome: string, x: { s: number; f: number; volta: boolean }): string {
+  if (x.volta) return `20 natural: ${nome} volta com 1 PV e acorda (já aplicado na ficha).`;
+  if (x.f >= 3) return `Terceira falha: ${nome} MORREU (já marcado na ficha). Narre a morte com o peso que ela merece.`;
+  if (x.s >= 3) return `Terceiro sucesso: ${nome} se estabiliza, inconsciente mas fora de perigo (já aplicado na ficha).`;
+  return `Testes contra a morte de ${nome}: ${x.s} sucesso${x.s === 1 ? "" : "s"} e ${x.f} falha${x.f === 1 ? "" : "s"} (já contados na ficha).`;
+}
+
+/**
+ * Inspiração heroica: rola o d20 de novo e fica com o novo, com o mesmo bônus, alvo e vantagem/desvantagem. Graus como em
+ * dnd5e/testes.ts: em ataque e magia o 20/1 decidem; em testes e resistências só destacam.
+ */
+function rerrolarD20Dnd(r: ResultadoTeste): ResultadoTeste {
+  const modo = r.expressao.startsWith("2d20kh1") ? "vantagem" : r.expressao.startsWith("2d20kl1") ? "desvantagem" : "normal";
+  const dados = modo === "normal" ? [d(20)] : [d(20), d(20)];
+  const natural = modo === "vantagem" ? Math.max(...dados) : modo === "desvantagem" ? Math.min(...dados) : dados[0];
+  const total = natural + r.bonus;
+  const alvo = r.alvo;
+  const ataque = /^(ataque|magia)/i.test(r.teste);
+  let grau: ResultadoTeste["grau"];
+  if (ataque) grau = natural === 20 ? "sucesso_critico" : natural === 1 ? "falha_critica" : alvo === null || total >= alvo ? "sucesso" : "falha";
+  else if (alvo === null) grau = natural === 20 ? "sucesso_critico" : natural === 1 ? "falha_critica" : "sucesso";
+  else grau = total >= alvo ? (natural === 20 ? "sucesso_critico" : "sucesso") : natural === 1 ? "falha_critica" : "falha";
+  const rotulos: Record<string, string> = ataque
+    ? { sucesso_critico: "Acerto crítico! Dobre os dados de dano.", sucesso: "Acertou", falha: "Errou", falha_critica: "Erro automático (1 natural)" }
+    : { sucesso_critico: "Sucesso (20 natural!)", sucesso: "Sucesso", falha: "Falha", falha_critica: "Falha (1 natural)" };
+  const sucesso = grau === "sucesso" || grau === "sucesso_critico";
+  return { ...r, dados, natural, total, grau, sucesso, rotuloGrau: rotulos[grau] ?? grau, margem: alvo === null ? null : total - alvo };
+}
+
 export const dnd5e: Sistema = {
   id: "dnd5e",
   nome: "D&D 5ª Edição (SRD 5.2)",
@@ -393,7 +452,58 @@ COMO MESTRAR 5E
   },
 
   resolverTeste(ficha: Ficha, pedido: PedidoTeste): ResultadoTeste {
-    return resolver(ficha, pedido);
+    const r = resolver(ficha, pedido);
+    // teste contra a morte: o servidor conta sucessos e falhas na ficha (aposTeste); o mestre só narra
+    const morte = pedido.previa ? null : contraAMorteDepois(ficha, r);
+    if (morte) r.avisoMestre = [r.avisoMestre, avisoContraAMorte(ficha.nome, morte)].filter(Boolean).join(" ");
+    return r;
+  },
+
+  // Inspiração heroica: depois de uma falha, rola o d20 de novo e fica com o novo (uma vez por teste). O teste contra a morte fica
+  // de fora: a contagem já foi gravada na ficha com o grau.
+  decisoesAposTeste(ficha, resultado) {
+    const r = resultado as ComInspiracao;
+    if (r.sistema !== "dnd5e" || r.sucesso || r.inspiracao || r.teste === "Teste contra a morte" || r.natural === null) return [];
+    if ((ficha.recursos.inspiracao?.atual ?? 0) <= 0) return [];
+    return [{ id: INSPIRACAO_HEROICA, rotulo: "Rerrolar com Inspiração heroica", custo: "1 Inspiração" }];
+  },
+
+  aplicarDecisao(ficha, resultado, id) {
+    if (id !== INSPIRACAO_HEROICA) throw new Error("Essa escolha não existe no D&D 5e.");
+    const r = resultado as ComInspiracao;
+    if (r.inspiracao) throw new Error("Este teste já foi rerrolado com Inspiração.");
+    const antes = ficha.recursos.inspiracao?.atual ?? 0;
+    if (antes <= 0) throw new Error("Não há Inspiração heroica para gastar.");
+    const nova = clonar(ficha);
+    nova.recursos.inspiracao.atual = antes - 1;
+    const novo = rerrolarD20Dnd(r) as ComInspiracao;
+    novo.inspiracao = { naturalAntes: r.natural ?? 0, naturalDepois: novo.natural ?? 0, antes, depois: antes - 1, grauAntes: r.rotuloGrau };
+    const notas = (r.detalhes ?? "").split(" · ").filter((n) => n && !/^(vantagem|desvantagem) \(/.test(n));
+    novo.detalhes = [...notas, `Inspiração heroica: d20 ${r.natural} → ${novo.natural}, antes ${r.rotuloGrau}`].join(" · ");
+    const acertou = /^(ataque|magia)/i.test(r.teste) && novo.sucesso;
+    return {
+      ficha: nova,
+      resultado: novo,
+      textoMestre: `${ficha.nome} gastou a Inspiração heroica (já descontada) e rerrolou o d20 (${r.natural} → ${novo.natural}): antes ${r.rotuloGrau}, agora ${novo.rotuloGrau}.${acertou ? " Agora acertou: role o dano (rolar_dados)." : ""} Narre o momento; não role o teste de novo.`,
+    };
+  },
+
+  aposTeste(ficha, r) {
+    const x = contraAMorteDepois(ficha, r);
+    if (!x) return null;
+    const nova = clonar(ficha);
+    const sem = nova.condicoes.filter((c) => !CONTRA_A_MORTE.test(c) && c !== "estabilizado");
+    if (x.volta) {
+      nova.pv = Math.max(1, nova.pv);
+      nova.condicoes = sem.filter((c) => normalizar(c) !== "inconsciente");
+    } else if (x.f >= 3) nova.condicoes = [...sem, "morto"];
+    else if (x.s >= 3) nova.condicoes = [...sem, "estabilizado"];
+    else nova.condicoes = [...sem, `contra a morte ${x.s}S/${x.f}F`];
+    return nova;
+  },
+
+  aposMudancaDePv(ficha, pvAntes) {
+    zerarContraAMorte(ficha, pvAntes);
   },
 
   descreverParaMestre(ficha) {
@@ -579,7 +689,7 @@ COMO MESTRAR 5E
       if (especieDe(ficha).id === "humano" && ficha.recursos.inspiracao) ficha.recursos.inspiracao.atual = 1;
       // descanso longo tira 1 nível de exaustão e levanta quem estava caído a 0 PV
       const exaustao = nivelExaustao(ficha);
-      ficha.condicoes = ficha.condicoes.filter((c) => !/inconsciente|estabilizad|morrendo|exaust/.test(normalizar(c)));
+      ficha.condicoes = ficha.condicoes.filter((c) => !/inconsciente|estabilizad|morrendo|exaust|contra a morte/.test(normalizar(c)));
       if (exaustao > 1) ficha.condicoes.push(`exaustão ${exaustao - 1}`);
       const extra = exaustao ? ` Exaustão ${exaustao} → ${exaustao - 1}.` : "";
       return { ficha, resumo: `${ficha.nome} descansou a noite toda: PV, dados de vida e recursos restaurados.${extra}` };
@@ -596,7 +706,7 @@ COMO MESTRAR 5E
       cura += v;
     }
     ficha.pv = Math.min(ficha.pvMax, ficha.pv + cura);
-    if (ficha.pv > 0) ficha.condicoes = ficha.condicoes.filter((c) => !/inconsciente|estabilizad/.test(normalizar(c)));
+    if (ficha.pv > 0) ficha.condicoes = ficha.condicoes.filter((c) => !/inconsciente|estabilizad|contra a morte/.test(normalizar(c)));
     const voltou = recuperarCurto(ficha);
     const arcana = recuperacaoArcana(ficha);
     if (arcana) voltou.push(arcana);

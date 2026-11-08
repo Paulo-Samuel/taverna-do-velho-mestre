@@ -8,6 +8,7 @@
     "start": "next start -p 3300",
     "rede": "next build && next start -p 3300 -H 0.0.0.0",
     "lint": "eslint",
+    "doutor": "node scripts/doutor.mjs",
     "test": "node --test --import ./tests/_suporte/registrar.mjs \"tests/**/*.test.ts\" \"tests/**/*.test.mjs\"",
     "golden:update": "node --import ./tests/_suporte/registrar.mjs tests/golden/golden.mjs update",
     "golden:check": "node --import ./tests/_suporte/registrar.mjs tests/golden/golden.mjs check"

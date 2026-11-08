@@ -11,12 +11,15 @@ export async function POST(request: Request, ctx: RouteContext<"/api/campanhas/[
   if (!acessoPermitido(request, campanha)) return Response.json({ erro: "Esta mesa pede PIN." }, { status: 403 });
   lembrarEndereco(request.url);
 
-  const corpo = (await request.json().catch(() => ({}))) as { mensagemId?: unknown; autor?: unknown };
+  // `clienteId`: o aparelho que rolou vira o dono da decisão depois do dado; `opcoes.surto`: Surto de Sangue antes de rolar (Vampiro)
+  const corpo = (await request.json().catch(() => ({}))) as { mensagemId?: unknown; autor?: unknown; clienteId?: unknown; opcoes?: unknown };
   const mensagemId = Number(corpo.mensagemId);
   if (!Number.isInteger(mensagemId)) return Response.json({ erro: "Qual teste?" }, { status: 400 });
   const autor = typeof corpo.autor === "string" ? corpo.autor.trim().slice(0, 40) : "";
+  const clienteId = typeof corpo.clienteId === "string" ? corpo.clienteId.slice(0, 80) : null;
+  const surto = Boolean(corpo.opcoes && typeof corpo.opcoes === "object" && (corpo.opcoes as { surto?: unknown }).surto === true);
   try {
-    const resultado = rolarTestePendente(campanha.id, mensagemId, autor);
+    const resultado = rolarTestePendente(campanha.id, mensagemId, autor, { clienteId, surto });
     return Response.json({ resultado });
   } catch (e) {
     return Response.json({ erro: e instanceof Error ? e.message : String(e) }, { status: 409 });

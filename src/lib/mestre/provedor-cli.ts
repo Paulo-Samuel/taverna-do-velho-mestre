@@ -15,6 +15,7 @@ import {
   raizClaudeDesktop,
   resolverShimNpm,
 } from "./claude-bin";
+import { registrar } from "../log";
 import { TURNO_CANCELADO, traduzirErroCli } from "./erros-api";
 import { TITULO_ESTADO, type EventoMestre, type OpcoesTurno, type Provedor } from "./tipos";
 
@@ -259,9 +260,87 @@ type Execucao = {
 
 export type OpcoesCli = { bin?: string; modelo?: string };
 
+let chamadas = 0;
+
+/**
+ * Flags da chamada para o log: sem o conteúdo do prompt (que vai pelo stdin e pelo arquivo temporário, nunca por aqui) e
+ * sem os caminhos temporários, que só fazem barulho. A lista de ferramentas vira a contagem.
+ */
+function flagsParaLog(args: string[], fixos: number): string[] {
+  const saida: string[] = [];
+  for (let i = fixos; i < args.length; i++) {
+    const a = args[i];
+    if (a === "--system-prompt-file" || a === "--mcp-config") {
+      saida.push(a, "(arquivo temporário)");
+      i++;
+    } else if (a === "--allowedTools") {
+      saida.push(a, `(${args.length - i - 1} ferramentas)`);
+      break;
+    } else saida.push(a === "" ? '""' : a);
+  }
+  return saida;
+}
+
 /** Roda `claude -p` uma vez e devolve o texto final. */
-async function executar({ sistema, prompt, ferramentas, ponte, aoEvento, sinal }: Execucao, opcoes: OpcoesCli): Promise<string> {
-  const exe = resolverExecutavelClaude(opcoes.bin);
+async function executar(execucao: Execucao, opcoes: OpcoesCli): Promise<string> {
+  let exe: ExecutavelClaude;
+  try {
+    exe = resolverExecutavelClaude(opcoes.bin);
+  } catch (e) {
+    registrar("erro", "mestre-cli", { etapa: "achar o executável", binConfigurado: opcoes.bin || process.env.CLAUDE_BIN || null, erro: e });
+    throw e;
+  }
+  const id = ++chamadas;
+  const inicio = Date.now();
+  // versão para o log (fica em cache por caminho: só a primeira chamada pergunta ao claude); não atrasa o turno
+  const versaoP = versaoDoExecutavel(exe).catch(() => null);
+  const diario = {
+    chamada: id,
+    tipo: execucao.ferramentas?.length ? "turno" : "texto",
+    caminho: exe.caminho,
+    achadoPor: exe.origem,
+    shell: exe.shell,
+  };
+  let args: string[] = [];
+  let codigo: number | null = null;
+  let stderrFinal = "";
+  let eventos = 0;
+  let subtype: string | null = null;
+  let falha: unknown = null;
+  versaoP.then((versao) => registrar("info", "mestre-cli", { evento: "início", ...diario, versao, modelo: opcoes.modelo ?? process.env.CLAUDE_CLI_MODELO ?? null, flags: flagsParaLog(args, exe.args.length) }));
+  try {
+    return await executarCom(exe, execucao, opcoes, (a) => (args = a), (r) => ({ codigo, stderr: stderrFinal, eventos, subtype } = r));
+  } catch (e) {
+    falha = e;
+    throw e;
+  } finally {
+    const versao = await versaoP;
+    const cancelado = falha instanceof Error && falha.message === TURNO_CANCELADO;
+    registrar(falha && !cancelado ? "erro" : "info", "mestre-cli", {
+      evento: "fim",
+      ...diario,
+      versao,
+      duracaoMs: Date.now() - inicio,
+      codigo,
+      eventos,
+      subtype,
+      cancelado: cancelado || undefined,
+      erro: falha && !cancelado ? (falha instanceof Error ? falha.message : String(falha)) : undefined,
+      // o stderr inteiro (sem chave nem e-mail, e cortado no meio só se passar de 20 mil caracteres)
+      stderr: stderrFinal.trim() || undefined,
+    });
+  }
+}
+
+type RelatorioExecucao = { codigo: number | null; stderr: string; eventos: number; subtype: string | null };
+
+async function executarCom(
+  exe: ExecutavelClaude,
+  { sistema, prompt, ferramentas, ponte, aoEvento, sinal }: Execucao,
+  opcoes: OpcoesCli,
+  aoMontarArgs: (args: string[]) => void,
+  aoTerminar: (r: RelatorioExecucao) => void,
+): Promise<string> {
   const { comando, shell } = exe;
   // Pasta temporária isolada: nenhum CLAUDE.md de projeto entra no contexto do mestre.
   const pasta = mkdtempSync(path.join(tmpdir(), "taverna-"));
@@ -302,6 +381,7 @@ async function executar({ sistema, prompt, ferramentas, ponte, aoEvento, sinal }
     );
     args.push("--mcp-config", arquivoMcp, "--allowedTools", ...ferramentas.map((n) => PREFIXO_MCP + n));
   }
+  aoMontarArgs(args);
 
   // Sem ANTHROPIC_API_KEY no ambiente: com -p a chave teria prioridade e cobraria créditos da API.
   const env = { ...process.env };
@@ -334,6 +414,10 @@ async function executar({ sistema, prompt, ferramentas, ponte, aoEvento, sinal }
   // cada bloco de texto novo (depois de uma ferramenta) vira parágrafo novo, sem grudar no anterior
   let jaEscreveu = false;
   let blocoNovo = false;
+  // para o log: quantos eventos chegaram, o subtype do result e o código de saída
+  let eventos = 0;
+  let subtype: string | null = null;
+  let codigo: number | null = null;
 
   try {
     for await (const linhaBruta of createInterface({ input: filho.stdout })) {
@@ -346,6 +430,7 @@ async function executar({ sistema, prompt, ferramentas, ponte, aoEvento, sinal }
       } catch {
         continue;
       }
+      eventos++;
 
       if (ev.type === "stream_event" && ev.event?.type === "content_block_start" && ev.event.content_block?.type === "text") {
         blocoNovo = jaEscreveu;
@@ -363,6 +448,7 @@ async function executar({ sistema, prompt, ferramentas, ponte, aoEvento, sinal }
           renovaEm: typeof info.resetsAt === "number" ? info.resetsAt : null,
         });
       } else if (ev.type === "result") {
+        subtype = typeof ev.subtype === "string" ? ev.subtype : null;
         const falhou = ev.is_error || ev.subtype !== "success";
         // o resultado traz o uso somado do turno inteiro (o mesmo log por turno da API: cache lido e escrito)
         const u = ev.usage;
@@ -384,7 +470,7 @@ async function executar({ sistema, prompt, ferramentas, ponte, aoEvento, sinal }
         };
       }
     }
-    const codigo: number | null = await new Promise((ok) => (filho.exitCode !== null ? ok(filho.exitCode) : filho.once("close", ok)));
+    codigo = await new Promise<number | null>((ok) => (filho.exitCode !== null ? ok(filho.exitCode) : filho.once("close", ok)));
     if (sinal?.aborted) throw new Error(TURNO_CANCELADO);
     if (estourouTempo) throw new Error(traduzirErroCli("", { estourouTempo, tempoMaximoMs: TEMPO_MAXIMO_MS })!.mensagem);
     if (!resultado) {
@@ -405,6 +491,7 @@ async function executar({ sistema, prompt, ferramentas, ponte, aoEvento, sinal }
     clearTimeout(relogio);
     sinal?.removeEventListener("abort", encerrar);
     encerrarArvore(filho);
+    aoTerminar({ codigo: codigo ?? filho.exitCode, stderr, eventos, subtype });
     try {
       rmSync(pasta, { recursive: true, force: true });
     } catch {

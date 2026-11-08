@@ -1,6 +1,7 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { PRAZO_DECISAO_MS, PRAZO_DISCRETO_MS } from "@/lib/constantes";
 import type { Mensagem } from "@/lib/db";
 
 // Cartão de uma mensagem de dado: teste de personagem (d20, d100, Fate, PbtA, parada de d10 do Vampiro V5), rolagem livre (mestre ou jogador),
@@ -960,5 +961,225 @@ export function CartaoDado({ mensagem, novo }: { mensagem: Mensagem; novo: boole
       </style>
       <Conteudo mensagem={mensagem} novo={novo} />
     </>
+  );
+}
+
+// ---------- decisão depois do teste (rerrolar com Força de Vontade, Ponto de Herói, Inspiração) ----------
+
+/** O que o servidor grava em `dados.decisao` (DecisaoDoTeste em lib/constantes.ts). */
+export type DecisaoNoCartao = {
+  ate: number | null;
+  clienteId: string | null;
+  campanhaId: number;
+  opcoes: { id: string; rotulo: string; custo?: string; dados?: { max: number; elegiveis: number[]; padrao?: number[] } }[];
+  discreta?: boolean;
+  automatico?: boolean;
+};
+
+/** A decisão do cartão ainda vale (a de "depois" some sozinha quando o tempo dela acaba; a que pausa, só o servidor fecha). */
+export function decisaoAberta(d: { decisao?: unknown } | null | undefined, agora = Date.now()): DecisaoNoCartao | null {
+  const x = d?.decisao as DecisaoNoCartao | undefined;
+  if (!x || !Array.isArray(x.opcoes) || !x.opcoes.length) return null;
+  if ((x.discreta || x.automatico) && x.ate !== null && agora > x.ate + 500) return null;
+  return x;
+}
+
+function useAgora(ms = 250) {
+  const [agora, setAgora] = useState(0);
+  useEffect(() => {
+    const tique = () => setAgora(Date.now());
+    const t0 = setTimeout(tique, 0);
+    const t = setInterval(tique, ms);
+    return () => {
+      clearTimeout(t0);
+      clearInterval(t);
+    };
+  }, [ms]);
+  return agora;
+}
+
+/**
+ * O jogador decide depois do dado. Só o dono (o aparelho que rolou; com o dono fora, a máquina da taverna) tem os botões; os
+ * outros veem "aguardando". O prazo é do servidor: aqui só a barrinha. Mesa solo espera sem prazo. Com opção de dados (Vampiro),
+ * os dados normais viram botões (até `max`, os que falharam já marcados) e os de Fome ficam travados. Enter aceita só com o foco
+ * dentro do cartão (chat/atalhos.tsx); F rerrola.
+ */
+export function DecisaoDoTeste({
+  mensagemId,
+  decisao,
+  r,
+  podeDecidir,
+  quem,
+  recurso,
+  clienteId,
+  aoRerrolar,
+}: {
+  mensagemId: number;
+  decisao: DecisaoNoCartao;
+  /** o resultado em decisão: faces e quantas são de Fome */
+  r: { dados?: number[]; dadosFome?: number[] };
+  podeDecidir: boolean;
+  quem: string;
+  /** o recurso que a opção gasta, para o jogador ver quanto tem ("Força de Vontade 3/5") */
+  recurso?: { rotulo: string; atual: number; max: number } | null;
+  clienteId: string;
+  aoRerrolar?: (novo: Record<string, unknown>) => void;
+}) {
+  const agora = useAgora();
+  const opcao = decisao.opcoes[0];
+  const escolhaDados = opcao.dados;
+  const [marcados, setMarcados] = useState<number[]>(() => escolhaDados?.padrao ?? []);
+  const [enviando, setEnviando] = useState<"rerrolar" | "aceitar" | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const caixa = useRef<HTMLDivElement>(null);
+  const depois = Boolean(decisao.discreta || decisao.automatico);
+
+  // o cartão NÃO puxa o foco sozinho: o Enter dado por reflexo (o do leitor cena a cena) nunca cai nele. O jogador põe o foco
+  // de propósito (clique no cartão ou Tab) para aceitar com Enter; F rerrola de qualquer lugar.
+
+  async function decidir(aceitar: boolean) {
+    if (enviando) return;
+    if (!aceitar && escolhaDados && !marcados.length) {
+      setErro("Escolha pelo menos um dado para rerrolar.");
+      return;
+    }
+    setEnviando(aceitar ? "aceitar" : "rerrolar");
+    setErro(null);
+    const corpo = aceitar ? { mensagemId, aceitar: true, clienteId } : { mensagemId, opcao: opcao.id, clienteId, ...(escolhaDados ? { dados: marcados } : {}) };
+    const resp = await fetch(`/api/campanhas/${decisao.campanhaId}/rerrolar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(corpo),
+    }).catch(() => null);
+    const json = resp ? ((await resp.json().catch(() => ({}))) as { resultado?: Record<string, unknown>; erro?: string }) : {};
+    if (!resp?.ok) {
+      setErro(json.erro ?? "Não deu certo. Tente de novo.");
+      setEnviando(null);
+      return;
+    }
+    // a mensagem atualizada chega pelo fluxo de eventos e tira os botões; o resultado novo já anima aqui
+    if (!aceitar && json.resultado) aoRerrolar?.(json.resultado);
+  }
+
+  const faces = Array.isArray(r.dados) ? r.dados : [];
+  const qtdFome = Array.isArray(r.dadosFome) ? r.dadosFome.length : 0;
+  const normais = faces.slice(0, faces.length - qtdFome);
+  const fome = faces.slice(faces.length - qtdFome);
+  // o prazo é do servidor; aqui só a barrinha
+  const prazo = decisao.ate === null ? null : decisao.discreta ? PRAZO_DISCRETO_MS : PRAZO_DECISAO_MS;
+  const resta = decisao.ate === null || !agora ? null : Math.max(0, decisao.ate - agora);
+  function alternar(i: number) {
+    if (!escolhaDados?.elegiveis.includes(i)) return;
+    setErro(null);
+    setMarcados((m) => (m.includes(i) ? m.filter((x) => x !== i) : m.length >= escolhaDados.max ? m : [...m, i].sort((a, b) => a - b)));
+  }
+  // a oferta de depois some sozinha quando o tempo dela acaba (o servidor fecha na próxima ação)
+  if (depois && decisao.ate !== null && agora && agora > decisao.ate + 500 && !enviando) return null;
+  const nomesMarcados = marcados.map((i) => normais[i]).filter((v) => v !== undefined);
+  const textoMarcados = nomesMarcados.length ? `rerrolar ${nomesMarcados.length > 1 ? `${nomesMarcados.slice(0, -1).join(", ")} e ${nomesMarcados[nomesMarcados.length - 1]}` : nomesMarcados[0]}` : "nenhum dado marcado";
+
+  return (
+    <div
+      ref={caixa}
+      tabIndex={-1}
+      className={`surgir mx-auto mt-4 max-w-md rounded-xl border bg-background/35 px-3 py-3 text-center outline-none focus-visible:ring-2 focus-visible:ring-ambar/70 ${
+        depois ? "border-border/70" : "border-ambar/45"
+      }`}
+      data-decisao={mensagemId}
+      aria-label="Decidir o teste"
+    >
+      <p className="text-sm text-foreground/90">
+        {depois ? "Quer tentar de novo?" : "Decidir antes de o mestre narrar:"} <span className="font-semibold text-ambar">{opcao.rotulo}</span>
+        {recurso && (
+          <span className="text-muted">
+            {" "}
+            ({recurso.rotulo} {recurso.atual}/{recurso.max})
+          </span>
+        )}
+      </p>
+      {escolhaDados && normais.length > 0 && (
+        <div className="mt-2" data-escolha-dados>
+          <p className="text-xs text-muted">
+            {podeDecidir ? `Toque nos dados normais para rerrolar (até ${escolhaDados.max}); os de Fome ficam.` : "Dados normais e de Fome:"}
+          </p>
+          <div className="mt-1.5 flex flex-wrap justify-center gap-1.5">
+            {normais.map((v, i) => {
+              const sim = marcados.includes(i);
+              return (
+                <button
+                  key={`n${i}`}
+                  type="button"
+                  data-dado-normal={i}
+                  aria-pressed={sim}
+                  disabled={!podeDecidir || enviando !== null}
+                  onClick={() => alternar(i)}
+                  title={sim ? `Rerrolar este ${v}` : `Manter este ${v}`}
+                  className={`grid size-9 place-items-center rounded-md border text-sm font-semibold tabular-nums transition ${
+                    sim ? "border-ambar bg-ambar/20 text-ambar ring-1 ring-ambar" : v >= 6 ? "border-border text-foreground/90" : "border-border/70 text-muted"
+                  } disabled:cursor-default`}
+                >
+                  {sim ? "↻" : ""}
+                  {v}
+                </button>
+              );
+            })}
+            {fome.map((v, i) => (
+              <span
+                key={`f${i}`}
+                className="grid size-9 cursor-not-allowed place-items-center rounded-md border border-sangue/60 bg-sangue/10 text-sm font-semibold tabular-nums text-sangue opacity-80"
+                title="Dado de Fome: nunca é rerrolado"
+                data-dado-fome={i}
+              >
+                {v}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {podeDecidir ? (
+        <div className="mt-3 flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:flex-wrap">
+          <button
+            type="button"
+            data-rerrolar
+            disabled={enviando !== null || (Boolean(escolhaDados) && !marcados.length)}
+            onClick={() => void decidir(false)}
+            className="btn-ambar min-h-11 flex-col gap-0 px-4 py-2 leading-tight focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ambar"
+          >
+            <span>{enviando === "rerrolar" ? "Rerrolando…" : `↻ ${opcao.rotulo}`}</span>
+            <span className="text-[11px] font-normal opacity-80">
+              {escolhaDados ? textoMarcados : "rola o d20 de novo e fica com o novo"}
+              {opcao.custo ? ` · −${opcao.custo}` : ""}
+            </span>
+          </button>
+          <button
+            type="button"
+            data-aceitar
+            disabled={enviando !== null}
+            onClick={() => void decidir(true)}
+            className="btn-borda min-h-11 px-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ambar"
+          >
+            {enviando === "aceitar" ? "Aceitando…" : depois ? "Deixar como está" : "Aceitar o resultado"}
+          </button>
+        </div>
+      ) : (
+        <p className="mt-2 text-sm italic text-muted">Aguardando {quem} decidir…</p>
+      )}
+      {resta !== null && prazo !== null && (
+        <div className="mx-auto mt-3 h-1 max-w-xs overflow-hidden rounded-full bg-border/60" aria-hidden>
+          <div className="h-full bg-ambar/80 transition-[width] duration-300 ease-linear" style={{ width: `${Math.min(100, (resta / prazo) * 100)}%` }} />
+        </div>
+      )}
+      <p className="mt-1 text-[11px] text-muted">
+        {decisao.ate === null
+          ? "a mesa espera você decidir"
+          : resta === null
+            ? ""
+            : depois
+              ? `o botão some em ${Math.ceil(resta / 1000)} s${decisao.automatico ? " · o mestre corrige a narração" : ""}`
+              : `fica com o resultado em ${Math.ceil(resta / 1000)} s`}
+        {podeDecidir ? " · F rerrola, Enter (com o cartão em foco) aceita" : ""}
+      </p>
+      {erro && <p className="mt-1 text-xs text-sangue">{erro}</p>}
+    </div>
   );
 }

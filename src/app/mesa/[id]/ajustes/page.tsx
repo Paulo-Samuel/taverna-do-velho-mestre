@@ -100,8 +100,25 @@ export default async function AjustesMesa(props: PageProps<"/mesa/[id]/ajustes">
       )}
 
       <Secao titulo="Grupo">
+        {grupo.length ? (
+          <ul className="mb-3 divide-y divide-border/60 rounded-md border border-border/70">
+            {grupo.map((p) => (
+              <li key={p.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                <span className="min-w-0 flex-1 truncate">
+                  <span className="text-pergaminho">{p.ficha.nome}</span>
+                  {p.jogador && <span className="text-muted"> · {p.jogador}</span>}
+                </span>
+                {/* nome, história e a parte narrativa da ficha; pela rede, só o dono salva (a ação confere) */}
+                <Link href={`/mesa/${campanha.id}/personagens/${p.id}/editar`} className="shrink-0 py-1 text-xs text-ambar hover:underline">
+                  ✐ editar
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <p className="mb-3 text-sm text-muted">
-          {grupo.length ? `${grupo.map((p) => p.ficha.nome).join(", ")}.` : "Ninguém sentado ainda."} Para tirar alguém, use a aba Grupo da mesa.
+          {grupo.length ? "" : "Ninguém sentado ainda. "}O “editar” muda nome, história e o que o mestre lê de cada um, sem mexer nos números. Para tirar
+          alguém, use a aba Grupo da mesa.
         </p>
         <Link href={`/mesa/${campanha.id}/personagens/novo`} className="btn-borda">
           + Adicionar personagem

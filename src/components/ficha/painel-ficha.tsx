@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import type { PersonagemVisivel } from "@/lib/mesa";
 import type { BlocoFicha, CondicaoDef, Ficha, SistemaPublico } from "@/lib/sistemas/tipos";
@@ -267,10 +268,12 @@ type PropsCartao = {
   rodape?: ReactNode;
   /** botão ao lado do XP (Vampiro: "Gastar XP"); com ele a linha de XP aparece mesmo zerada */
   acaoXp?: ReactNode;
+  /** link para editar a parte narrativa da ficha (/mesa/[id]/personagens/[pid]/editar) */
+  linkEditar?: string;
 };
 
 /** Cabeçalho + blocos. Usado na mesa (PainelFicha) e na prévia do formulário de criação. */
-export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste, rodape, acaoXp }: PropsCartao) {
+export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste, rodape, acaoXp, linkEditar }: PropsCartao) {
   const classe = sistema.classes.find((c) => c.id === ficha.classe)?.nome ?? ficha.classe;
   const anc = sistema.ancestralidades.find((a) => a.id === ficha.ancestralidade)?.nome ?? ficha.ancestralidade;
   const antecedente = sistema.antecedentes?.find((a) => a.id === ficha.antecedente)?.nome;
@@ -297,13 +300,22 @@ export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste
             {sistema.rotulos.nivel} {ficha.nivel}
           </span>
           {jogador && <span className="rounded-full border border-border px-2 py-0.5 text-muted">jogado por {jogador}</span>}
+          {linkEditar && (
+            <Link
+              href={linkEditar}
+              title="Nome, história, conceito, convicções, pedras de toque, vantagens e defeitos (os números ficam como estão)"
+              className="ml-auto rounded-full border border-border px-2 py-0.5 text-muted transition hover:border-ambar hover:text-ambar"
+            >
+              ✐ editar
+            </Link>
+          )}
           {ajuste && (
             <button
               type="button"
               onClick={ajuste.alternarEdicao}
               aria-pressed={ajuste.editando}
               title="Corrigir à mão o que o mestre esqueceu: vida, recursos, dinheiro, condições, inventário"
-              className={`ml-auto rounded-full border px-2 py-0.5 transition ${ajuste.editando ? "border-ambar bg-ambar/15 text-ambar" : "border-border text-muted hover:border-ambar hover:text-ambar"}`}
+              className={`${linkEditar ? "" : "ml-auto "}rounded-full border px-2 py-0.5 transition ${ajuste.editando ? "border-ambar bg-ambar/15 text-ambar" : "border-border text-muted hover:border-ambar hover:text-ambar"}`}
             >
               {ajuste.editando ? "✓ pronto" : "✎ ajustar"}
             </button>
@@ -399,6 +411,7 @@ function FichaDaMesa({ personagem, sistema, editavel = true, ocupado = false }: 
       progresso={progresso}
       ajuste={editavel ? ajuste : undefined}
       acaoXp={editavel && sistema.id === "vtm5" ? <BotaoGastarXp personagem={personagem} /> : undefined}
+      linkEditar={editavel ? `/mesa/${personagem.campanhaId}/personagens/${personagem.id}/editar` : undefined}
       rodape={
         editavel ? (
           <Secao titulo="Minhas anotações" aberta={false}>

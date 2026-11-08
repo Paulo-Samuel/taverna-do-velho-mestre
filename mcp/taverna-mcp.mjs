@@ -2,6 +2,8 @@
 // Não tem regra nenhuma aqui: ele repassa cada chamada para o app (rota /api/interno/ferramentas),
 // que rola os dados, altera as fichas e avisa todos os aparelhos da mesa.
 // O app passa TAVERNA_PONTE_URL e TAVERNA_PONTE_TOKEN pelo --mcp-config de cada turno.
+// A lista vem do app (definirFerramentas): ferramenta nova, inclusive de extensão (consultar_bestiario, sortear_tabela),
+// aparece aqui sozinha; o retorno textual das consultas já vem curto (≤ 600 caracteres) e passa como está.
 import { createInterface } from "node:readline";
 
 const URL_PONTE = process.env.TAVERNA_PONTE_URL;
@@ -44,7 +46,8 @@ async function tratar({ id, method, params }) {
         body: JSON.stringify({ token: TOKEN, nome: params.name, entrada: params.arguments ?? {} }),
       });
       if (r.erro) return responder(id, { content: [{ type: "text", text: r.erro }], isError: true });
-      return responder(id, { content: [{ type: "text", text: JSON.stringify(r.resultado) }] });
+      const texto = typeof r.resultado === "string" ? r.resultado : JSON.stringify(r.resultado);
+      return responder(id, { content: [{ type: "text", text: texto }] });
     }
     default:
       return erro(id, -32601, `Método não suportado: ${method}`);

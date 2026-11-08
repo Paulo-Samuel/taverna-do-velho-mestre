@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import Link from "next/link";
+import { useActionState, useState, type ReactNode } from "react";
 import type { AventuraPublica } from "@/lib/aventuras/tipos";
+import { apelido as apelidoSalvo } from "@/lib/cliente/identidade";
 import { DIFICULDADES, FOCOS, MAX_FOCO_LIVRE, MAX_INSTRUCOES, TAMANHOS, type Dificuldade, type TamanhoNarracao } from "@/lib/mestre/estilo";
 import { exemploDoCampo, sementesDe, type ParSemente } from "@/lib/sistemas/sementes";
 import { atributosIniciaisPf2, periciasCriacaoPf2 } from "@/lib/sistemas/pf2e/criacao";
@@ -1677,5 +1679,154 @@ export function PassoCampanha({ e, atualizar, aventuras = [] }: Omit<PropsPasso,
         </label>
       </div>
     </>
+  );
+}
+
+/* ---------- editar a ficha depois de criada ---------- */
+
+export type PropsEdicaoFicha = {
+  sistema: SistemaPublico;
+  /** as opções de criação que dá para mexer (lib/editar-ficha.ts: só as narrativas, já filtradas pela classe da ficha) */
+  opcoes: OpcaoCriacao[];
+  inicial: { nome: string; jogador: string; historia: string; classe: string; ancestralidade: string; extras: Record<string, string[]> };
+  /** server action editarPersonagemAcao, com campanha e personagem amarrados */
+  acao: (estado: { erro: string | null }, form: FormData) => Promise<{ erro: string | null }>;
+  voltar: { href: string; texto: string };
+  /** o mestre está narrando agora: dá para escrever, mas salvar só depois */
+  ocupado?: boolean;
+};
+
+/**
+ * Formulário reduzido de edição (página /mesa/[id]/personagens/[pid]/editar): o passo de identidade e as opções narrativas do
+ * sistema, com os mesmos campos da criação (CampoOpcao, CampoPar). Sem atributos, perícias nem disciplinas: o que mexe em
+ * número fica como está. Ao contrário dos passos, este escreve os próprios <input type="hidden"> (contrato de lib/editar-ficha.ts).
+ */
+export function EdicaoFicha({ sistema, opcoes, inicial, acao, voltar, ocupado }: PropsEdicaoFicha) {
+  const [e, setE] = useState<Escolhas>(() => ({
+    sistemaId: sistema.id,
+    ancestralidade: inicial.ancestralidade,
+    classe: inicial.classe,
+    antecedente: "",
+    metodo: "",
+    atributos: {},
+    pericias: [],
+    extras: inicial.extras,
+    nome: inicial.nome,
+    historia: inicial.historia,
+    jogador: inicial.jogador,
+    campanha: "",
+    cenario: "",
+    tom: "",
+    aventura: "",
+    modoMesa: "livre",
+    pin: "",
+    adicionarMais: false,
+    dificuldade: "justa",
+    narracao: "media",
+    foco: [],
+    focoLivre: "",
+    instrucoes: "",
+    dados: "jogador",
+    sugestoes: true,
+    copiaDe: null,
+    zerarXp: false,
+  }));
+  const [estado, enviar, enviando] = useActionState(acao, { erro: null });
+  const [aviso, setAviso] = useState<string | null>(null);
+  const atualizar = (p: Partial<Escolhas>) => {
+    setE((atual) => ({ ...atual, ...p }));
+    setAviso(null);
+  };
+
+  const s = sementesDe(sistema.id);
+  const ctx = { classe: e.classe, ancestralidade: e.ancestralidade };
+  const anc = sistema.ancestralidades.find((a) => a.id === e.ancestralidade);
+  const pares = (s.pares ?? []).filter((p) => opcoes.some((o) => o.id === p.campo) && opcoes.some((o) => o.id === p.par));
+  const segundos = new Set(pares.map((p) => p.par));
+
+  function aoEnviar(form: FormData) {
+    if (!e.nome.trim()) {
+      setAviso("Seu personagem precisa de um nome.");
+      return;
+    }
+    // pela rede, o servidor confere se quem edita é o dono do personagem (o mesmo apelido da mesa)
+    form.set("editor", apelidoSalvo());
+    enviar(form);
+  }
+
+  return (
+    <form action={aoEnviar} className="space-y-5">
+      <div className="cartao p-5">
+        <PassoIdentidade e={e} atualizar={atualizar} />
+      </div>
+
+      {opcoes.length > 0 && (
+        <div className="cartao p-5">
+          <Titulo ajuda="O que o mestre lê a cada turno para saber quem você é. Atributos, perícias e poderes não mudam aqui: crescem com XP.">
+            Quem você é agora
+          </Titulo>
+          <div className="divide-y divide-border/70">
+            {opcoes
+              .filter((o) => !segundos.has(o.id))
+              .map((o) => {
+                const par = pares.find((p) => p.campo === o.id);
+                const b = par && opcoes.find((x) => x.id === par.par);
+                const campo = s.campos?.[o.id];
+                return (
+                  <div key={o.id} className="py-4 first:pt-0 last:pb-0">
+                    {par && b ? (
+                      <CampoPar par={par} a={o} b={b} e={e} atualizar={atualizar} />
+                    ) : (
+                      <fieldset>
+                        <legend className="mb-1 font-semibold text-pergaminho">
+                          {o.rotulo}
+                          {o.obrigatoria && (
+                            <span className="ml-1 text-sangue" title="obrigatório">
+                              *<span className="sr-only"> (obrigatório)</span>
+                            </span>
+                          )}
+                        </legend>
+                        {o.ajuda && <p className="mb-2 text-xs leading-relaxed text-muted">{o.ajuda}</p>}
+                        <CampoOpcao
+                          opcao={o}
+                          destaque={anc?.nome}
+                          valores={e.extras[o.id] ?? []}
+                          mudar={(v) => atualizar({ extras: { ...e.extras, [o.id]: v } })}
+                          exemplo={exemploDoCampo(campo, ctx)}
+                          sugerir={campo?.gerar ? (linhas) => sugerirTexto(sistema.id, o.id, e, { ...e.extras, [o.id]: linhas }) : undefined}
+                        />
+                      </fieldset>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      <input type="hidden" name="nome" value={e.nome.trim()} />
+      <input type="hidden" name="jogador" value={e.jogador.trim()} />
+      <input type="hidden" name="historia" value={e.historia.trim()} />
+      {opcoes.flatMap((o) =>
+        (e.extras[o.id] ?? []).filter((v) => v.trim()).map((v, i) => <input key={`${o.id}-${i}`} type="hidden" name={`extra_${o.id}`} value={v.trim()} />),
+      )}
+
+      <div className="sticky bottom-0 z-10 -mx-4 border-t border-border/50 bg-background/95 px-4 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3 backdrop-blur">
+        {(aviso || estado.erro || ocupado) && (
+          <p role="alert" className="mb-3 rounded-md border border-sangue/50 bg-sangue/10 px-3 py-2 text-sm text-pergaminho">
+            {aviso ?? estado.erro ?? "O mestre está narrando agora. Pode escrever; salve quando ele terminar."}
+          </p>
+        )}
+        <div className="flex items-center gap-3">
+          <Link href={voltar.href} className="btn-borda min-h-11 px-4">
+            {voltar.texto}
+          </Link>
+          <button type="submit" className="btn-ambar min-h-11 flex-1" disabled={enviando}>
+            {enviando ? "Guardando…" : "Salvar a ficha"}
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-muted">O mestre recebe um aviso no chat com o que mudou.</p>
+      </div>
+    </form>
   );
 }

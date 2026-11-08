@@ -1,5 +1,6 @@
 import "server-only";
 import type { AcaoPendente, Fato, Mensagem } from "./db";
+import { registrar } from "./log";
 import type { PersonagemVisivel } from "./visivel";
 import type { Cena, EntradaDiario } from "./sistemas/tipos";
 
@@ -53,11 +54,15 @@ const g = globalThis as unknown as { __tavernaHub?: Hub };
 const hub: Hub = (g.__tavernaHub ??= { ouvintes: new Map(), presenca: new Map() });
 
 export function publicar(campanhaId: number, ev: EventoMesa) {
+  // a faixa vermelha da mesa também vai para o log em disco (o que o amigo manda em /config → Diagnóstico)
+  if (ev.e === "erro") {
+    registrar(ev.aviso ? "aviso" : "erro", "mesa", { campanhaId, erro: ev.erro, refazer: ev.refazer, acao: ev.acao });
+  }
   for (const ouvir of hub.ouvintes.get(campanhaId) ?? []) {
     try {
       ouvir(ev);
     } catch (e) {
-      console.warn("[taverna] ouvinte falhou:", e);
+      registrar("aviso", "tempo-real", { campanhaId, evento: ev.e, motivo: "ouvinte falhou", erro: e });
     }
   }
 }

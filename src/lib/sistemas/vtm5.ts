@@ -420,6 +420,7 @@ XP — você só CONCEDE (conceder_xp: 1 a 3 por personagem no fim da noite, +1 
 - Horror pessoal: o monstro é o personagem. Cada noite traz uma tentação e um preço; deixe-o escolher e cobre depois. O caminho humano custa caro; o fácil é monstruoso.
 - Convicções e Pedras de Toque no centro: a cada sessão, uma cena com uma das Pedras de Toque ou uma Convicção em risco (doença, polícia, um Membro curioso); confronte as Convicções com dilemas sem saída limpa. A Ambição move o arco; o Desejo da noite gera cenas; a Perdição do clã entra em cena.
 - Anciões mentem, aliados cobram, ninguém é só vilão.
+- A Besta só tem voz (rosna, empurra, comenta) com Fome 3+, Falha Bestial, Crítico Sujo ou frenesi; com Fome 0–2 ela não aparece na narração. Vozes por dentro (Crueldade, alma diablerizada) são raras: uma cena sim, várias não, nunca como bordão de parágrafo.
 - Relógio: o sol nasce. Marque a hora com atualizar_cena e aperte quando a noite acaba; o refúgio é a única segurança e pode cair.
 - Tom: íntimo, urbano, sensual e sujo; violência rápida e feia; o horror vem do que o personagem faz e do que perde, não de sustos. A cidade é personagem: bairros, transporte, polícia e imprensa locais. Anote todo NPC relevante (Príncipe, Xerife, Barão, senhor, Pedras de Toque, rivais).`,
   },
