@@ -15,6 +15,7 @@ import { CSS_CRIACAO } from "./estilos";
 import { gotica } from "./fonte";
 import { sortearGanchos } from "./ganchos";
 import { sortearNomes } from "./nomes";
+import { Icone, TextoComIcones } from "@/components/icones";
 
 // Criação do modo história em cinco passos, no estilo "senta aí e conta quem você é": nome, aparência, ofício, passado e
 // onde a história começa (com tom e estilo do mestre). Sem número nenhum na tela; as regras ficam escondidas no sistema
@@ -316,6 +317,8 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
 
   /** o passo mais adiantado que dá para abrir: o primeiro com pendência (ou o último, se está tudo certo) */
   const alcancavel = [0, 1, 2].find((p) => problemaDoPasso(p)) ?? ultimo;
+  /** o que ainda falta escolher, para a prévia ao lado não deixar dúvida */
+  const pendencias = [0, 1, 2].filter((p) => problemaDoPasso(p)).map((p) => passos[p]);
 
   function irPara(passo: number) {
     mudar({ passo: Math.max(0, Math.min(ultimo, passo)) });
@@ -404,7 +407,9 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
         <div className="criacao-estrelas" />
       </div>
 
-      <main className="relative z-10 mx-auto w-full max-w-lg px-4 pb-16 pt-6 sm:pt-10">
+      <main className="relative z-10 mx-auto w-full max-w-lg px-4 pb-16 pt-6 sm:pt-10 lg:max-w-5xl">
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start lg:gap-8">
+          <div className="mx-auto w-full max-w-lg lg:mx-0 lg:max-w-none">
         {/* mais um herói numa mesa que já existe: de onde se veio e quem já está sentado */}
         {soPersonagem && mesa && (
           <div className="mb-3 text-sm">
@@ -444,7 +449,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                       } disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:text-muted`}
                     >
                       <span
-                        className={`grid size-5 shrink-0 place-items-center rounded-full border text-[10px] font-semibold tabular-nums ${
+                        className={`grid size-5 shrink-0 place-items-center rounded-full border text-[11px] font-semibold tabular-nums ${
                           atual ? "border-ambar bg-ambar text-[#1a120c]" : feito ? "border-ambar/70 text-ambar" : "border-border"
                         }`}
                         aria-hidden
@@ -483,8 +488,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
             </h1>
             <p className="mt-2 text-center text-sm italic text-muted">{SUBTITULOS[r.passo]}</p>
             {aventura && r.passo < ultimo && (
-              <p className="mx-auto mt-3 w-fit rounded-full border border-ambar/40 bg-ambar/10 px-3 py-1 text-center text-xs text-pergaminho">
-                📜 Aventura escolhida: {aventura.titulo}
+              <p className="mx-auto mt-3 w-fit rounded-full border border-ambar/40 bg-ambar/10 px-3 py-1 text-center text-xs text-pergaminho"><Icone nome="scroll" />  Aventura escolhida: {aventura.titulo}
               </p>
             )}
 
@@ -618,7 +622,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                         }`}
                       >
                         <span className="grid size-11 shrink-0 place-items-center rounded-lg border border-border bg-background/60 text-2xl" aria-hidden>
-                          {c.icone ?? "⚔️"}
+                          {c.icone && <TextoComIcones texto={c.icone} />}
                         </span>
                         <span className="min-w-0">
                           <span className={`block font-semibold ${ativo ? "text-ambar" : "text-pergaminho"}`}>{c.nome}</span>
@@ -722,7 +726,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                             </span>
                           )}
                           <span className="text-2xl leading-none" aria-hidden>
-                            {c.icone}
+                            <TextoComIcones texto={c.icone} />
                           </span>
                           <span className={`pr-5 text-sm font-semibold leading-tight ${ativo ? "text-ambar" : "text-pergaminho"}`}>{c.nome}</span>
                           {/* no celular a descrição só aparece embaixo, a do escolhido: oito cartões altos viravam rolagem */}
@@ -757,13 +761,11 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                                 ✓
                               </span>
                             )}
-                            <span className="text-2xl leading-none" aria-hidden>
-                              📜
-                            </span>
+                            <Icone nome="scroll" className="text-2xl leading-none" />
                             <span className="min-w-0 flex-1">
                               <span className={`block pr-5 text-sm font-semibold leading-tight ${ativo ? "text-ambar" : "text-pergaminho"}`}>{a.titulo}</span>
                               <span className="mt-1 block text-xs leading-snug text-muted">{a.chamada}</span>
-                              <span className="mt-1 block text-[11px] text-muted/80">
+                              <span className="mt-1 block text-xs text-muted/80">
                                 {a.duracao} · {a.tom}
                               </span>
                             </span>
@@ -843,14 +845,18 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                   />
                 </div>
 
-                <div>
+                <div className="lg:hidden">
                   <Rotulo>Quem entra em cena</Rotulo>
                   <CartaoHeroi
                     retrato={retrato}
                     nome={r.nome.trim()}
                     linhas={[
                       [origem?.nome, classe?.nome].filter(Boolean).join(" · "),
-                      aventura ? `📜 ${aventura.titulo}` : `${comeco.icone} ${comeco.id === "livre" ? "Onde começa: o mestre escolhe" : `Começa ${comeco.onde}`}`,
+                      aventura ? (
+                        <><Icone nome="scroll" /> {aventura.titulo}</>
+                      ) : (
+                        <><TextoComIcones texto={comeco.icone} /> {comeco.id === "livre" ? "Onde começa: o mestre escolhe" : `Começa ${comeco.onde}`}</>
+                      ),
                       `${tomNome} · mestre ${dificuldade.nome.toLowerCase()}`,
                     ]}
                   />
@@ -922,6 +928,30 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
             </Link>
           </p>
         )}
+          </div>
+
+          {!pendente && (
+            <aside className="hidden lg:sticky lg:top-6 lg:block" aria-label="Prévia do herói">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted">Seu herói até aqui</p>
+              <CartaoHeroi
+                retrato={retrato}
+                nome={r.nome.trim()}
+                linhas={[
+                  [origem?.nome, classe?.nome].filter(Boolean).join(" · "),
+                  aventura ? (
+                    <><Icone nome="scroll" /> {aventura.titulo}</>
+                  ) : (
+                    <><TextoComIcones texto={comeco.icone} /> {comeco.id === "livre" ? "Onde começa: o mestre escolhe" : `Começa ${comeco.onde}`}</>
+                  ),
+                  `${tomNome} · mestre ${dificuldade.nome.toLowerCase()}`,
+                ]}
+              />
+              <p className="mt-3 text-xs leading-snug text-muted">
+                {pendencias.length ? `Falta: ${pendencias.join(" · ")}` : "Tudo escolhido: siga até o começo e abra a mesa."}
+              </p>
+            </aside>
+          )}
+        </div>
       </main>
     </div>
   );

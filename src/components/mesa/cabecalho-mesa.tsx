@@ -7,7 +7,7 @@ import { MenuLeitura } from "@/components/leitor/menu-leitura";
 import { Convite } from "@/components/presenca/convite";
 import { Presenca } from "@/components/presenca/presenca";
 import { IconeLua, remorsoUrgente } from "@/components/sessao/encerrar-noite";
-import { BotaoVoz, LinhaVoz } from "@/components/voz/voz";
+import { LinhaVoz } from "@/components/voz/voz";
 import type { AcoesMesa, Mesa } from "@/lib/cliente/use-mesa";
 import { dadosDoTema } from "@/lib/temas";
 
@@ -128,7 +128,7 @@ export function CabecalhoMesa({
           <h1 className={`line-clamp-2 break-words text-[15px] leading-[1.15] sm:truncate sm:text-xl baixo:line-clamp-1 baixo:text-base ${classeTitulo}`} title={mesa.campanha.nome}>
             {mesa.campanha.nome}
           </h1>
-          <p className="truncate text-[11px] text-muted max-sm:hidden baixo:hidden">
+          <p className="truncate text-xs text-muted max-sm:hidden baixo:hidden">
             <span aria-hidden>{dadosDoTema(mesa.sistema.id).ornamento}</span> {mesa.sistema.nomeCurto}
             {rodada && <span className="uppercase tracking-wider text-ambar-forte"> · modo rodada</span>}
           </p>
@@ -136,17 +136,8 @@ export function CabecalhoMesa({
         <span data-ordem="presenca" className="contents">
           <Presenca mesa={mesa} acoes={acoes} />
         </span>
-        <span data-ordem="convidar" className="contents">
-          <Convite campanhaId={id} temPin={mesa.campanha.temPin} compacto className="max-sm:hidden" />
-        </span>
-        <span data-ordem="som" className="contents">
-          <Musica musica={mesa.cena.musica} sistema={mesa.sistema.id} compacto fimDaNoite={fimDaNoite} />
-        </span>
         <span data-ordem="ler" className="contents">
           <MenuLeitura className="max-sm:hidden" telaBaixa={telaBaixa} />
-        </span>
-        <span data-ordem="voz" className="contents">
-          <BotaoVoz compacto className="max-lg:hidden" />
         </span>
         <Link href={`/mesa/${id}/livro`} className="botao-cabecalho max-lg:hidden" aria-label="Livro da campanha" title="Livro da campanha: a história inteira, para reler, imprimir ou baixar" data-ordem="livro">
           <IconeLivro />
@@ -159,7 +150,7 @@ export function CabecalhoMesa({
           {urgente && <Pontinho />}
         </button>
         {/* transbordo: o que a largura não comporta */}
-        <div ref={caixaMenu} className="relative lg:hidden" data-ordem="mais">
+        <div ref={caixaMenu} className="relative" data-ordem="mais">
           <button
             ref={botaoMenu}
             type="button"
@@ -176,8 +167,11 @@ export function CabecalhoMesa({
           </button>
           {menu && (
             <div role="menu" aria-label="Mais opções da mesa" className="cartao surgir bg-surface! absolute right-0 top-full z-50 mt-2 w-64 max-w-[calc(100vw-1rem)] p-1.5 text-foreground">
-              <div className="sm:hidden" data-item-menu>
+              <div data-item-menu>
                 <Convite campanhaId={id} temPin={mesa.campanha.temPin} linha />
+              </div>
+              <div data-item-menu>
+                <Musica musica={mesa.cena.musica} sistema={mesa.sistema.id} linha fimDaNoite={fimDaNoite} />
               </div>
               <div className="sm:hidden" data-item-menu>
                 <MenuLeitura linha telaBaixa={telaBaixa} />
@@ -185,19 +179,19 @@ export function CabecalhoMesa({
               <div data-item-menu>
                 <LinhaVoz />
               </div>
-              <Link href={`/mesa/${id}/livro`} role="menuitem" className={LINHA} data-item-menu>
+              <Link href={`/mesa/${id}/livro`} role="menuitem" className={`${LINHA} lg:hidden`} data-item-menu>
                 <span className="text-muted">
                   <IconeLivro />
                 </span>
                 Livro da campanha
               </Link>
-              <Link href={`/mesa/${id}/ajustes`} role="menuitem" className={LINHA} data-item-menu>
+              <Link href={`/mesa/${id}/ajustes`} role="menuitem" className={`${LINHA} lg:hidden`} data-item-menu>
                 <span className="text-muted">
                   <IconeAjustes />
                 </span>
                 Ajustes da mesa
               </Link>
-              <div className="my-1 h-px bg-border sm:hidden" aria-hidden />
+              <div className="my-1 h-px bg-border lg:hidden" aria-hidden />
               <button
                 type="button"
                 role="menuitem"
@@ -214,7 +208,7 @@ export function CabecalhoMesa({
                 </span>
                 <span className="min-w-0 flex-1">
                   Encerrar a noite
-                  {urgente && <span className="block text-[11px] text-sangue">há Remorso para rolar</span>}
+                  {urgente && <span className="block text-xs text-sangue">há Remorso para rolar</span>}
                 </span>
               </button>
             </div>

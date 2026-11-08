@@ -6,6 +6,7 @@ import { BotaoGastarXp } from "@/components/ficha/gastar-xp";
 import { manchasDe, pedirRemorso } from "@/components/ficha/ajuste-ficha";
 import type { AcoesMesa, Mesa } from "@/lib/cliente/use-mesa";
 import { noiteAtual, noiteEncerrada, remorsoDesde, sessaoDaMesa, ultimoMarcador, xpDesde, type EstadoRemorso } from "./noite";
+import { Icone } from "@/components/icones";
 
 // "🌙 Encerrar a noite" como ritual, nas duas mesas (o botão mora no cabeçalho; no celular, no pé do painel/Códex).
 // Diálogo em três passos: 1) Remorso (Vampiro): cada personagem com Manchas rola o próprio teste no cartão do dado
@@ -214,8 +215,7 @@ export function EncerrarNoite({
           <div className="space-y-3 text-sm" role="status">
             {xp.length > 0 && <ListaXp linhas={xp} />}
             <div className="flex flex-wrap justify-end gap-2 pt-1">
-              <Link href={`/mesa/${mesa.campanha.id}/livro`} className="btn-borda min-h-10 px-3 py-1.5 text-xs">
-                📜 Ler o livro
+              <Link href={`/mesa/${mesa.campanha.id}/livro`} className="btn-borda min-h-10 px-3 py-1.5 text-xs"><Icone nome="scroll" />  Ler o livro
               </Link>
               <button type="button" className="btn-ambar min-h-10 px-4 py-1.5 text-xs" onClick={aoFechar} data-foco-inicial>
                 Fechar
@@ -261,8 +261,7 @@ export function EncerrarNoite({
                               aoFechar();
                               irParaMensagem(estado.mensagemId);
                             }}
-                          >
-                            🎲 Ir para o dado
+                          ><Icone nome="dice" />  Ir para o dado
                           </button>
                         ) : (
                           <button
@@ -272,7 +271,7 @@ export function EncerrarNoite({
                             onClick={() => void rolarRemorso(p.id)}
                             data-dialogo-rolar-remorso
                           >
-                            {pedindo === p.id ? "Pedindo…" : "🩸 Rolar Remorso"}
+                            {pedindo === p.id ? "Pedindo…" : <><Icone nome="drop" /> Rolar Remorso</>}
                           </button>
                         )}
                       </li>
@@ -289,7 +288,7 @@ export function EncerrarNoite({
                     <input type="checkbox" checked={mestreDecide} onChange={(e) => setMestreDecide(e.target.checked)} className="mt-0.5 accent-ambar" data-mestre-decide />
                     <span>
                       O mestre decide o Remorso no fechamento
-                      <span className="block text-[11px]">Sem marcar, cada jogador rola o próprio teste antes de fechar.</span>
+                      <span className="block text-xs">Sem marcar, cada jogador rola o próprio teste antes de fechar.</span>
                     </span>
                   </label>
                 )}
@@ -322,8 +321,7 @@ export function EncerrarNoite({
                         aoFechar();
                         irParaMensagem(testeEsperando);
                       }}
-                    >
-                      🎲 Ir para o dado
+                    ><Icone nome="dice" />  Ir para o dado
                     </button>
                   )}
                 </div>
@@ -344,7 +342,7 @@ export function EncerrarNoite({
                   data-confirmar-encerrar
                   data-foco-inicial={!ocupado || undefined}
                 >
-                  {enviando ? "Fechando…" : `🌙 Fechar a noite ${n}`}
+                  {enviando ? "Fechando…" : <><Icone nome="moon" /> Fechar a noite {n}</>}
                 </button>
               </div>
             </li>
@@ -360,7 +358,7 @@ export function FaixaFechando({ n }: { n: number }) {
   return (
     <div className="flex min-h-11 items-center justify-center gap-2.5 rounded-lg border border-ambar/40 bg-ambar/5 px-3 py-2 text-sm text-ambar" role="status" data-faixa-fechando>
       <span className="size-2 shrink-0 animate-pulse rounded-full bg-ambar motion-reduce:animate-none" aria-hidden />
-      <span>🌙 Fechando a noite {n}…</span>
+      <span><Icone nome="moon" />  Fechando a noite {n}…</span>
     </div>
   );
 }
@@ -408,8 +406,7 @@ export function CartaoNoiteEncerrada({
         <Link href="/" className="btn-borda min-h-10 px-3 py-1.5 text-xs">
           ← Voltar às campanhas
         </Link>
-        <Link href={`/mesa/${mesa.campanha.id}/livro`} className="btn-borda min-h-10 px-3 py-1.5 text-xs">
-          📜 Ler o livro
+        <Link href={`/mesa/${mesa.campanha.id}/livro`} className="btn-borda min-h-10 px-3 py-1.5 text-xs"><Icone nome="scroll" />  Ler o livro
         </Link>
         {mesa.sistema.id === "vtm5" && ativo && <BotaoGastarXp personagem={ativo} />}
         <button type="button" onClick={aoContinuar} className="ml-auto min-h-10 rounded-md px-2 text-xs text-ambar underline-offset-4 hover:underline" data-continuar-jogando>

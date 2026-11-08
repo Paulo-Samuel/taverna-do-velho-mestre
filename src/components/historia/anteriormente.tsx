@@ -6,6 +6,7 @@ import { idUltimaMensagem, resumoParaLeitura, semAnteriormente, type BlocoResumo
 import type { Mensagem } from "@/lib/db";
 import type { Cena, EntradaDiario } from "@/lib/sistemas/tipos";
 import { fonteGotica } from "./fonte-gotica";
+import { Icone } from "@/components/icones";
 
 /** O que a rota do livro devolve com ?formato=resumo (recapitulacao/fechamento chegam com a W21; antes, só o resumo). */
 type Resumo = {
@@ -176,8 +177,7 @@ export function Anteriormente({
     return (
       <div className="pointer-events-none absolute inset-x-0 top-2 z-20 flex justify-center px-4">
         <div className="pointer-events-auto surgir flex items-center overflow-hidden rounded-full border border-ambar/40 bg-surface/95 text-xs shadow-lg backdrop-blur">
-          <button type="button" onClick={() => setFase("aberto")} className="min-h-9 px-3 text-ambar hover:bg-surface-2" aria-expanded={false}>
-            📜 Anteriormente…
+          <button type="button" onClick={() => setFase("aberto")} className="min-h-9 px-3 text-ambar hover:bg-surface-2" aria-expanded={false}><Icone nome="scroll" />  Anteriormente…
           </button>
           <button type="button" onClick={() => setFase("oculto")} className="grid min-h-9 w-9 place-items-center border-l border-border text-muted hover:text-foreground" aria-label="Dispensar o resumo">
             ✕
@@ -236,7 +236,7 @@ export function Anteriormente({
 
         {lugar && (
           <p className="mt-3 text-sm text-muted">
-            <span aria-hidden>📍 </span>
+            <Icone nome="place" />
             {cena.titulo && <span className="text-foreground">{cena.titulo} — </span>}
             {lugar}
           </p>
@@ -289,8 +289,7 @@ export function Anteriormente({
           <button type="button" onClick={continuar} className="btn-ambar min-h-11 px-6">
             Continuar de onde paramos
           </button>
-          <Link href={`/mesa/${campanhaId}/livro`} className="text-sm text-muted underline-offset-4 hover:text-ambar hover:underline">
-            📜 Reler o livro da campanha
+          <Link href={`/mesa/${campanhaId}/livro`} className="text-sm text-muted underline-offset-4 hover:text-ambar hover:underline"><Icone nome="scroll" />  Reler o livro da campanha
           </Link>
         </div>
       </section>

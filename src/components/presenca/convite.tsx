@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Icone } from "@/components/icones";
 
 // Convite para entrar pela rede local: endereço da máquina, QR code e PIN.
 // Os endereços e os QR codes vêm de /api/rede (o servidor sabe os IPs; o navegador não).
@@ -172,7 +173,7 @@ export function Convite({
         </button>
       ) : (
         <button type="button" className={`btn-borda px-3 py-1.5 ${className}`} onClick={() => setAberto(true)} title="Chamar gente pela rede local">
-          <span aria-hidden>📜</span> Convidar
+          <Icone nome="scroll" /> Convidar
         </button>
       )}
 
@@ -253,11 +254,11 @@ export function Convite({
             <div className="mt-4 rounded-md border border-border px-3 py-2 text-sm">
               {comPin ? (
                 <p>
-                  <span aria-hidden>🔒</span> Mesa com PIN: quem chegar pela rede vai precisar dele. Fale em voz alta, a taverna não conta.
+                  <Icone nome="lock" /> Mesa com PIN: quem chegar pela rede vai precisar dele. Fale em voz alta, a taverna não conta.
                 </p>
               ) : (
                 <p>
-                  <span aria-hidden>🚪</span> Mesa sem PIN: qualquer um no Wi-Fi entra. Ótimo em casa, péssimo no Wi-Fi da faculdade.
+                  <Icone nome="door" /> Mesa sem PIN: qualquer um no Wi-Fi entra. Ótimo em casa, péssimo no Wi-Fi da faculdade.
                 </p>
               )}
               {info?.local && <TrocarPin campanhaId={campanhaId} temPin={comPin} aoMudar={setPinAgora} />}

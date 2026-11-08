@@ -18,6 +18,7 @@ import {
 } from "@/lib/cliente/musica/preferencias";
 import { ROTULO_ENERGIA, ROTULO_HUMOR, type Energia } from "@/lib/cliente/musica/teoria";
 import type { Cena, HumorMusical } from "@/lib/sistemas/tipos";
+import { Icone } from "@/components/icones";
 
 // Trilha sonora conforme o humor da cena: gerada no navegador (Web Audio) no estilo do sistema de regras, ou as
 // músicas da própria pessoa na pasta musica/<sistema>/<humor> (rota /api/musica), quando houver.
@@ -81,11 +82,13 @@ export function Musica({
   sistema = "historia",
   compacto = false,
   fimDaNoite = false,
+  linha = false,
 }: {
   musica: Cena["musica"];
   sistema?: string;
   compacto?: boolean;
   fimDaNoite?: boolean;
+  linha?: boolean;
 }) {
   const prefs = useSyncExternalStore(assinarPreferenciasMusica, preferenciasMusica, preferenciasMusicaServidor);
   const estado = useSyncExternalStore(assinarEstadoMusica, estadoMusica, () => ESTADO_INICIAL);
@@ -221,7 +224,24 @@ export function Musica({
 
   return (
     <div ref={caixa} className="relative inline-flex shrink-0 items-center">
-      {compacto ? (
+      {linha ? (
+        <button
+          type="button"
+          onClick={() => setAberto((a) => !a)}
+          title={dica}
+          aria-label={`Som: ${prefs.ligado ? "ligado" : "desligado"}. Abrir a trilha sonora`}
+          aria-expanded={aberto}
+          aria-haspopup="dialog"
+          className="flex min-h-10 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground/90 hover:bg-surface-2/60 hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar"
+          data-item-menu
+        >
+          <span className="text-muted">
+            <IconeSom ligado={prefs.ligado} />
+          </span>
+          <span className="min-w-0 flex-1">Música</span>
+          <span className="text-xs text-muted">{prefs.ligado ? "ligada" : "desligada"}</span>
+        </button>
+      ) : compacto ? (
         // cabeçalho das mesas: um botão só, como os vizinhos; o liga/desliga e o volume moram no popover
         <button
           type="button"
@@ -278,7 +298,7 @@ export function Musica({
             </button>
           </div>
           <label className="flex items-center gap-2 text-xs text-muted">
-            <span aria-hidden>🔈</span>
+            <Icone nome="soundOff" />
             <input
               type="range"
               min={0}
@@ -294,13 +314,13 @@ export function Musica({
           <p className="mt-2 break-words text-xs text-muted" aria-live="polite">
             {prefs.ligado ? (estado.aguardandoGesto ? "Começa no primeiro clique ou toque na página." : `Trilha: ${rotulo}`) : "Desligada."}
           </p>
-          {estado.faixa && <p className="mt-1 text-[11px] text-muted">Música sua · {rotuloHumor}</p>}
+          {estado.faixa && <p className="mt-1 text-xs text-muted">Música sua · {rotuloHumor}</p>}
 
           {/* humor à mão: vence a cena do mestre até voltar para "automático"; por campanha, no localStorage.
               Fora de uma mesa (criação de campanha) não há campanha para guardar a escolha: a seção não aparece */}
           {campanhaId !== null && (
           <div className="mt-2 border-t border-border pt-2" role="group" aria-label="Humor da trilha">
-            <p className="mb-1.5 text-[11px] text-muted">
+            <p className="mb-1.5 text-xs text-muted">
               Humor{" "}
               {manual.humor ? (
                 <span className="text-ambar">(manual)</span>
@@ -337,7 +357,7 @@ export function Musica({
           </div>
           )}
           {totalLocal === 0 && (
-            <p className="mt-2 border-t border-border pt-2 text-[11px] leading-snug text-muted">
+            <p className="mt-2 border-t border-border pt-2 text-xs leading-snug text-muted">
               Quer suas próprias músicas? Coloque os arquivos em{" "}
               <code className="break-all text-foreground">
                 musica/{sistema}/{humor}

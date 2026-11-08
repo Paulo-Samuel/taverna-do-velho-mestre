@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { PRAZO_DECISAO_MS, PRAZO_DISCRETO_MS } from "@/lib/constantes";
 import type { Mensagem } from "@/lib/db";
+import { Icone, TextoComIcones } from "@/components/icones";
 
 // Cartão de uma mensagem de dado: teste de personagem (d20, d100, Fate, PbtA, parada de d10 do Vampiro V5), rolagem livre (mestre ou jogador),
 // mudança de ficha, XP, descanso, iniciativa, fim de combate, cena e diário. Tipo desconhecido cai num cartão genérico com mensagem.texto.
@@ -32,9 +33,13 @@ const CSS = `
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
+/** Crítico e falha crítica continuam marcados no cartão depois do reload: anel e halo, não só a cor do grau. */
+const ANEL_CRITICO = "border-ambar/60 ring-1 ring-ambar/35 shadow-[0_0_24px_-10px_var(--critico)]";
+const ANEL_FALHA = "border-sangue/60 ring-1 ring-sangue/30 shadow-[0_0_24px_-10px_var(--sangue)]";
+
 /** Selo pequeno no canto: manual, secreta, só para você... */
 function Selo({ children, cor = "border-border text-muted" }: { children: ReactNode; cor?: string }) {
-  return <span className={`shrink-0 rounded-full border px-1.5 py-px text-[10px] uppercase tracking-wider ${cor}`}>{children}</span>;
+  return <span className={`shrink-0 rounded-full border px-1.5 py-px text-[11px] uppercase tracking-wider ${cor}`}>{children}</span>;
 }
 
 function Selos({ r }: { r: Dados }) {
@@ -55,7 +60,7 @@ function Cabecalho({ r, mensagem, padrao }: { r: Dados; mensagem: Mensagem; padr
   return (
     <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
       <span className="min-w-0 truncate">
-        {jogador && "🎲 "}
+        {jogador && <Icone nome="dice" />}
         {quem || rotuloOrigem ? <span className="text-foreground/90">{quem || rotuloOrigem}</span> : null}
         {(quem || rotuloOrigem) && (r.motivo || padrao) ? " · " : ""}
         {r.motivo || padrao}
@@ -101,7 +106,7 @@ function Face({
     >
       {valor}
       {explodiu && !descartado && (
-        <span className="absolute -right-1.5 -top-1.5 text-[10px] text-ambar" aria-label="explodiu">
+        <span className="absolute -right-1.5 -top-1.5 text-[11px] text-ambar" aria-label="explodiu">
           ✶
         </span>
       )}
@@ -223,7 +228,7 @@ export function LinhaOposicao({ r, novo = false }: { r: { oposicao?: unknown }; 
       <span className="text-foreground/85">{textoOposicaoCartao(o)}</span>
       {d10 &&
         o.dados.map((v, i) => (
-          <span key={i} className={`grid size-5 place-items-center rounded border text-[10px] tabular-nums ${novo ? "cd-pop" : ""} ${v >= 6 ? "border-foreground/40 text-foreground/85" : "border-border text-muted/70"}`}>
+          <span key={i} className={`grid size-5 place-items-center rounded border text-[11px] tabular-nums ${novo ? "cd-pop" : ""} ${v >= 6 ? "border-foreground/40 text-foreground/85" : "border-border text-muted/70"}`}>
             {v}
           </span>
         ))}
@@ -260,7 +265,7 @@ function TesteD20({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: b
   const mostrarPar = dados.length === 2 && natural !== null;
   const descartado = mostrarPar ? dados.indexOf(natural) : -1;
   return (
-    <Moldura mensagem={mensagem} destaque={critico === "text-ambar" ? "border-ambar/60" : critico ? "border-sangue/60" : "border-border"}>
+    <Moldura mensagem={mensagem} destaque={critico === "text-ambar" || r.grau === "sucesso_critico" ? ANEL_CRITICO : critico || r.grau === "falha_critica" ? ANEL_FALHA : "border-border"}>
       <div className="flex items-center gap-3">
         <IconeD20 valor={natural ?? r.total} cor={critico ?? cor} novo={novo} brilho={Boolean(critico)} />
         <div className="min-w-0 flex-1">
@@ -292,16 +297,16 @@ function TesteD100({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: 
   const nivel = alvo === null ? null : valor <= (extremo ?? 0) ? "Extremo" : valor <= (dificil ?? 0) ? "Difícil" : valor <= alvo ? "Normal" : null;
   const pct = (v: number) => `${Math.max(0, Math.min(100, v))}%`;
   return (
-    <Moldura mensagem={mensagem} destaque={r.grau === "sucesso_critico" ? "border-ambar/60" : r.grau === "falha_critica" ? "border-sangue/60" : "border-border"}>
+    <Moldura mensagem={mensagem} destaque={r.grau === "sucesso_critico" ? ANEL_CRITICO : r.grau === "falha_critica" ? ANEL_FALHA : "border-border"}>
       <div className="flex items-center gap-3">
         <div className={`flex shrink-0 gap-1 ${novo ? "dado-rolando" : ""}`} aria-label={`d100: ${valor}`}>
           <span className="grid h-12 w-10 place-items-center rounded-lg border border-pergaminho/50 bg-surface">
             <span className="titulo text-lg text-pergaminho">{dezena}0</span>
-            <span className="-mt-2 text-[9px] uppercase text-muted">dez.</span>
+            <span className="-mt-2 text-[11px] uppercase text-muted">dez.</span>
           </span>
           <span className="grid h-12 w-9 place-items-center rounded-lg border border-border bg-surface">
             <span className="titulo text-lg">{unidade}</span>
-            <span className="-mt-2 text-[9px] uppercase text-muted">un.</span>
+            <span className="-mt-2 text-[11px] uppercase text-muted">un.</span>
           </span>
         </div>
         <div className="min-w-0 flex-1">
@@ -325,7 +330,7 @@ function TesteD100({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: 
             <div className="absolute inset-y-0 left-0 bg-ambar/80" style={{ width: pct(extremo ?? 0) }} />
             <div className="absolute inset-y-[-2px] w-0.5 bg-foreground shadow-[0_0_6px_white]" style={{ left: `calc(${pct(valor)} - 1px)` }} />
           </div>
-          <div className="mt-1 flex justify-between text-[10px] text-muted">
+          <div className="mt-1 flex justify-between text-[11px] text-muted">
             <span className={nivel === "Extremo" ? "text-ambar" : ""}>Extremo ≤{extremo}</span>
             <span className={nivel === "Difícil" ? "text-musgo" : ""}>Difícil ≤{dificil}</span>
             <span className={nivel === "Normal" ? "text-musgo" : ""}>Normal ≤{alvo}</span>
@@ -448,14 +453,12 @@ function D10({ valor, fome, despertar, i, novo, pequeno }: { valor: number; fome
       </svg>
       <span className={`relative -mt-1 text-xs font-semibold tabular-nums ${dez ? "text-sm" : ""}`}>{valor}</span>
       {fome && dez && !despertar && (
-        <span className="absolute -right-1 -top-1.5 text-[10px] text-sangue" aria-hidden>
+        <span className="absolute -right-1 -top-1.5 text-[11px] text-sangue" aria-hidden>
           ᐯᐯ
         </span>
       )}
       {bestial && (
-        <span className="absolute -right-1 -top-1.5 text-[11px]" aria-hidden>
-          ☠
-        </span>
+        <Icone nome="skull" className="absolute -right-1 -top-1.5 text-[11px]" />
       )}
     </span>
   );
@@ -480,7 +483,7 @@ function TesteVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: b
   const sujo = rotulo === "Crítico Sujo";
   // frenesi que venceu a vontade pinta o cartão como a Falha Bestial
   const bestial = rotulo === "Falha Bestial" || r.grau === "falha_critica" || (r.frenesi && !r.frenesi.resistiu);
-  const destaque = sujo || bestial ? "border-sangue/70" : r.grau === "sucesso_critico" ? "border-ambar/60" : despertar && !r.sucesso ? "border-sangue/40" : "border-border";
+  const destaque = sujo || bestial ? ANEL_FALHA : r.grau === "sucesso_critico" ? ANEL_CRITICO : despertar && !r.sucesso ? "border-sangue/40" : "border-border";
   const tom = sujo || bestial ? "bg-sangue/10" : "bg-surface-2/80";
   const despertares = listaDespertares(r.despertares).filter((x) => !x.previsto);
   const dezes = [...normais, ...fome].filter((v) => v === 10).length;
@@ -495,7 +498,7 @@ function TesteVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: b
         <div className={`grid size-14 shrink-0 place-items-center rounded-full border-2 ${sujo || bestial ? "border-sangue/70" : "border-current"} ${cor} ${novo ? "dado-rolando" : ""} ${novo && (sujo || bestial || r.grau === "sucesso_critico") ? "cd-brilho" : ""}`}>
           <span className="flex flex-col items-center leading-none">
             <span className="titulo text-2xl">{total}</span>
-            <span className="mt-0.5 text-[9px] uppercase tracking-wider text-muted">{despertar ? "ok" : total === 1 ? "sucesso" : "sucessos"}</span>
+            <span className="mt-0.5 text-[11px] uppercase tracking-wider text-muted">{despertar ? "ok" : total === 1 ? "sucesso" : "sucessos"}</span>
           </span>
         </div>
         <div className="min-w-0 flex-1">
@@ -508,7 +511,7 @@ function TesteVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: b
             </span>
           </p>
           {!despertar && (
-            <p className="mt-0.5 text-[11px] text-muted">
+            <p className="mt-0.5 text-xs text-muted">
               {num(r.parada) ?? dados.length} dados{fome.length ? <span className="text-sangue"> · {fome.length} de Fome</span> : null}
               {pares > 0 && <span className="text-ambar"> · {pares} par{pares > 1 ? "es" : ""} de 10</span>}
             </p>
@@ -522,7 +525,7 @@ function TesteVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: b
             // rerrolado com Força de Vontade: contorno âmbar e o valor de antes no título
             <span key={`n${i}`} className="relative rounded-md ring-1 ring-ambar/80 ring-offset-1 ring-offset-transparent" title={`rerrolado com Força de Vontade: ${trocas.get(i)} → ${v}`}>
               <D10 valor={v} fome={false} i={i} novo={novo} />
-              <span className="absolute -left-1 -top-1.5 text-[10px] font-bold text-ambar" aria-hidden>
+              <span className="absolute -left-1 -top-1.5 text-[11px] font-bold text-ambar" aria-hidden>
                 ↻
               </span>
             </span>
@@ -626,7 +629,7 @@ function FacesDespertar({ x, novo, pequeno = false }: { x: DespertarVtm; novo: b
           {r.length > 1 && (
             <span className="inline-flex items-center opacity-40" title="rerrolado (Potência de Sangue)">
               <D10 valor={r[0]} fome despertar i={i++} novo={novo} pequeno={pequeno} />
-              <span className="text-[10px] text-muted" aria-hidden>
+              <span className="text-[11px] text-muted" aria-hidden>
                 ↻
               </span>
             </span>
@@ -650,7 +653,7 @@ export function FaixaDespertar({ x, novo = false, centro = false }: { x: Despert
     <div
       className={`mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border px-2 py-1 text-xs ${pesou ? "border-sangue/45 bg-sangue/10" : "border-sangue/25 bg-sangue/5"} ${centro ? "justify-center" : ""}`}
     >
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-sangue">🩸 Despertar{x.vezes > 1 ? ` ×${x.vezes}` : ""}</span>
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-sangue"><Icone nome="drop" />  Despertar{x.vezes > 1 ? ` ×${x.vezes}` : ""}</span>
       {x.motivo && <span className="text-foreground/85">{x.motivo}</span>}
       <FacesDespertar x={x} novo={novo} pequeno />
       <MedidorFome antes={x.fomeAntes} depois={x.fomeDepois} novo={novo} />
@@ -671,7 +674,7 @@ function SangueVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: 
       <Cabecalho r={r} mensagem={mensagem} />
       <div className="mt-1.5 flex items-center gap-3">
         <span className={`grid size-11 shrink-0 place-items-center rounded-full border-2 border-sangue/60 text-lg ${novo ? "dado-rolando" : ""}`} aria-hidden>
-          {surto ? "⚡" : "🩸"}
+          {surto ? <Icone nome="bolt" /> : <Icone nome="drop" />}
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm">
@@ -687,7 +690,7 @@ function SangueVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: 
         <span className={`titulo max-w-[7.5rem] shrink-0 text-balance text-right text-base leading-tight sm:text-lg ${cor} ${novo ? "cd-pop" : ""}`}>{r.rotuloGrau}</span>
       </div>
       {surto && ganho > 0 && <p className="mt-1.5 text-xs text-[var(--critico)]">+{ganho} dados no próximo teste (fora de disciplinas)</p>}
-      {x.rerrolagem && x.rolagens.some((f) => f.length > 1) && <p className="mt-1 text-[11px] text-muted">↻ rerrolou pela Potência de Sangue</p>}
+      {x.rerrolagem && x.rolagens.some((f) => f.length > 1) && <p className="mt-1 text-xs text-muted">↻ rerrolou pela Potência de Sangue</p>}
       {x.estourou && <p className="mt-1 text-xs text-sangue/90">Fome 5: o sangue não responde e a Besta exige — teste de frenesi de fome.</p>}
     </Moldura>
   );
@@ -760,7 +763,7 @@ function Rolagem({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: bo
             <p className="mt-1 text-sm italic text-muted">O mestre rolou atrás do escudo. Você ouviu os dados, e só.</p>
           ) : r.manual ? (
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm">
-              {r.expressao && <span className="text-[11px] text-muted">{r.expressao}</span>}
+              {r.expressao && <span className="text-xs text-muted">{r.expressao}</span>}
               {valoresManuais.map((v, i) => (fateManual ? <FaceFate key={i} valor={v} i={i} novo={novo} /> : <Face key={i} valor={v} lados={1000} i={i} novo={novo} />))}
               {!valoresManuais.length && <span className="text-xs text-muted">resultado informado na palavra</span>}
             </div>
@@ -772,7 +775,7 @@ function Rolagem({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: bo
           {natural === 20 && <p className="mt-1 text-xs text-ambar">20 natural!</p>}
           {natural === 1 && <p className="mt-1 text-xs text-sangue">1 natural… os deuses riram.</p>}
           {unicoD100 !== null && (
-            <p className="mt-1 text-[11px] text-muted">
+            <p className="mt-1 text-xs text-muted">
               dezena {Math.floor((unicoD100 % 100) / 10)}0 · unidade {unicoD100 % 10}
             </p>
           )}
@@ -784,7 +787,7 @@ function Rolagem({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: bo
           >
             {r.secreta ? "?" : r.total}
           </span>
-          {!r.secreta && r.expressao && !r.manual && <span className="mt-1 text-[10px] text-muted">{r.expressao}</span>}
+          {!r.secreta && r.expressao && !r.manual && <span className="mt-1 text-xs text-muted">{r.expressao}</span>}
         </div>
       </div>
     </Moldura>
@@ -935,7 +938,7 @@ function Iniciativa({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo:
           >
             <span className="w-7 shrink-0 text-right font-semibold tabular-nums text-foreground">{c.iniciativa ?? "—"}</span>
             <span className={`min-w-0 flex-1 truncate ${c.aliado ? "text-musgo" : "text-sangue"}`}>{c.nome}</span>
-            {c.detalhe && <span className="hidden shrink-0 text-[11px] text-muted sm:inline">{c.detalhe}</span>}
+            {c.detalhe && <span className="hidden shrink-0 text-xs text-muted sm:inline">{c.detalhe}</span>}
           </li>
         ))}
       </ol>
@@ -948,7 +951,7 @@ function Nota({ icone, rotulo, texto }: { icone: string; rotulo: string; texto: 
   return (
     <div className="surgir mx-auto flex w-full max-w-lg items-baseline gap-2 rounded-lg border border-dashed border-border/80 px-3 py-1.5 text-xs text-muted">
       <span className="text-ambar" aria-hidden>
-        {icone}
+        <TextoComIcones texto={icone} />
       </span>
       <span className="shrink-0 uppercase tracking-wider">{rotulo}</span>
       <span className="min-w-0 flex-1 text-foreground/80">{texto}</span>
@@ -1207,7 +1210,7 @@ export function DecisaoDoTeste({
           <div className="h-full bg-ambar/80 transition-[width] duration-300 ease-linear" style={{ width: `${Math.min(100, (resta / prazo) * 100)}%` }} />
         </div>
       )}
-      <p className="mt-1 text-[11px] text-muted">
+      <p className="mt-1 text-xs text-muted">
         {decisao.ate === null
           ? "a mesa espera você decidir"
           : resta === null

@@ -101,9 +101,9 @@ function classeValor(valor: string) {
 // Rótulo em versalete ocupa até duas linhas; palavras longas ("Manipulação", "Inteligência") perdem o espaçamento largo
 function classeRotulo(rotulo: string) {
   const palavra = maiorPalavra(rotulo);
-  if (palavra <= 8) return "text-[10px] tracking-wider";
-  if (palavra <= 11) return "text-[10px] tracking-normal";
-  return "text-[9px] tracking-normal";
+  if (palavra <= 8) return "text-[11px] tracking-wider";
+  if (palavra <= 11) return "text-[11px] tracking-normal";
+  return "text-[11px] tracking-normal";
 }
 
 /** Valor comprido ("Força + Briga", "13ª Cria (recém-abraçado)") ganha duas colunas em vez de espremer. */
@@ -125,7 +125,7 @@ function Grade({ itens, ajuste }: Extract<BlocoFicha, { tipo: "grade" }> & { aju
           >
             <p className={`line-clamp-2 break-words uppercase leading-tight text-muted ${classeRotulo(i.rotulo)}`}>{i.rotulo}</p>
             <p className={`titulo break-words leading-tight tracking-normal! ${classeValor(valor)} ${v?.pendente ? "text-ambar" : "text-pergaminho"}`}>{valor}</p>
-            {i.detalhe && <p className="line-clamp-2 break-words text-[11px] leading-tight text-ambar">{i.detalhe}</p>}
+            {i.detalhe && <p className="line-clamp-2 break-words text-xs leading-tight text-ambar">{i.detalhe}</p>}
             {alvo && ajuste && (
               <BotoesMarcador ajuste={ajuste} alvo={alvo} compacto classe="pointer-events-none absolute inset-x-0.5 bottom-1 flex justify-between">
                 <span aria-hidden />
@@ -220,11 +220,11 @@ function Secao({ titulo, contagem, aberta, children }: { titulo: string; contage
   return (
     <details open={aberta} className="group border-t border-border/70 pt-2">
       <summary className="flex cursor-pointer list-none items-center gap-2 py-1 text-xs uppercase tracking-wider text-muted hover:text-ambar [&::-webkit-details-marker]:hidden">
-        <span className="text-[10px] transition-transform group-open:rotate-90" aria-hidden>
+        <span className="text-[11px] transition-transform group-open:rotate-90" aria-hidden>
           ▶
         </span>
         <span className="flex-1">{titulo}</span>
-        {contagem !== undefined && <span className="rounded-full bg-surface-2 px-1.5 text-[10px] tabular-nums">{contagem}</span>}
+        {contagem !== undefined && <span className="rounded-full bg-surface-2 px-1.5 text-[11px] tabular-nums">{contagem}</span>}
       </summary>
       <div className="pb-2 pt-1.5">{children}</div>
     </details>
@@ -326,7 +326,7 @@ export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste
         </div>
         {mostrarXp && (
           <div className="mt-2">
-            <div className="mb-0.5 flex items-center justify-between gap-2 text-[11px] text-muted">
+            <div className="mb-0.5 flex items-center justify-between gap-2 text-xs text-muted">
               <span>XP {ficha.xp.toLocaleString("pt-BR")}</span>
               {acaoXp}
               {proximo !== null &&
@@ -348,7 +348,7 @@ export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste
       {acaoRegra}
       {ajuste && <AvisoAjuste ajuste={ajuste} />}
       {ajuste?.editando && (
-        <p className="text-[11px] leading-snug text-muted">
+        <p className="text-xs leading-snug text-muted">
           Modo de ajuste: o mestre esqueceu alguma coisa? Corrija aqui. Cada mudança vira uma linha no chat, para ninguém dizer que foi milagre.
           {sistema.id === "vtm5" && " Manchas só sobem à mão (quem limpa é o Remorso); a Humanidade pede confirmação."}
         </p>

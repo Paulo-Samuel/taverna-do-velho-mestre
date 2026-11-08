@@ -7,6 +7,7 @@ import { obterSistema } from "@/lib/sistemas";
 import { dadosDoTema, temaDoSistema } from "@/lib/temas";
 import { excluirCampanhaAcao } from "./acoes-campanha";
 import { BotaoExcluir } from "./botao-excluir";
+import { Icone } from "@/components/icones";
 
 export const dynamic = "force-dynamic";
 
@@ -79,8 +80,7 @@ function Etiquetas({ c }: { c: CampanhaListada }) {
         </span>
       )}
       {c.config.pin && (
-        <span className="etiqueta" title="Quem entra pela rede precisa do PIN">
-          🔒 PIN
+        <span className="etiqueta" title="Quem entra pela rede precisa do PIN"><Icone nome="lock" />  PIN
         </span>
       )}
     </div>
@@ -130,7 +130,7 @@ function Continuar({ c }: { c: CampanhaListada }) {
     <section
       aria-labelledby="continuar-titulo"
       data-tema={temaDoSistema(c.sistema.id)}
-      className="cartao cartao-tema relative overflow-hidden border-ambar-forte/60 p-5 sm:p-6"
+      className="cartao cartao-tema relative overflow-hidden border-2 border-ambar/70 p-5 shadow-[0_0_50px_-24px_var(--ambar)] sm:p-6"
     >
       {/* brilho de vela atrás do cartão */}
       <div aria-hidden className="pointer-events-none absolute -top-16 -right-16 size-48 rounded-full bg-ambar/10 blur-3xl" />
@@ -157,7 +157,7 @@ function Continuar({ c }: { c: CampanhaListada }) {
           Ajustes
         </Link>
         <Link href={`/mesa/${c.id}/livro`} className="inline-flex min-h-11 items-center gap-1 px-2 text-sm text-muted underline-offset-4 hover:text-ambar hover:underline" title="Livro da campanha: reler, imprimir ou baixar">
-          <span aria-hidden>📜</span> Livro
+          <Icone nome="scroll" /> Livro
         </Link>
       </div>
     </section>
@@ -211,11 +211,11 @@ function AventurasProntas() {
                 className="cartao cartao-tema group flex h-full flex-col p-4 transition hover:border-ambar"
               >
                 <span className="etiqueta w-fit text-ambar-forte">
-                  <span aria-hidden>{sistema === "historia" ? "📜" : tema.ornamento}</span> {sistema === "historia" ? "Modo história" : obterSistema(sistema).nomeCurto}
+                  <span aria-hidden>{sistema === "historia" ? <Icone nome="scroll" /> : tema.ornamento}</span> {sistema === "historia" ? "Modo história" : obterSistema(sistema).nomeCurto}
                 </span>
                 <span className="titulo mt-2 text-lg leading-tight text-pergaminho group-hover:text-ambar">{a.titulo}</span>
                 <span className="mt-1 line-clamp-3 text-xs leading-snug text-muted">{a.chamada}</span>
-                <span className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-2 text-[11px] text-muted/80">
+                <span className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-2 text-xs text-muted/80">
                   <span>{a.duracao}</span>
                   {a.soloOk && (
                     <span className="rounded-full border border-ambar/50 px-1.5 leading-4 text-ambar-forte" title="Roda com um personagem só: um aliado do mestre divide as cenas">
@@ -223,7 +223,7 @@ function AventurasProntas() {
                     </span>
                   )}
                 </span>
-                {a.recomendado && <span className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted/70">{a.recomendado}</span>}
+                {a.recomendado && <span className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted/70">{a.recomendado}</span>}
               </Link>
             </li>
           );
@@ -250,14 +250,16 @@ export default function Inicio() {
         ? "Cada turno gasta créditos da API."
         : "Sai do limite do seu plano do Claude, sem cobrança extra.";
   const recente = campanhas[0];
+  // a campanha em destaque não se repete na grade: o palco de cima já é ela
+  const outras = recente ? campanhas.slice(1) : campanhas;
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
       <section className={`grid gap-6 md:grid-cols-[1.25fr_1fr] md:items-center ${recente ? "mb-10" : "mb-12"}`}>
         <div>
-          <h1 className="titulo text-4xl leading-tight text-pergaminho sm:text-5xl">
-            Puxe um banco. <br />
-            <span className="text-ambar">O mestre já está bêbado.</span>
+          <h1 className="titulo leading-none">
+            <span className="block text-3xl text-pergaminho sm:text-4xl">Puxe um banco.</span>
+            <span className="mt-1.5 block text-4xl tracking-tight text-ambar sm:mt-2 sm:text-6xl">O mestre já está bêbado.</span>
           </h1>
           {/* quem já tem campanha não precisa do discurso de boas-vindas no celular */}
           <p className={`mt-4 max-w-xl text-lg text-muted ${recente ? "hidden sm:block" : ""}`}>
@@ -298,7 +300,8 @@ export default function Inicio() {
 
       <div className="mb-4 flex items-end justify-between gap-3">
         <h2 className="titulo text-2xl text-pergaminho">
-          Campanhas {campanhas.length > 1 && <span className="text-base text-muted">({campanhas.length})</span>}
+          {recente && outras.length > 0 ? "Outras campanhas" : "Campanhas"}{" "}
+          {outras.length > 1 && <span className="text-base text-muted">({outras.length})</span>}
         </h2>
         {campanhas.length > 0 && (
           <Link href="/nova" className="btn-borda min-h-10 px-3 py-1.5">
@@ -310,8 +313,7 @@ export default function Inicio() {
       {campanhas.length === 0 ? (
         <div className="cartao relative overflow-hidden px-6 py-10 text-center">
           <div aria-hidden className="pointer-events-none absolute inset-x-0 -bottom-24 mx-auto size-64 rounded-full bg-ambar/10 blur-3xl" />
-          <p className="text-5xl" aria-hidden>
-            🕯️
+          <p className="text-5xl" aria-hidden><Icone nome="candle" /> 
           </p>
           <p className="titulo mt-3 text-2xl text-pergaminho">A taverna está vazia</p>
           <p className="mx-auto mt-2 max-w-md text-muted">
@@ -330,9 +332,17 @@ export default function Inicio() {
             Vampiro…) e preencher a ficha inteira.
           </p>
         </div>
+      ) : outras.length === 0 ? (
+        <p className="cartao px-5 py-6 text-center text-sm text-muted">
+          Só essa campanha por enquanto. Continue nela ou{" "}
+          <Link href="/nova" className="text-ambar underline-offset-4 hover:underline">
+            comece outra
+          </Link>
+          .
+        </p>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {campanhas.map((c) => (
+          {outras.map((c) => (
             <li key={c.id} data-tema={temaDoSistema(c.sistema.id)} className="cartao cartao-tema flex flex-col p-5">
               <Etiquetas c={c} />
               <Link href={`/mesa/${c.id}`} className="group mt-2 rounded-sm">
@@ -373,7 +383,7 @@ export default function Inicio() {
                   className="ml-auto inline-flex min-h-8 items-center gap-1 rounded-sm hover:text-ambar"
                   title="Livro da campanha: reler, imprimir ou baixar"
                 >
-                  <span aria-hidden>📜</span> Livro
+                  <Icone nome="scroll" /> Livro
                 </Link>
                 <form action={excluirCampanhaAcao}>
                   <input type="hidden" name="id" value={c.id} />

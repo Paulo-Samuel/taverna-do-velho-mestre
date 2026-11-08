@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MAX_TEXTO_FATO } from "./limites";
 import { ancoraDe, type Ancora, type ControleFatos } from "./use-fatos";
+import { Icone } from "@/components/icones";
 
 // "📌 Fixar" flutuante: ao selecionar um trecho da narração (qualquer bloco com data-fixavel, nos dois modos de leitura;
 // no celular, a seleção por toque longo), aparece o botão; ele abre o mini-popover para editar e confirmar.
@@ -85,7 +86,7 @@ function Popover({ controle }: { controle: ControleFatos }) {
       data-popover-fato
     >
       <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">
-        <span aria-hidden>📌</span> Fixar para o mestre nunca esquecer
+        <Icone nome="pin" /> Fixar para o mestre nunca esquecer
       </p>
       <textarea
         value={texto}
@@ -115,8 +116,7 @@ function Popover({ controle }: { controle: ControleFatos }) {
         <button type="button" className="ml-auto min-h-9 px-2 text-xs text-muted hover:text-foreground" onClick={fecharProposta}>
           Cancelar
         </button>
-        <button type="button" className="btn-ambar min-h-9 px-3 py-1.5 text-xs" disabled={!texto.trim() || enviando} onClick={() => void confirmar()}>
-          📌 Fixar
+        <button type="button" className="btn-ambar min-h-9 px-3 py-1.5 text-xs" disabled={!texto.trim() || enviando} onClick={() => void confirmar()}><Icone nome="pin" />  Fixar
         </button>
       </div>
     </div>
@@ -175,7 +175,7 @@ export function FixarSelecao({ controle }: { controle: ControleFatos }) {
           title="Fixar este trecho: o mestre nunca mais esquece"
           data-fixar-selecao
         >
-          <span aria-hidden>📌</span> Fixar
+          <Icone nome="pin" /> Fixar
         </button>
       )}
       {aberto && <Popover key={`${controle.proposta!.texto}-${controle.proposta!.ancora.x}`} controle={controle} />}
@@ -197,7 +197,7 @@ export function BotaoFixar({ texto, controle, rotulo }: { texto: string; control
       title="Fixar um resumo desta entrada (o mestre nunca esquece)"
       data-botao-fixar
     >
-      <span aria-hidden>📌</span>
+      <Icone nome="pin" />
     </button>
   );
 }

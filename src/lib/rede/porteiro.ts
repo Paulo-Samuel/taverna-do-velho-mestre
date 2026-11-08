@@ -45,7 +45,7 @@ body{margin:0;min-height:100dvh;display:grid;place-items:center;background:#120d
 main{max-width:26rem;border:1px solid #3a2c22;border-radius:12px;background:#1c1511;padding:24px;text-align:center}
 h1{color:#e0a24a;font-size:1.4rem;margin:0 0 .75rem}p{margin:.5rem 0;color:#a39580}strong{color:#f1e4c4}
 </style></head><body><main>
-<h1>🍺 Porta dos fundos trancada</h1>
+<h1><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.15em;margin-right:6px"><path d="M4 8h12v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z"/><path d="M16 10h2a2.5 2.5 0 0 1 0 5h-2"/><path d="M5.4 5.6c1 .8 2 .8 3 0s2-.8 3 0 2 .8 3 0"/></svg>Porta dos fundos trancada</h1>
 <p>Daqui do seu aparelho só dá para entrar <strong>numa mesa</strong>.</p>
 <p>Peça a quem está na máquina da taverna o botão <strong>Convidar</strong>: tem o link e o QR code da mesa.</p>
 </main></body></html>`;

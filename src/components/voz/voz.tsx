@@ -15,6 +15,7 @@ import {
   vozesPt,
 } from "@/lib/cliente/voz";
 import type { Mensagem } from "@/lib/db";
+import { Icone, TextoComIcones } from "@/components/icones";
 
 // Narração em voz alta nas duas mesas: o botão do cabeçalho (liga a leitura automática, popover de voz e velocidade),
 // o botãozinho "ouvir" em cada narração e o gancho que lê as narrações novas assim que terminam de chegar.
@@ -143,8 +144,8 @@ export function BotaoVoz({
               {prefs.auto ? "Desligar" : "Ligar"}
             </button>
           </div>
-          <p className="mb-3 text-[11px] leading-snug text-muted">
-            {prefs.auto ? "Cada narração nova é lida assim que o mestre termina de escrever." : "Desligada. Dá para ouvir uma narração só pelo botão 🔊 ao lado dela."}
+          <p className="mb-3 text-xs leading-snug text-muted">
+            <TextoComIcones texto={prefs.auto ? "Cada narração nova é lida assim que o mestre termina de escrever." : "Desligada. Dá para ouvir uma narração só pelo botão 🔊 ao lado dela."} />
           </p>
           <label className="block text-xs text-muted">
             Voz
@@ -276,7 +277,7 @@ export function Ouvir({ id, texto, className = "", fixo = false }: { id: string;
             : "text-muted/70 hover:text-ambar sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
       } ${className}`}
     >
-      <span aria-hidden>{este ? "■" : "🔊"}</span>
+      <span aria-hidden>{este ? "■" : <Icone nome="sound" />}</span>
       <span className={fixo ? "max-sm:sr-only" : ""}>{este ? "parar" : "ouvir"}</span>
     </button>
   );

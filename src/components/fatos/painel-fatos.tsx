@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Fato } from "@/lib/db";
 import { MAX_CARACTERES_NO_PROMPT, MAX_FATOS_NO_PROMPT, MAX_TEXTO_FATO, quantosEntram } from "./limites";
 import type { ControleFatos } from "./use-fatos";
+import { Icone } from "@/components/icones";
 
 // Lista dos fatos fixados (aba "📌" da mesa avançada e do códex): fixar com Enter, editar, remover, reordenar (↑↓ ou arrastar).
 // Os que passam do limite do prompt ficam esmaecidos: guardados, mas o mestre não lê.
@@ -110,7 +111,7 @@ function ItemFato({
       ) : (
         <p className="min-w-0 flex-1 py-1 leading-snug break-words text-foreground/90" title={f.autor ? `Fixado por ${f.autor}` : undefined}>
           {f.texto}
-          {fora && <span className="ml-1.5 whitespace-nowrap text-[10px] uppercase tracking-wide text-sangue">fora do prompt</span>}
+          {fora && <span className="ml-1.5 whitespace-nowrap text-[11px] uppercase tracking-wide text-sangue">fora do prompt</span>}
         </p>
       )}
       {/* com mouse, os botões aparecem por cima ao passar (o texto fica com a largura toda); no toque, sempre à vista */}
@@ -163,8 +164,8 @@ export function PainelFatos({ controle }: { controle: ControleFatos }) {
     <div className="space-y-3 text-sm">
       <div>
         <h3 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
-          <span aria-hidden>📌</span> Fatos fixados
-          {fatos.length > 0 && <span className="rounded-full bg-ambar/20 px-1.5 text-[10px] leading-4 tracking-normal text-ambar">{fatos.length}</span>}
+          <Icone nome="pin" /> Fatos fixados
+          {fatos.length > 0 && <span className="rounded-full bg-ambar/20 px-1.5 text-[11px] leading-4 tracking-normal text-ambar">{fatos.length}</span>}
         </h3>
         <p className="mt-1 text-xs leading-relaxed text-muted">
           O mestre lê isto em todo turno e não pode contrariar. Selecione um trecho da narração para fixar, ou escreva aqui.
@@ -186,8 +187,7 @@ export function PainelFatos({ controle }: { controle: ControleFatos }) {
           maxLength={MAX_TEXTO_FATO}
           onChange={(e) => setNovo(e.target.value)}
         />
-        <button className="btn-ambar shrink-0 px-3 py-1.5 text-xs" disabled={!novo.trim() || enviando} title="Fixar (Enter)">
-          📌 Fixar
+        <button className="btn-ambar shrink-0 px-3 py-1.5 text-xs" disabled={!novo.trim() || enviando} title="Fixar (Enter)"><Icone nome="pin" />  Fixar
         </button>
       </form>
       {novo.length > MAX_TEXTO_FATO - 40 && (

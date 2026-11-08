@@ -15,6 +15,7 @@ import { corDoNome } from "./cores";
 import { fonteGotica } from "./fonte-gotica";
 import { Retrato, RetratoSVG } from "./retrato";
 import { retratoDaEntrada } from "./retrato/dados";
+import { Icone, TextoComIcones } from "@/components/icones";
 
 // Códex do modo história: gaveta recolhível à esquerda (tela cheia no celular) com o personagem, as missões,
 // as pessoas e os lugares que o mestre anotou no diário, o grupo e os fatos fixados (📌). Tecla C abre e fecha; Esc fecha.
@@ -103,7 +104,7 @@ function Bloco({ b, ajuste }: { b: BlocoFicha; ajuste?: AjusteFicha }) {
         <div className="grid grid-cols-3 gap-1.5">
           {b.itens.map((x, i) => (
             <div key={`${x.rotulo}-${i}`} className="rounded-md border border-border/70 bg-background/40 px-2 py-1.5 text-center" title={x.detalhe}>
-              <p className="text-[10px] uppercase tracking-wider text-muted">{x.rotulo}</p>
+              <p className="text-[11px] uppercase tracking-wider text-muted">{x.rotulo}</p>
               <p className="tabular-nums text-pergaminho">{x.valor}</p>
             </div>
           ))}
@@ -225,7 +226,7 @@ const STATUS: Record<string, [string, string]> = {
 function Selo({ status }: { status: string }) {
   if (!status) return null;
   const [rotulo, cor] = STATUS[status] ?? [status, "border-border text-muted"];
-  return <span className={`shrink-0 rounded-full border px-2 py-px text-[10px] uppercase tracking-wider ${cor}`}>{rotulo}</span>;
+  return <span className={`shrink-0 rounded-full border px-2 py-px text-[11px] uppercase tracking-wider ${cor}`}>{rotulo}</span>;
 }
 
 const texto = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
@@ -339,7 +340,7 @@ function ListaSimples({ entradas, icone, fatos }: { entradas: EntradaDiario[]; i
           <div className="flex items-start justify-between gap-2">
             <p className="font-semibold text-pergaminho">
               <span className="mr-1.5 text-ambar/70" aria-hidden>
-                {icone}
+                <TextoComIcones texto={icone} />
               </span>
               {e.titulo}
             </p>
@@ -526,9 +527,9 @@ export function Codex({
               aba === "fatos" ? "border-ambar bg-ambar/15 text-ambar" : "border-border text-muted hover:border-ambar/60 hover:text-ambar"
             }`}
           >
-            <span aria-hidden>📌</span> Fatos
+            <Icone nome="pin" /> Fatos
             {fatos.fatos.length > 0 && (
-              <span className="grid min-w-4 place-items-center rounded-full bg-ambar/20 px-1 text-[10px] leading-4 text-ambar">{fatos.fatos.length}</span>
+              <span className="grid min-w-4 place-items-center rounded-full bg-ambar/20 px-1 text-[11px] leading-4 text-ambar">{fatos.fatos.length}</span>
             )}
           </button>
           <button
@@ -558,11 +559,11 @@ export function Codex({
             >
               <span className="truncate">{rotulo}</span>
               {id === "missoes" && missoesAbertas > 0 && (
-                <span className="grid min-w-4 shrink-0 place-items-center rounded-full bg-ambar/20 px-1 text-[10px] leading-4 text-ambar" aria-label={`${missoesAbertas} em andamento`}>
+                <span className="grid min-w-4 shrink-0 place-items-center rounded-full bg-ambar/20 px-1 text-[11px] leading-4 text-ambar" aria-label={`${missoesAbertas} em andamento`}>
                   {missoesAbertas}
                 </span>
               )}
-              {id === "grupo" && mesa.personagens.length > 1 && <span className="shrink-0 text-[10px] text-muted">{mesa.personagens.length}</span>}
+              {id === "grupo" && mesa.personagens.length > 1 && <span className="shrink-0 text-[11px] text-muted">{mesa.personagens.length}</span>}
               {temNovidade(id) && (
                 <span className="size-1.5 shrink-0 rounded-full bg-ambar" data-novidade-aba={id} title="Anotação nova do mestre" aria-label="novidade" />
               )}
@@ -593,7 +594,7 @@ export function Codex({
             className="flex min-h-10 shrink-0 items-center gap-1 rounded-md px-2 hover:bg-surface-2 hover:text-ambar"
             title="Livro da campanha: a história inteira, para reler, imprimir ou baixar"
           >
-            <span aria-hidden>📜</span> Livro
+            <Icone nome="scroll" /> Livro
           </Link>
           <Link href={`/mesa/${mesa.campanha.id}/ajustes`} className="flex min-h-10 shrink-0 items-center gap-1 rounded-md px-2 hover:bg-surface-2 hover:text-ambar">
             <span aria-hidden>⚙</span> Ajustes da mesa
@@ -610,7 +611,7 @@ export function Codex({
               className="flex min-h-11 w-full items-center gap-2 rounded-md border border-ambar/50 bg-ambar/10 px-3 text-left text-sm text-ambar hover:bg-ambar/20 focus-visible:outline-2 focus-visible:outline-ambar"
               data-encerrar-painel
             >
-              <span aria-hidden>🌙</span>
+              <Icone nome="moon" />
               <span className="font-semibold">Encerrar a noite</span>
               <span className="min-w-0 truncate text-xs text-muted">· XP, Remorso e marcador no livro</span>
             </button>

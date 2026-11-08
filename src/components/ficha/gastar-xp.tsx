@@ -260,7 +260,7 @@ function PainelGastarXp({ personagem, aoFechar }: { personagem: PersonagemVisive
                   />
                 </div>
                 {poderesDaFicha(ficha.extras, confirmacao.poder.disciplina).length > 0 && (
-                  <p className="text-[11px] text-muted">Já conhece: {poderesDaFicha(ficha.extras, confirmacao.poder.disciplina).join(", ")}</p>
+                  <p className="text-xs text-muted">Já conhece: {poderesDaFicha(ficha.extras, confirmacao.poder.disciplina).join(", ")}</p>
                 )}
               </fieldset>
             )}
@@ -322,7 +322,7 @@ function ConteudoSecao({ secao, xp, desligado, aoComprar }: { secao: SecaoXp; xp
       {secao.ajuda && <p className="mb-2 text-xs leading-snug text-muted">{secao.ajuda}</p>}
       {grupos.map((g, n) => (
         <div key={`${g.titulo ?? ""}-${n}`} className="mb-2">
-          {g.titulo && <p className="mb-0.5 mt-2 text-[10px] uppercase tracking-wider text-muted">{g.titulo}</p>}
+          {g.titulo && <p className="mb-0.5 mt-2 text-[11px] uppercase tracking-wider text-muted">{g.titulo}</p>}
           <ul className="divide-y divide-border/50">
             {g.itens.map((i) => (
               <LinhaItem key={`${i.tipo}:${i.alvo}`} item={i} xp={xp} desligado={desligado} aoComprar={aoComprar} />
@@ -380,7 +380,7 @@ function LinhaItem({ item: i, xp, desligado, aoComprar }: { item: ItemXp; xp: nu
         </span>
       </div>
       {/* no celular não há tooltip: o motivo de bloqueio que não é "falta XP" aparece por escrito */}
-      {i.custo === null && !maximo && i.motivo && <p className="mt-0.5 text-[11px] leading-snug text-muted">{i.motivo}</p>}
+      {i.custo === null && !maximo && i.motivo && <p className="mt-0.5 text-xs leading-snug text-muted">{i.motivo}</p>}
       {falta > 0 && <p className="sr-only">Faltam {falta} XP.</p>}
     </li>
   );
@@ -449,7 +449,7 @@ function FormNovo({ novo, xp, desligado, aoComprar }: { novo: NovoXp; xp: number
           Comprar ({custo} XP)
         </button>
       </div>
-      {novo.tipo === "especialidade" && !novo.pericias.some((p) => p.pode) && <p className="text-[11px] text-muted">Nenhuma perícia com espaço: cada ponto comporta uma especialidade.</p>}
+      {novo.tipo === "especialidade" && !novo.pericias.some((p) => p.pode) && <p className="text-xs text-muted">Nenhuma perícia com espaço: cada ponto comporta uma especialidade.</p>}
     </form>
   );
 }

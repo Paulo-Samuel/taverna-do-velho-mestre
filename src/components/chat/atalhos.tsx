@@ -147,7 +147,7 @@ export function AjudaAtalhos({ aberta, aoFechar, extras = [] }: { aberta: boolea
           </div>
         ))}
       </dl>
-      <p className="mt-3 text-[11px] text-muted">Valem quando você não está digitando. O mestre não tem atalho para ser gentil.</p>
+      <p className="mt-3 text-xs text-muted">Valem quando você não está digitando. O mestre não tem atalho para ser gentil.</p>
     </div>
   );
 }

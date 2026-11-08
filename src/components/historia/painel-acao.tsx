@@ -5,6 +5,7 @@ import { SugestoesCompactas } from "@/components/chat/sugestoes-compactas";
 import { foraDoJogo } from "@/components/leitor/cena";
 import { BotaoPerguntar } from "@/components/leitor/pecas";
 import type { SugestaoAcao } from "@/lib/sistemas/tipos";
+import { Icone } from "@/components/icones";
 
 // Rodapé da mesa do modo história, enxuto para o palco ganhar altura: as ações que o mestre sugeriu (linhas baixas no desktop,
 // uma linha que abre no celular) e o campo "O que fulano faz?", de uma linha que cresce, com o retrato do personagem ao lado.
@@ -107,7 +108,7 @@ export function PainelAcao({
                 className="surgir group flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-ambar/60 bg-ambar/10 px-3 py-1.5 text-left text-sm shadow-[0_0_24px_-12px_var(--ambar)] transition hover:border-ambar hover:bg-ambar/15 focus-visible:border-ambar focus-visible:outline-none"
               >
                 <span className="min-w-0 text-ambar">
-                  <span aria-hidden>🎲 </span>
+                  <Icone nome="dice" />
                   {bloqueio}
                 </span>
                 <span className="shrink-0 rounded-md bg-ambar px-3 py-1.5 text-xs font-semibold text-[#1a120c] transition group-hover:bg-[#f0b762]">
@@ -116,7 +117,7 @@ export function PainelAcao({
               </button>
             ) : (
               <div className="flex min-h-11 w-full items-center gap-3 rounded-lg border border-ambar/50 bg-ambar/10 px-3 py-1.5 text-sm text-ambar" role="status">
-                <span aria-hidden>🎲</span> {bloqueio}
+                <Icone nome="dice" /> {bloqueio}
               </div>
             )}
           </div>

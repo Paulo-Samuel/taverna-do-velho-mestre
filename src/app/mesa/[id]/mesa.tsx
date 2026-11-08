@@ -40,6 +40,7 @@ import type { Mensagem } from "@/lib/db";
 import type { EstadoMesa } from "@/lib/mesa";
 import { AvisoDarkPack } from "@/components/aviso-dark-pack";
 import { temaDoSistema } from "@/lib/temas";
+import { Icone } from "@/components/icones";
 
 // Casca da mesa de jogo: chat com o mestre, campo de ação e painéis laterais.
 // Cada painel é um componente próprio em src/components/*, que recebe o estado vivo da mesa.
@@ -111,7 +112,7 @@ function Pontinhos() {
   );
 }
 
-type Aba = "ficha" | "grupo" | "cena" | "diario" | "fatos";
+type Aba = "ficha" | "grupo" | "cena" | "anotacoes";
 
 /** Abas Ficha/Grupo/Cena/Diário/📌 Fatos: a barra de abas fica parada e o conteúdo rola sozinho. */
 function Lateral({
@@ -130,14 +131,14 @@ function Lateral({
   aoRemorso: (mensagemId: number | null) => void;
 }) {
   const [aba, setAba] = useState<Aba>("ficha");
+  const [anotacao, setAnotacao] = useState<"diario" | "fatos">("diario");
   const urgente = remorsoUrgente(mesa);
   const ativo = mesa.personagens.find((p) => p.id === mesa.eu.personagemId) ?? mesa.personagens[0] ?? null;
-  const abas: [Aba, string][] = [
+  const abas: [Aba, ReactNode][] = [
     ["ficha", "Ficha"],
     ["grupo", `Grupo (${mesa.personagens.length})`],
     ["cena", mesa.cena.combate?.ativo ? "⚔ Cena" : "Cena"],
-    ["diario", "Diário"],
-    ["fatos", `📌 ${fatos.fatos.length}`],
+    ["anotacoes", "Anotações"],
   ];
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -149,8 +150,6 @@ function Lateral({
             role="tab"
             aria-selected={aba === id}
             onClick={() => setAba(id)}
-            aria-label={id === "fatos" ? `Fatos fixados (${fatos.fatos.length})` : undefined}
-            title={id === "fatos" ? "Fatos fixados: o que o mestre nunca pode esquecer" : undefined}
             className={`-mb-px min-h-10 border-b-2 px-2 focus-visible:text-ambar focus-visible:outline-none ${aba === id ? "border-ambar text-ambar" : "border-transparent text-muted hover:text-foreground"}`}
           >
             {rotulo}
@@ -166,15 +165,32 @@ function Lateral({
           ))}
         {aba === "grupo" && <PainelGrupo mesa={mesa} acoes={acoes} />}
         {aba === "cena" && <PainelCena cena={mesa.cena} sistema={mesa.sistema} />}
-        {aba === "diario" && <Diario entradas={mesa.diario} fatos={fatos} />}
-        {aba === "fatos" && <PainelFatos controle={fatos} />}
+        {aba === "anotacoes" && (
+          <div className="flex min-h-0 flex-col">
+            <div className="mb-3 flex shrink-0 gap-1 self-start rounded-md border border-border p-0.5 text-xs" role="tablist" aria-label="Anotações da mesa">
+              {(["diario", "fatos"] as const).map((qual) => (
+                <button
+                  key={qual}
+                  type="button"
+                  role="tab"
+                  aria-selected={anotacao === qual}
+                  onClick={() => setAnotacao(qual)}
+                  className={`rounded px-2.5 py-1.5 transition ${anotacao === qual ? "bg-ambar/15 text-ambar" : "text-muted hover:text-foreground"}`}
+                >
+                  {qual === "diario" ? "Diário" : `Fatos fixados (${fatos.fatos.length})`}
+                </button>
+              ))}
+            </div>
+            {anotacao === "diario" ? <Diario entradas={mesa.diario} fatos={fatos} /> : <PainelFatos controle={fatos} />}
+          </div>
+        )}
         <div className="mt-5 border-t border-border pt-3 text-xs text-muted">
           <p>
             {mesa.sistema.nomeCurto} · Mestre: {mesa.provedor}
           </p>
           <p className="mt-1 flex flex-wrap items-center gap-x-3">
             <Link href={`/mesa/${mesa.campanha.id}/livro`} className="inline-flex min-h-9 items-center gap-1 text-ambar underline-offset-4 hover:underline">
-              <span aria-hidden>📜</span> Livro da campanha
+              <Icone nome="scroll" /> Livro da campanha
             </Link>
             {/* no celular a engrenagem sai do cabeçalho (o título precisa do espaço) e mora aqui */}
             <Link href={`/mesa/${mesa.campanha.id}/ajustes`} className="inline-flex min-h-9 items-center gap-1 underline-offset-4 hover:text-ambar hover:underline sm:hidden">
@@ -201,7 +217,7 @@ function Lateral({
             </span>
             <span className="min-w-0">
               <span className="block text-sm font-semibold text-foreground">Encerrar a noite</span>
-              <span className="block text-[11px] leading-snug">{urgente ? "Há Remorso para rolar · XP e marcador no livro" : mesa.sistema.id === "vtm5" ? "XP, Remorso e marcador no livro" : "XP e marcador no livro"}</span>
+              <span className="block text-xs leading-snug">{urgente ? "Há Remorso para rolar · XP e marcador no livro" : mesa.sistema.id === "vtm5" ? "XP, Remorso e marcador no livro" : "XP e marcador no livro"}</span>
             </span>
           </button>
           {mesa.sistema.id === "vtm5" && (
@@ -1008,7 +1024,7 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
                   data-ir-para-dado
                 >
                   <span className="min-w-0 text-ambar">
-                    <span aria-hidden>🎲 </span>
+                    <Icone nome="dice" />
                     Role o dado primeiro: o mestre não aceita fiado.
                   </span>
                   <span className="shrink-0 rounded-md bg-ambar px-3 py-1.5 text-xs font-semibold text-[#1a120c] transition group-hover:bg-[#f0b762]">Ir para o dado ↑</span>

@@ -266,7 +266,7 @@ export function livroEmMarkdown(l: Livro): string {
     for (const b of c.blocos) {
       if (b.tipo === "narracao") linhas.push(b.texto.replace(/^#{1,6}\s+/gm, ""), "");
       else if (b.tipo === "acao") linhas.push(`> **${b.nome}:** *${b.texto.replace(/\*/g, "").replace(/\n+/g, " ")}*`, "");
-      else if (b.tipo === "nota") linhas.push(`<sub>🎲 ${b.texto}</sub>`, "");
+      else if (b.tipo === "nota") linhas.push(`<sub>${b.texto}</sub>`, "");
       else if (b.tipo === "fim") linhas.push(`*— Fim da noite${b.sessao ? ` ${b.sessao}` : ""} —*`, "");
       else linhas.push(`*✦ ${b.texto} ✦*`, "");
     }
@@ -295,7 +295,7 @@ export function livroEmMarkdown(l: Livro): string {
     secao("Pessoas", l.pessoas, (e) => (e.status ? ` *(${e.status})*` : ""));
     secao("Lugares", l.lugares);
     secao("Notas e itens", l.outros);
-    if (l.fatos.length) linhas.push("### Fatos fixados", "", ...l.fatos.map((f) => `- 📌 ${f}`), "");
+    if (l.fatos.length) linhas.push("### Fatos fixados", "", ...l.fatos.map((f) => `- ${f}`), "");
   }
   linhas.push("---", "", "*Escrito na Taverna do Velho Mestre. Os personagens são IA; as desculpas pelas rolagens ruins são de vocês.*", "");
   return linhas.join("\n");

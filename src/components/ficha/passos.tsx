@@ -26,6 +26,7 @@ import {
   type GrupoOpcao,
 } from "./sugestoes";
 import { agrupar, capitalizar, casaBusca, sinal } from "./utilidades";
+import { Icone } from "@/components/icones";
 
 // Passos do assistente de criação. São componentes controlados: o estado mora no formulário,
 // que também escreve os <input type="hidden"> do contrato (lib/formulario-ficha.ts). Aqui nada tem `name`.
@@ -88,7 +89,7 @@ export function Titulo({ children, ajuda, acao }: { children: ReactNode; ajuda?:
 export function BotaoSortear({ onClick, children = "Sortear", titulo }: { onClick: () => void; children?: ReactNode; titulo?: string }) {
   return (
     <button type="button" onClick={onClick} title={titulo ?? "Escolhe uma opção válida ao acaso"} className="btn-borda min-h-10 py-1.5 text-sm sm:min-h-9">
-      <span aria-hidden>🎲</span> {children}
+      <Icone nome="dice" /> {children}
     </button>
   );
 }
@@ -103,7 +104,7 @@ function BotaoDado({ onClick, rotulo }: { onClick: () => void; rotulo: string })
       aria-label={rotulo}
       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border text-base transition hover:border-ambar/60 hover:bg-ambar/10 active:scale-95"
     >
-      <span aria-hidden>🎲</span>
+      <Icone nome="dice" />
     </button>
   );
 }
@@ -299,7 +300,7 @@ export function PassoSistema({ sistemas, e, escolher }: { sistemas: SistemaPubli
                 {s.ancestralidades.length === 1 ? "" : "s"}
               </p>
             )}
-            <p className="mt-auto pt-1.5 text-[11px] leading-snug text-muted">{s.licenca}</p>
+            <p className="mt-auto pt-1.5 text-xs leading-snug text-muted">{s.licenca}</p>
           </Cartao>
         ))}
       </div>
@@ -631,8 +632,7 @@ export function PassoAtributos({ sistema, e, carregando, sugerir, editar, sugest
       <div className="mb-3 flex flex-wrap items-center gap-3">
         {vazios || tipo === "aleatorio" ? (
           <button type="button" className="btn-borda py-1.5" disabled={carregando} onClick={() => sugerir(e.metodo)}>
-            <span className={carregando ? "dado-rolando inline-block" : "inline-block"} aria-hidden>
-              🎲
+            <span className={carregando ? "dado-rolando inline-block" : "inline-block"} aria-hidden><Icone nome="dice" /> 
             </span>
             {carregando ? "Rolando…" : vazios ? "Sugerir valores" : "Rolar de novo"}
           </button>
@@ -640,7 +640,7 @@ export function PassoAtributos({ sistema, e, carregando, sugerir, editar, sugest
           <>
             {tipo === "fixo" && (
               <button type="button" className="btn-borda py-1.5" onClick={embaralhar} title="Troca os mesmos valores de lugar">
-                <span aria-hidden>🔀</span> Embaralhar
+                <Icone nome="shuffle" /> Embaralhar
               </button>
             )}
             <button type="button" className="text-sm text-ambar hover:underline disabled:opacity-50" disabled={carregando} onClick={() => sugerir(e.metodo)}>
@@ -697,7 +697,7 @@ export function PassoAtributos({ sistema, e, carregando, sugerir, editar, sugest
                 </button>
               </div>
               {ajuste ? (
-                <p className="mt-1 text-[11px] text-ambar">
+                <p className="mt-1 text-xs text-ambar">
                   {sinal(ajuste)} de {anc?.nome}
                 </p>
               ) : null}
@@ -929,13 +929,13 @@ function CampoOpcao({ opcao, valores, mudar, destaque, bloqueados, exemplo, suge
                   <span className="text-sm font-semibold leading-tight">
                     {ativo && <span aria-hidden>✓ </span>}
                     {o.nome}
-                    {parcial && combina(o) && <span className="ml-1.5 text-[10px] font-normal text-ambar">✦ {destaque}</span>}
+                    {parcial && combina(o) && <span className="ml-1.5 text-[11px] font-normal text-ambar">✦ {destaque}</span>}
                   </span>
                   {ondeEsta ? (
-                    <span className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-muted">em {ondeEsta.toLowerCase()}</span>
+                    <span className="mt-0.5 line-clamp-1 text-xs leading-snug text-muted">em {ondeEsta.toLowerCase()}</span>
                   ) : (
                     // no item escolhido a descrição aparece inteira (no celular não há title para ler o resto)
-                    o.descricao && <span className={`mt-0.5 text-[11px] leading-snug ${ativo ? "text-ambar/80" : "line-clamp-2 text-muted"}`}>{o.descricao}</span>
+                    o.descricao && <span className={`mt-0.5 text-xs leading-snug ${ativo ? "text-ambar/80" : "line-clamp-2 text-muted"}`}>{o.descricao}</span>
                   )}
                 </button>
               );
@@ -1169,7 +1169,7 @@ function GradePericiasNiveis({ sistema, e, atualizar, niveis, legendaOculta }: P
                   {bolinhas(n)}
                 </span>
               </span>
-              {o.descricao && <span className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-muted">{o.descricao}</span>}
+              {o.descricao && <span className="mt-0.5 line-clamp-1 text-xs leading-snug text-muted">{o.descricao}</span>}
             </button>
           );
         })}
@@ -1285,7 +1285,7 @@ function CampoPoderes({ e, opcoes, valores, mudar }: { e: Escolhas; opcoes: Opca
           </div>
         </div>
       ))}
-      <p className="text-[11px] text-muted">Em branco, o ponto fica sem poder anotado e o mestre não inventa um: combine depois e anote ao gastar XP.</p>
+      <p className="text-xs text-muted">Em branco, o ponto fica sem poder anotado e o mestre não inventa um: combine depois e anote ao gastar XP.</p>
     </div>
   );
 }
@@ -1427,7 +1427,7 @@ export function BlocoTrazer({ sistema, lista, escolher }: { sistema: SistemaPubl
               <Cartao key={p.id} ativo={false} onClick={() => escolher(p)} titulo={`Trazer ${p.nome} de ${p.campanha}`}>
                 <p className="pr-6 font-semibold leading-tight text-pergaminho">{p.nome}</p>
                 {p.linha && <p className="mt-0.5 text-xs text-muted">{p.linha}</p>}
-                <p className="mt-1 text-[11px] text-muted">de {p.campanha}</p>
+                <p className="mt-1 text-xs text-muted">de {p.campanha}</p>
               </Cartao>
             ))}
           </div>
@@ -1493,8 +1493,7 @@ export function PassoIdentidade({ e, atualizar }: Omit<PropsPasso, "sistema">) {
                 ↻ outros ganchos
               </button>
             )}
-            <button type="button" onClick={() => juntar(sortear(s.ganchos.filter((g) => !e.historia.includes(g))))} className="min-h-10 px-2 text-xs text-ambar hover:underline sm:min-h-8">
-              🎲 me dá um
+            <button type="button" onClick={() => juntar(sortear(s.ganchos.filter((g) => !e.historia.includes(g))))} className="min-h-10 px-2 text-xs text-ambar hover:underline sm:min-h-8"><Icone nome="dice" />  me dá um
             </button>
           </div>
         </div>
@@ -1547,7 +1546,7 @@ function BlocoAventuras({ e, atualizar, aventuras }: Omit<PropsPasso, "sistema">
   const alternar = (a: AventuraPublica) => atualizar(a.id === e.aventura ? semAventura(e, a) : comAventura(a));
   return (
     <fieldset>
-      <legend className="mb-1 text-sm font-semibold text-pergaminho">📜 Ou comece com uma aventura pronta</legend>
+      <legend className="mb-1 text-sm font-semibold text-pergaminho"><Icone nome="scroll" />  Ou comece com uma aventura pronta</legend>
       <p className="mb-2 text-xs text-muted">
         Missão escrita para este sistema: o mestre recebe um roteiro secreto (NPCs, pistas, reviravoltas) e improvisa em cima. Você não lê o roteiro, claro.
       </p>
@@ -1556,7 +1555,7 @@ function BlocoAventuras({ e, atualizar, aventuras }: Omit<PropsPasso, "sistema">
           <Cartao key={a.id} ativo={a.id === e.aventura} onClick={() => alternar(a)} titulo={a.id === e.aventura ? "Clique de novo para desmarcar" : undefined}>
             <p className="pr-6 font-semibold leading-tight text-pergaminho">{a.titulo}</p>
             <p className="mt-1 text-xs leading-snug text-foreground/85">{a.chamada}</p>
-            <p className="mt-auto pt-2 text-[11px] text-muted">
+            <p className="mt-auto pt-2 text-xs text-muted">
               {[a.duracao, a.recomendado, a.tom].filter(Boolean).join(" · ")}
             </p>
           </Cartao>

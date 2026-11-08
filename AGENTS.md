@@ -10,8 +10,13 @@ Instruções de instalação e mapa do código: ver CLAUDE.md. Aqui fica o hist�
 
 ## Pendências conhecidas
 - Testes `tests/w09-historia-personagem.test.mjs` falharam (3) rodando sem servidor no ar; reconferir com a taverna ligada.
-- Baixa gravidade: W07 agrupamento "⋯" (voz/música/convite) e "esconder cabeçalho"; "Anteriormente…" após fim de sessão sem teste com mestre real; teto da Potência de Sangue por Geração sem conferir no livro.
-- Itens visuais fora do plano: emojis -> ícones, textos de 9-11px, contraste do vermelho, favicon/manifest, destaque de crítico.
+- Baixa gravidade: W07 "esconder cabeçalho"; "Anteriormente…" após fim de sessão sem teste com mestre real; teto da Potência de Sangue por Geração sem conferir no livro. (O agrupamento "⋯" de voz/música/convite no cabeçalho da mesa foi feito em nov/2026.)
+- Itens visuais (nov/2026): feitos favicon/manifest (`src/app/icon.png`, `apple-icon.png`, `manifest.ts`), contraste do vermelho (só o tema `padrao` reprovava), piso de 11px com prosa em 12px, emojis -> ícones (`src/components/icones.tsx`: `<Icone>` para JSX e `<TextoComIcones>` para strings/dados) e destaque persistente de crítico (anel + halo no cartão, além do brilho de chegada). Falta a revisão visual com a taverna ligada. Restos de emoji conhecidos: `✋ manual`, `🗡 dano`, texto de tooltip do leitor e campos `icone` de `comecos.ts`/`historia.ts` (saem como ícone onde são renderizados; nas classes de sistema não são exibidos).
+
+## Regras de custo (sessões de agente)
+- Antes de abrir qualquer arquivo, mapear com `glob`/`grep`; ler só o trecho necessário (`offset`/`limit`), nunca despejar o arquivo inteiro.
+- Responder com o diff (o que mudou, onde e por quê), não com o conteúdo inteiro dos arquivos.
+- Uma sessão por tarefa: não misturar frentes no mesmo histórico; ao trocar de tarefa, abrir sessão nova.
 
 ## Regras de trabalho
 - Servidor só pelo atalho (nunca `npm run dev/start` na sessão do agente); porta 3300; testes em 3301/3302.

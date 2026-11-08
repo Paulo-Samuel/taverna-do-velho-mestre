@@ -37,6 +37,7 @@ function periciasQueCompletam(e: Escolhas, fixas: Set<string>, faltam: number): 
     .map((id) => nomePericia(id));
 }
 import { gruposDasOpcoes, NOMES_GRUPOS, opcoesDoGrupo, opcoesValidas, personagemPronto, problemaOpcoes, sortearOpcoes as sortearExtras, type GrupoOpcao } from "./sugestoes";
+import { Icone } from "@/components/icones";
 
 // Assistente de criação de personagem, guiado só pelos dados públicos do sistema (SistemaPublico).
 // Um único <form> para a server action: os passos são controlados e os campos do contrato
@@ -714,6 +715,11 @@ export function FormularioPersonagem({
                 );
               })}
             </ol>
+            {/* os dez passos em dois blocos: oito de ficha, dois de mesa */}
+            <div className="mt-1 hidden grid-cols-[8fr_2fr] gap-2 text-[11px] uppercase tracking-[0.14em] text-muted md:grid" aria-hidden>
+              <span>Ficha do personagem</span>
+              <span>Mesa</span>
+            </div>
           </nav>
 
           {mostrarPronto && sistema && (
@@ -722,8 +728,7 @@ export function FormularioPersonagem({
                 <span className="font-semibold text-pergaminho">Sem paciência para ficha?</span>{" "}
                 <span className="text-muted">O dado escolhe tudo em {sistema.nomeCurto} (dentro das regras, prometo) e você só revisa o nome e a história.</span>
               </p>
-              <button type="button" className="btn-ambar shrink-0" onClick={prontoJa}>
-                ⚡ Personagem pronto
+              <button type="button" className="btn-ambar shrink-0" onClick={prontoJa}><Icone nome="bolt" />  Personagem pronto
               </button>
             </div>
           )}
@@ -755,15 +760,13 @@ export function FormularioPersonagem({
           )}
 
           {veioPronto && atual === "identidade" && (
-            <p role="status" className="mb-4 rounded-lg border border-musgo/50 bg-musgo/10 px-3 py-2 text-sm">
-              ⚡ Tudo sorteado. Revise o nome e a história; a barra de passos leva a qualquer escolha para trocar o que o dado errou.
+            <p role="status" className="mb-4 rounded-lg border border-musgo/50 bg-musgo/10 px-3 py-2 text-sm"><Icone nome="bolt" />  Tudo sorteado. Revise o nome e a história; a barra de passos leva a qualquer escolha para trocar o que o dado errou.
             </p>
           )}
 
           {/* veio do início com uma aventura: lembrete discreto de que a campanha já está pronta, só falta o personagem */}
           {aventuraEscolhida && atual !== "campanha" && atual !== "resumo" && (
-            <p role="status" className="mb-4 rounded-lg border border-ambar/40 bg-ambar/[0.07] px-3 py-2 text-sm">
-              📜 Aventura pronta: <span className="font-semibold text-pergaminho">{aventuraEscolhida.titulo}</span>.{" "}
+            <p role="status" className="mb-4 rounded-lg border border-ambar/40 bg-ambar/[0.07] px-3 py-2 text-sm"><Icone nome="scroll" />  Aventura pronta: <span className="font-semibold text-pergaminho">{aventuraEscolhida.titulo}</span>.{" "}
               <span className="text-muted">A campanha já vem preenchida; monte o personagem e confira tudo no passo da campanha.</span>
             </p>
           )}
@@ -863,7 +866,7 @@ export function FormularioPersonagem({
                   onClick={() => setPreviaAberta((v) => !v)}
                   className="-mt-1 mb-2 flex min-h-9 w-full items-center gap-2 rounded text-left text-xs"
                 >
-                  <span className="shrink-0 text-[10px] uppercase tracking-widest text-ambar-forte">Prévia</span>
+                  <span className="shrink-0 text-[11px] uppercase tracking-widest text-ambar-forte">Prévia</span>
                   <span className="min-w-0 flex-1 truncate text-foreground/90">{resumoCurto}</span>
                   <span className={`shrink-0 text-muted transition-transform ${previaAberta ? "rotate-180" : ""}`} aria-hidden>
                     ▾

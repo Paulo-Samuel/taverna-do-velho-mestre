@@ -8,6 +8,7 @@ import type { PersonagemVisivel } from "@/lib/mesa";
 import type { SistemaPublico } from "@/lib/sistemas/tipos";
 import { temaDoSistema } from "@/lib/temas";
 import { DADOS_RAPIDOS, EXEMPLOS, lerFaces, montarExpressao, somaConstantes, validarExpressao, type Lados } from "./notacao";
+import { Icone } from "@/components/icones";
 
 // Rolador de dados dos jogadores. Quem rola é o servidor (rota /api/campanhas/[id]/rolagem): o número é honesto
 // e, se a rolagem for pública, aparece para a mesa inteira pelo fluxo de eventos.
@@ -432,8 +433,7 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar, 
                 fechar(false);
                 pendente.irPara();
               }}
-            >
-              🎲 Rolar esse teste
+            ><Icone nome="dice" />  Rolar esse teste
             </button>
           </div>
         )}
@@ -648,7 +648,7 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar, 
                       <span className="titulo w-9 shrink-0 text-right text-base text-pergaminho tabular-nums">{r.total ?? "?"}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-xs">{rotulo}</span>
-                        <span className="block truncate text-[10px] text-muted">
+                        <span className="block truncate text-xs text-muted">
                           {detalhe}
                           {r.privada ? " · só para você" : ""}
                           {r.manual ? " · manual" : ""} · {new Date(h.quando).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
@@ -688,7 +688,7 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar, 
               title="Tecla P"
               className={`shrink-0 rounded-md border px-2.5 py-2 text-xs ${privada ? "border-sky-300/60 bg-sky-300/10 text-sky-300" : "border-border text-muted hover:text-foreground"}`}
             >
-              {privada ? "🙈 Só para mim" : "👁 Pública"}
+              {privada ? <Icone nome="eyeOff" /> : <Icone nome="eye" />}{" "}{privada ? "Só para mim" : "Pública"}
             </button>
           ) : (
             <span className="shrink-0 text-xs text-muted">sempre pública</span>
@@ -697,8 +697,8 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar, 
             <span className="truncate">{enviando ? "Rolando…" : rotuloRolar}</span>
           </button>
         </div>
-        {pendente && <p className="px-4 pb-1 text-[11px] text-sangue">⚠ Rolagem solta: isso não resolve o teste pedido pelo mestre.</p>}
-        <p className="hidden px-4 pb-2 text-[10px] text-muted sm:block">Enter rola · 1–8 escolhe o dado · +/− quantidade · A/Z vantagem/desvantagem · P privada · Esc fecha</p>
+        {pendente && <p className="px-4 pb-1 text-xs text-sangue">⚠ Rolagem solta: isso não resolve o teste pedido pelo mestre.</p>}
+        <p className="hidden px-4 pb-2 text-[11px] text-muted sm:block">Enter rola · 1–8 escolhe o dado · +/− quantidade · A/Z vantagem/desvantagem · P privada · Esc fecha</p>
       </div>
     </>
   );
@@ -713,8 +713,7 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar, 
         aria-expanded={aberto}
         title={pendente ? `Rolar dados (tecla D) · o mestre pediu ${pendente.teste}` : "Rolar dados (tecla D)"}
         className={`relative min-h-10 rounded-md border px-2.5 py-1 text-xs transition focus-visible:outline-2 focus-visible:outline-ambar sm:min-h-0 sm:px-2 ${aberto ? "border-ambar bg-ambar/10 text-ambar" : "border-border text-foreground/90 hover:border-ambar hover:text-ambar"}`}
-      >
-        🎲 Dados
+      ><Icone nome="dice" />  Dados
         {pendente && (
           <span className="absolute -right-1 -top-1 size-2.5 rounded-full bg-ambar ring-2 ring-surface" data-rolador-ponto aria-label="há um teste pedido pelo mestre" />
         )}

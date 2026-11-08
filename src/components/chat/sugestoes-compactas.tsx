@@ -105,7 +105,7 @@ export function SugestoesCompactas({
             >
               {/* número do atalho de teclado (1, 2, 3); no toque vira só a seta */}
               <kbd
-                className="hidden size-[18px] shrink-0 place-items-center rounded border border-border/80 font-sans text-[10px] leading-none text-muted transition group-hover:border-ambar/60 group-hover:text-ambar [@media(pointer:fine)]:grid"
+                className="hidden size-[18px] shrink-0 place-items-center rounded border border-border/80 font-sans text-[11px] leading-none text-muted transition group-hover:border-ambar/60 group-hover:text-ambar [@media(pointer:fine)]:grid"
                 aria-hidden
               >
                 {i + 1}
@@ -114,7 +114,7 @@ export function SugestoesCompactas({
                 ➶
               </span>
               <span className="min-w-0 flex-1 leading-snug text-foreground/85 group-hover:text-foreground largo:truncate">{s.texto}</span>
-              {s.pericia && <span className="shrink-0 text-[11px] italic text-muted group-hover:text-ambar/90">{s.pericia}</span>}
+              {s.pericia && <span className="shrink-0 text-xs italic text-muted group-hover:text-ambar/90">{s.pericia}</span>}
             </button>
           </li>
         ))}

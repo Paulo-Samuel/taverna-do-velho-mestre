@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { valorDaCondicao } from "@/lib/sistemas/pf2e/condicoes";
 import type { Cena, CondicaoDef, Combatente, SistemaPublico } from "@/lib/sistemas/tipos";
+import { TextoComIcones } from "@/components/icones";
 
 // Painel da cena: onde o grupo está, quando, com que tempo e o que está acontecendo,
 // mais o rastreador de combate (rodada, ordem de iniciativa, quem age, PV e condições).
@@ -56,7 +57,7 @@ function AcoesDoTurno({ c, total, condicoesDef, vez }: { c: Combatente; total: n
   const proximo = ataques >= 2 ? "−10 (ágil −8)" : ataques === 1 ? "−5 (ágil −4)" : "";
   if (!vez && !lento) return null;
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted">
+    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
       {vez && (
         <span className="flex items-center gap-0.5" role="img" aria-label={`${disponiveis - gastas} de ${disponiveis} ações sobrando`} title="Ações do turno">
           {Array.from({ length: total }, (_, i) => (
@@ -120,7 +121,7 @@ function LinhaCombatente({
             <span className="sr-only">{indice + 1}º: </span>
             {c.nome}
           </p>
-          <p className="text-[11px] text-muted">
+          <p className="text-xs text-muted">
             {c.aliado ? "grupo" : "inimigo"}
             {numeros && c.defesa && efetiva === null ? ` · ${rotuloDefesa} ${c.defesa}` : ""}
             {numeros && c.defesa && efetiva !== null ? (
@@ -133,14 +134,14 @@ function LinhaCombatente({
             {caido ? " · caído" : ""}
           </p>
         </div>
-        {vez && <span className="shrink-0 rounded-full bg-botao px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-botao-texto">age agora</span>}
+        {vez && <span className="shrink-0 rounded-full bg-botao px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-botao-texto">age agora</span>}
       </div>
       {acoesTurno ? <AcoesDoTurno c={c} total={acoesTurno} condicoesDef={condicoesDef} vez={vez} /> : null}
       <BarraPv c={c} numeros={numeros} />
       {condicoes.length > 0 && (
         <ul className="mt-1.5 flex flex-wrap gap-1">
           {condicoes.map((x) => (
-            <li key={x} className="rounded border border-border bg-background/60 px-1.5 py-0.5 text-[10px] text-muted">
+            <li key={x} className="rounded border border-border bg-background/60 px-1.5 py-0.5 text-xs text-muted">
               {x}
             </li>
           ))}
@@ -168,7 +169,7 @@ function Rastreador({ combate, sistema }: { combate: NonNullable<Cena["combate"]
           Vez de <span className={atual.aliado ? "text-musgo" : "text-sangue"}>{atual.nome}</span>
         </p>
       )}
-      <p className="mb-3 flex gap-3 text-[11px] text-muted">
+      <p className="mb-3 flex gap-3 text-xs text-muted">
         <span>
           <span className="mr-1 inline-block size-2 rounded-full bg-musgo align-middle" aria-hidden />
           {aliados.length} no grupo
@@ -212,7 +213,7 @@ export function PainelCena({ cena, sistema }: { cena: Cena; sistema: SistemaPubl
             <ul className="mt-1.5 flex flex-wrap gap-1.5">
               {detalhes.map((d) => (
                 <li key={d.rotulo} className="flex items-center gap-1 rounded-full border border-border bg-surface-2/70 px-2.5 py-0.5 text-xs text-muted">
-                  <span aria-hidden>{d.icone}</span>
+                  <span aria-hidden><TextoComIcones texto={d.icone} /></span>
                   <span className="sr-only">{d.rotulo}: </span>
                   {d.valor}
                 </li>

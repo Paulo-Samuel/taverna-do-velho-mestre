@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { AcoesMesa, Mesa } from "@/lib/cliente/use-mesa";
+import { Icone } from "@/components/icones";
 
 // Quem está na mesa agora (aparelhos conectados), o estado da conexão e o apelido deste aparelho.
 // Na primeira visita (sem apelido salvo) pergunta como chamar o jogador.
@@ -110,9 +111,7 @@ export function Presenca({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
         <span className={`size-2 shrink-0 rounded-full ${corDoPonto}`} data-conexao={mesa.conexao} />
         {/* no celular só o número e um bonequinho, para não quebrar a linha do cabeçalho */}
         <span className="tabular-nums">{mesa.presenca.length}</span>
-        <span className="opacity-70 grayscale sm:hidden" aria-hidden>
-          👤
-        </span>
+        <Icone nome="person" className="opacity-70 grayscale sm:hidden" />
         <span className="hidden sm:inline">na mesa</span>
       </button>
 
@@ -131,7 +130,7 @@ export function Presenca({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
               {jogadores.map((j) => (
                 <li key={j.clienteId} className="flex items-center gap-2 text-sm">
                   <span aria-hidden title={j.local ? "Na máquina da taverna" : "Pela rede"}>
-                    {j.local ? "🖥️" : "📱"}
+                    {j.local ? <Icone nome="desktop" /> : <Icone nome="phone" />}
                   </span>
                   <span className="min-w-0 flex-1 truncate">
                     <span className={j.clienteId === mesa.eu.clienteId ? "text-ambar" : "text-foreground"}>{j.apelido}</span>

@@ -42,7 +42,7 @@ function quando(iso: string): string {
 function Status({ status }: { status: string }) {
   if (!status) return null;
   const s = STATUS[sem(status)] ?? { rotulo: status, classe: "border-border text-muted" };
-  return <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide ${s.classe}`}>{s.rotulo}</span>;
+  return <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] uppercase tracking-wide ${s.classe}`}>{s.rotulo}</span>;
 }
 
 function Entrada({ e, mostrarTipo, fatos }: { e: EntradaDiario; mostrarTipo: boolean; fatos?: ControleFatos }) {
@@ -53,7 +53,7 @@ function Entrada({ e, mostrarTipo, fatos }: { e: EntradaDiario; mostrarTipo: boo
     <li className={`surgir rounded-lg border border-border bg-surface-2/60 px-3 py-2 ${apagada ? "opacity-75" : ""}`}>
       <div className="flex items-start justify-between gap-2">
         <p className="min-w-0 text-sm text-pergaminho">
-          {mostrarTipo && <span className="mr-1.5 text-[10px] uppercase tracking-wide text-muted">{ABAS.find((a) => a.tipo === e.tipo)?.rotulo ?? e.tipo}</span>}
+          {mostrarTipo && <span className="mr-1.5 text-[11px] uppercase tracking-wide text-muted">{ABAS.find((a) => a.tipo === e.tipo)?.rotulo ?? e.tipo}</span>}
           {e.titulo}
         </p>
         <div className="-mr-1.5 -mt-0.5 flex shrink-0 items-center gap-1">
@@ -64,7 +64,7 @@ function Entrada({ e, mostrarTipo, fatos }: { e: EntradaDiario; mostrarTipo: boo
       {e.texto && (
         <p className={`mt-1 whitespace-pre-line text-xs leading-relaxed text-muted ${longo && !aberta ? "line-clamp-3" : ""}`}>{e.texto}</p>
       )}
-      <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-muted/70">
+      <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-muted/70">
         <span>{quando(e.atualizadoEm)}</span>
         {longo && (
           <button className="text-ambar hover:underline" onClick={() => setAberta((v) => !v)} aria-expanded={aberta}>

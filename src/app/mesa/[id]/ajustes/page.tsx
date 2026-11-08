@@ -10,6 +10,7 @@ import { temaDoSistema } from "@/lib/temas";
 import { TemaPagina } from "@/components/tema-pagina";
 import { desligarAventuraAcao, duplicarCampanhaAcao, excluirCampanhaAcao, salvarAjustesAcao } from "./acoes";
 import { FormularioAventura, FormularioCampanha, FormularioDuplicar, FormularioExcluir, FormularioPin } from "./formularios";
+import { Icone } from "@/components/icones";
 
 // Ajustes da mesa: nome, cenário, tom, modo (livre/rodada), dados, estilo do mestre, PIN da rede e exclusão.
 // Pela rede a página abre só para leitura; quem manda no salão é a máquina da taverna.
@@ -86,7 +87,7 @@ export default async function AjustesMesa(props: PageProps<"/mesa/[id]/ajustes">
 
       {aventura && (
         <Secao titulo="Aventura em andamento">
-          <p className="titulo text-lg text-ambar">📜 {aventura.titulo}</p>
+          <p className="titulo text-lg text-ambar"><Icone nome="scroll" />  {aventura.titulo}</p>
           <p className="mt-1 text-sm text-foreground/90">{aventura.chamada}</p>
           <p className="mt-1 text-xs text-muted">
             {[aventura.duracao, aventura.recomendado, aventura.tom].filter(Boolean).join(" · ")}

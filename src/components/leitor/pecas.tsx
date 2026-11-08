@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState, type ReactNode } from "react";
 import type { Paragrafo } from "./cena";
 import { capitularCabe, Ornamento } from "./prosa";
 import { SEPARADOR } from "./turnos";
+import { Icone } from "@/components/icones";
 
 // Peças de desenho da cena, comuns ao leitor cena a cena e ao modo 📜 Rolagem das duas mesas: o aparte ((fora do jogo)), o
 // divisor de fim de sessão ("— Fim da noite 3 —"), o mestre escrevendo no palco e a prosa corrida com os apartes no meio.
@@ -13,7 +14,7 @@ export function Aparte({ quem = "Mestre", children, className = "" }: { quem?: s
   return (
     <aside className={`leitor-aparte ${className}`} aria-label={`${quem}, fora do jogo`} data-aparte>
       <p className="leitor-aparte-rotulo">
-        <span aria-hidden>💬</span> {quem}, fora do jogo
+        <Icone nome="speech" /> {quem}, fora do jogo
       </p>
       <div className="leitor-aparte-texto">{children}</div>
     </aside>
@@ -39,7 +40,7 @@ export function BotaoPerguntar({ ligado, aoAlternar, className = "" }: { ligado:
       } ${className}`}
       data-perguntar
     >
-      <span aria-hidden>💬</span>
+      <Icone nome="speech" />
       <span className="hidden sm:inline">Perguntar</span>
     </button>
   );

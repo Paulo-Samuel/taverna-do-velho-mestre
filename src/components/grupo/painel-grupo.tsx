@@ -155,7 +155,7 @@ function CartaoPersonagem({
           <div className="flex items-baseline justify-between gap-2">
             <p className="truncate font-semibold text-pergaminho">{ficha.nome}</p>
             {agiu !== null && (
-              <span className={`shrink-0 rounded-full px-1.5 text-[10px] uppercase tracking-wider ${agiu ? "bg-musgo/30 text-[#a9c48a]" : "bg-surface-2 text-muted"}`}>
+              <span className={`shrink-0 rounded-full px-1.5 text-[11px] uppercase tracking-wider ${agiu ? "bg-musgo/30 text-[#a9c48a]" : "bg-surface-2 text-muted"}`}>
                 {agiu ? "agiu ✓" : "falta agir"}
               </span>
             )}
@@ -275,7 +275,7 @@ export function PainelGrupo({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
         + Adicionar personagem
       </Link>
       {mesa.personagens.length > 1 && (
-        <p className="text-center text-[11px] text-muted">Mesa local: troque quem age pelos chips acima do campo de ação ou com Alt+1…9.</p>
+        <p className="text-center text-xs text-muted">Mesa local: troque quem age pelos chips acima do campo de ação ou com Alt+1…9.</p>
       )}
     </div>
   );

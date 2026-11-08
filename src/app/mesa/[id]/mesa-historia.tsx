@@ -39,6 +39,7 @@ import { useMesa } from "@/lib/cliente/use-mesa";
 import { INICIO, podeDecidir, RESULTADO_TESTE } from "@/lib/constantes";
 import type { Mensagem } from "@/lib/db";
 import type { EstadoMesa } from "@/lib/mesa";
+import { Icone } from "@/components/icones";
 
 // Mesa do modo história, no estilo de um livro: céu estrelado, coluna central de texto corrido, cabeçalhos de
 // capítulo, ações dos jogadores em cartões, o dado 3D quando o mestre pede um teste e as ações sugeridas no rodapé.
@@ -720,7 +721,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
             title="Códex: ficha, missões, pessoas e lugares (tecla C)"
             data-ordem="codex"
           >
-            <span aria-hidden>📖</span>
+            <Icone nome="book" />
             <span className="hidden text-sm font-semibold sm:inline">Códex</span>
             {novidadesCodex > 0 && <span className="absolute right-1 top-1 size-2 rounded-full bg-ambar" data-novidade-codex aria-hidden />}
           </button>
@@ -736,9 +737,9 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
           aria-label="Abrir o códex"
           title="Códex (tecla C)"
         >
-          <span aria-hidden>📖</span>
+          <Icone nome="book" />
           <span className="text-[11px] font-semibold uppercase tracking-[0.25em] [writing-mode:vertical-rl]">Códex</span>
-          <kbd className="rounded border border-border px-1 text-[10px] text-muted group-hover:border-ambar/50" aria-hidden>
+          <kbd className="rounded border border-border px-1 text-[11px] text-muted group-hover:border-ambar/50" aria-hidden>
             C
           </kbd>
         </button>
@@ -992,7 +993,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
             }
           />
           )}
-          <p className="mt-1.5 text-center text-[10.5px] leading-4 text-muted/60 baixo:hidden">
+          <p className="mt-1.5 text-center text-xs leading-4 text-muted/60 baixo:hidden">
             Os personagens são IA. As respostas são ficção.
             <button type="button" onClick={() => setAjuda(true)} className="ml-2 hidden underline-offset-2 hover:text-ambar hover:underline [@media(pointer:fine)]:inline">
               Atalhos: <kbd className="rounded border border-border/70 px-1">?</kbd>

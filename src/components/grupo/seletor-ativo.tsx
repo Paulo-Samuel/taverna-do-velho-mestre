@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 import type { AcoesMesa, Mesa } from "@/lib/cliente/use-mesa";
 import { Avatar, outroAparelhoCom, quemAgiu } from "./avatar";
+import { Icone } from "@/components/icones";
 
 // "Agindo como": chips com as iniciais de cada personagem para passar o teclado na mesa local (hot-seat).
 // Alt+1..9 troca direto. Pela rede dá para trocar também, mas avisa quando o personagem tem outro dono.
@@ -74,7 +75,7 @@ export function SeletorAtivo({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) 
           const outro = outroAparelhoCom(mesa, p.id);
           // 📱 alguém está agindo com ele em outro aparelho; 🔒 o dono está na mesa (em outro aparelho), mesmo que com outro personagem
           const emUso = outro?.personagemId === p.id;
-          const marca = emUso ? "📱" : outro ? "🔒" : null;
+          const marca = emUso ? <Icone nome="phone" /> : outro ? <Icone nome="lock" /> : null;
           const detalhe = emUso ? ` · em uso no aparelho de ${outro.apelido}` : outro ? ` · personagem de ${p.jogador}, que está na mesa` : "";
           return (
             <button
@@ -98,7 +99,7 @@ export function SeletorAtivo({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) 
                 </span>
               )}
               {marca && (
-                <span className="absolute -bottom-1 -right-0.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-surface text-[9px] leading-none" aria-hidden>
+                <span className="absolute -bottom-1 -right-0.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-surface text-[11px] leading-none" aria-hidden>
                   {marca}
                 </span>
               )}
@@ -106,7 +107,7 @@ export function SeletorAtivo({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) 
           );
         })}
       </div>
-      {dono && !euLocal && <span className="text-[11px] text-ambar-forte">personagem de {dono}</span>}
+      {dono && !euLocal && <span className="text-xs text-ambar-forte">personagem de {dono}</span>}
     </div>
   );
 }

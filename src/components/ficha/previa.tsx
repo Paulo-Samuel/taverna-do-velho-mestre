@@ -8,6 +8,7 @@ import type { OpcaoCriacao, SistemaPublico } from "@/lib/sistemas/tipos";
 import { CartaoFicha } from "./painel-ficha";
 import { ajustesTexto, resumoEstilo, Titulo, type Escolhas, type PersonagemParaTrazer } from "./passos";
 import { grupoDaOpcao } from "./sugestoes";
+import { Icone } from "@/components/icones";
 
 // Prévia ao lado do assistente (desktop) e o resumo final antes de enviar.
 // A prévia lateral é montada só com os dados públicos do sistema; o resumo pede ao servidor a ficha de verdade.
@@ -110,7 +111,7 @@ export function PreviaLateral({ sistema, e, opcoes, copia }: { sistema: SistemaP
         <div className="grid grid-cols-3 gap-1">
           {sistema.atributos.map((a) => (
             <div key={a.id} className="rounded-md border border-border bg-surface-2/70 py-1 text-center">
-              <p className="text-[10px] uppercase tracking-wider text-muted">{a.abrev}</p>
+              <p className="text-[11px] uppercase tracking-wider text-muted">{a.abrev}</p>
               <p className="titulo text-base text-pergaminho">{e.atributos[a.id] || "—"}</p>
             </div>
           ))}
@@ -200,7 +201,7 @@ export function Resumo({ sistema, e, opcoes, modo, passos, irPara, previa, carre
               </button>
             )}
           </div>
-          <p className="mt-1 text-[11px] text-muted">Dá para criar assim mesmo.</p>
+          <p className="mt-1 text-xs text-muted">Dá para criar assim mesmo.</p>
         </div>
       )}
       <div className="grid gap-5 md:grid-cols-2">
@@ -275,8 +276,7 @@ export function Resumo({ sistema, e, opcoes, modo, passos, irPara, previa, carre
                 {editar("campanha")}
               </Linha>
               {aventura && (
-                <Linha rotulo="Aventura">
-                  📜 {aventura.titulo} <span className="text-muted">· {aventura.duracao} · o mestre tem o roteiro</span>
+                <Linha rotulo="Aventura"><Icone nome="scroll" />  {aventura.titulo} <span className="text-muted">· {aventura.duracao} · o mestre tem o roteiro</span>
                 </Linha>
               )}
               <Linha rotulo="Cenário">{e.cenario.trim() ? <span className="line-clamp-3">{e.cenario}</span> : <span className="text-muted">o mestre inventa</span>}</Linha>
@@ -309,7 +309,7 @@ export function Resumo({ sistema, e, opcoes, modo, passos, irPara, previa, carre
           {!carregando && previa?.ok && (
             <>
               <CartaoFicha ficha={previa.ficha} blocos={previa.blocos} sistema={sistema} jogador={e.jogador.trim() || undefined} />
-              <p className="mt-3 text-[11px] text-muted">Valores que o sistema rola na criação podem mudar quando você entrar.</p>
+              <p className="mt-3 text-xs text-muted">Valores que o sistema rola na criação podem mudar quando você entrar.</p>
             </>
           )}
           {!carregando && previa && !previa.ok && <p className="text-sm text-sangue">{previa.erro}</p>}

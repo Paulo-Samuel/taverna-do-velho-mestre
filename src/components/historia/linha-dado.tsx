@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { CartaoDado, listaDespertares, MedidorFome } from "@/components/chat/cartao-dado";
 import type { Mensagem } from "@/lib/db";
 import { COR_GRAU, corDoNome } from "./cores";
+import { TextoComIcones } from "@/components/icones";
 
 // Acontecimentos mecânicos no fluxo do livro (dano, XP, descanso, missão, reputação, rolagem do mestre...):
 // linhas discretas e centradas, como notas de rodapé no meio do capítulo. Tipos sem desenho próprio usam o CartaoDado.
@@ -31,7 +32,7 @@ function Linha({ children, icone, tom = "text-muted", titulo }: { children: Reac
       <p className="max-w-[85%] text-center italic leading-snug">
         {icone && (
           <span className="mr-1.5 not-italic" aria-hidden>
-            {icone}
+            <TextoComIcones texto={icone} />
           </span>
         )}
         {children}

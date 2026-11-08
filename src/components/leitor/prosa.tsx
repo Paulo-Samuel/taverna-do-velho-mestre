@@ -122,7 +122,7 @@ export function AberturaCapitulo({
   if (!titulo && !linha) return null;
   return (
     <header className="surgir mx-auto max-w-[34rem] pb-4 pt-5 text-center first:pt-1 sm:pt-7" data-abertura>
-      {linha && <p className="text-[10.5px] font-semibold uppercase tracking-[0.34em] text-muted sm:text-[11px]">{linha}</p>}
+      {linha && <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-muted sm:text-[11px]">{linha}</p>}
       {titulo && <h2 className={`${classeTitulo} mt-2 text-balance text-[2rem] leading-[1.08] text-pergaminho sm:text-[2.6rem]`}>{titulo}</h2>}
       <Ornamento simbolo={simbolo} className="mb-0! mt-4! max-w-[11em]!" />
     </header>

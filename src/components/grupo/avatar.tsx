@@ -32,7 +32,7 @@ export function iniciais(nome: string): string {
 
 export function Avatar({ mesa, personagem, tamanho = "md" }: { mesa: Pick<Mesa, "personagens">; personagem: PersonagemVisivel; tamanho?: "sm" | "md" }) {
   const caido = personagem.ficha.pvMax > 0 && personagem.ficha.pv <= 0;
-  const medida = tamanho === "sm" ? "h-6 w-6 text-[10px]" : "h-9 w-9 text-xs";
+  const medida = tamanho === "sm" ? "h-6 w-6 text-[11px]" : "h-9 w-9 text-xs";
   return (
     <span
       aria-hidden

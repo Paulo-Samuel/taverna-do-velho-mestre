@@ -26,9 +26,9 @@ function Icone({ modo }: { modo: ModoLeitura }) {
   );
 }
 
-const OPCOES: [ModoLeitura, string, string, string][] = [
-  ["cenas", "📖", "Cena a cena", "Só a cena atual, em páginas. Nada de rolar."],
-  ["rolagem", "📜", "Rolagem", "A história inteira numa coluna só, para reler o que passou."],
+const OPCOES: [ModoLeitura, string, string][] = [
+  ["cenas", "Cena a cena", "Só a cena atual, em páginas. Nada de rolar."],
+  ["rolagem", "Rolagem", "A história inteira numa coluna só, para reler o que passou."],
 ];
 
 const DICAS_FONTE = ["Miúda, para quem tem olho de águia.", "A de sempre.", "Mais folgada.", "Grande, para ler de longe da tela."];
@@ -78,8 +78,8 @@ export function MenuLeitura({
         onClick={() => setAberto((v) => !v)}
         aria-expanded={aberto}
         aria-haspopup="dialog"
-        aria-label={`Modo de leitura: ${atual[2]}`}
-        title={`Modo de leitura: ${atual[2]}`}
+        aria-label={`Modo de leitura: ${atual[1]}`}
+        title={`Modo de leitura: ${atual[1]}`}
         className={
           linha
             ? `flex min-h-10 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-sm hover:bg-surface-2/60 hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar ${aberto ? "text-ambar" : "text-foreground/90"}`
@@ -87,13 +87,13 @@ export function MenuLeitura({
         }
       >
         <Icone modo={modo} />
-        {linha && <span>Como ler · {atual[2]}</span>}
+        {linha && <span>Como ler · {atual[1]}</span>}
       </button>
       {aberto && (
         <div role="dialog" aria-label="Modo de leitura" className={`cartao surgir bg-surface! absolute z-50 max-h-[calc(100dvh-5rem)] w-72 max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain p-3 text-foreground ${acima ? "bottom-full mb-2" : "top-full mt-2"} ${esquerda ? "left-0" : "right-0"}`}>
           <p className="titulo mb-2 text-sm text-ambar">Como ler a história</p>
           <div role="radiogroup" aria-label="Modo de leitura" className="space-y-1.5">
-            {OPCOES.map(([id, emoji, nome, dica]) => (
+            {OPCOES.map(([id, nome, dica]) => (
               <button
                 key={id}
                 type="button"
@@ -108,18 +108,18 @@ export function MenuLeitura({
                   modo === id ? "border-ambar/70 bg-ambar/10" : "border-border hover:border-ambar/50"
                 }`}
               >
-                <span aria-hidden className="text-lg leading-6">
-                  {emoji}
+                <span aria-hidden className="grid size-[18px] shrink-0 place-items-center">
+                  <Icone modo={id} />
                 </span>
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold">{nome}</span>
-                  <span className="block text-[11px] leading-snug text-muted">{dica}</span>
+                  <span className="block text-xs leading-snug text-muted">{dica}</span>
                 </span>
               </button>
             ))}
           </div>
           {telaBaixa && modo === "cenas" && (
-            <div className="mt-2 rounded-lg border border-ambar/40 bg-ambar/5 px-2.5 py-2 text-[11px] leading-snug text-foreground/90" role="status" data-tela-baixa={paginasEmTelaBaixa ? "paginas" : "rolagem"}>
+            <div className="mt-2 rounded-lg border border-ambar/40 bg-ambar/5 px-2.5 py-2 text-xs leading-snug text-foreground/90" role="status" data-tela-baixa={paginasEmTelaBaixa ? "paginas" : "rolagem"}>
               {paginasEmTelaBaixa ? (
                 <>
                   Tela baixa: as páginas ficam curtas.{" "}
@@ -141,7 +141,7 @@ export function MenuLeitura({
           <div className="mt-3 flex items-center gap-2 border-t border-border pt-2.5 text-xs" data-tamanho-letra>
             <span className="min-w-0 flex-1">
               Tamanho da letra
-              <span className="block text-[11px] leading-snug text-muted">{DICAS_FONTE[fonte]}</span>
+              <span className="block text-xs leading-snug text-muted">{DICAS_FONTE[fonte]}</span>
             </span>
             <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Tamanho da letra">
               <button
@@ -184,7 +184,7 @@ export function MenuLeitura({
             />
             <span>
               Texto se revelando aos poucos
-              <span className="block text-[11px] leading-snug text-muted">
+              <span className="block text-xs leading-snug text-muted">
                 {menos
                   ? "Desligado: seu sistema pediu menos movimento."
                   : !suportaRevelar()

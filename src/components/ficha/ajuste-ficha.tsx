@@ -5,6 +5,7 @@ import * as identidade from "@/lib/cliente/identidade";
 import type { PersonagemVisivel } from "@/lib/mesa";
 import { lerCondicao, textoCondicao } from "@/lib/sistemas/pf2e/condicoes";
 import type { BlocoFicha, CondicaoDef } from "@/lib/sistemas/tipos";
+import { Icone } from "@/components/icones";
 
 // Ajuste manual da ficha na mesa: o mestre esqueceu o dano, a Força de Vontade gasta, a Fome... o jogador corrige.
 // Cliques seguidos se juntam (debounce) num só PATCH com variações; o valor aparece na hora e o SSE {e:"personagem"} confirma.
@@ -491,8 +492,8 @@ export function SeletorCondicao({ ajuste, condicoes, dica }: { ajuste: AjusteFic
       <button type="button" className="px-1 text-xs text-muted hover:text-foreground" onClick={() => setAberto(false)} aria-label="Fechar">
         ✕
       </button>
-      {def.efeito && <p className="w-full text-[11px] text-muted">{def.efeito}</p>}
-      {existente && <p className="w-full text-[11px] text-ambar">Já tem “{existente}”: grava no lugar dela.</p>}
+      {def.efeito && <p className="w-full text-xs text-muted">{def.efeito}</p>}
+      {existente && <p className="w-full text-xs text-ambar">Já tem “{existente}”: grava no lugar dela.</p>}
     </form>
   );
 }
@@ -630,7 +631,7 @@ export function NotasJogador({ campanhaId, personagemId, linhas = 5 }: { campanh
         aria-label="Minhas anotações sobre o personagem"
         className="campo resize-y px-2.5 py-2 text-sm leading-relaxed"
       />
-      <p className="mt-1 flex justify-between gap-2 text-[11px] text-muted">
+      <p className="mt-1 flex justify-between gap-2 text-xs text-muted">
         <span>só para você e a mesa: o mestre não lê isto</span>
         <span className={estado === "erro" ? "text-sangue" : ""} aria-live="polite">
           {situacao}
@@ -706,14 +707,14 @@ export function BotaoRemorso({
         }`}
         data-rolar-remorso
       >
-        <span aria-hidden>🩸</span>
+        <Icone nome="drop" />
         {indo ? "Pedindo…" : "Rolar Remorso"}
         <span className="tabular-nums text-muted">
           ({m.atual} {m.atual === 1 ? "Mancha" : "Manchas"})
         </span>
       </button>
       {erro && (
-        <p className="mt-1 text-[11px] leading-snug text-sangue" role="alert">
+        <p className="mt-1 text-xs leading-snug text-sangue" role="alert">
           {erro}
         </p>
       )}

@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
+import { Icone } from "@/components/icones";
 
 // Parada de dados do cartão de teste para sistemas sem d20: d10 do Vampiro V5 (dados de Fome em vermelho-sangue), d100
 // (dezena e unidade), Fate (4dF) e d6 do PbtA; outras expressões caem num dado genérico pelo número de lados.
@@ -222,8 +223,7 @@ function D10Vtm({ valor, fome, bestial, i, v, antes }: { valor: number | null; f
         </span>
       )}
       {um && (
-        <span className={`pd-face absolute -right-1.5 -top-2 ${v.compacto ? "text-[10px]" : "text-sm"}`} aria-hidden>
-          ☠
+        <span className={`pd-face absolute -right-1.5 -top-2 ${v.compacto ? "text-[10px]" : "text-sm"}`} aria-hidden><Icone nome="skull" /> 
         </span>
       )}
     </Casca>
@@ -266,7 +266,7 @@ function ParadaD100({ r, v }: { r: ResultadoParada | null; v: Visual }) {
         </SvgD10>
         {texto !== null && <span className={`pd-face titulo relative mb-[10%] leading-none tabular-nums ${v.compacto ? "text-[11px]" : "text-base sm:text-lg"}`}>{texto}</span>}
       </Casca>
-      {!v.compacto && <span className="text-[9px] uppercase tracking-wider text-muted">{legenda}</span>}
+      {!v.compacto && <span className="text-[11px] uppercase tracking-wider text-muted">{legenda}</span>}
     </span>
   );
   return (

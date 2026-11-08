@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { RetratoSVG } from "../historia/retrato/desenho";
 import type { Chip, GrupoChips } from "./cena";
+import { TextoComIcones } from "@/components/icones";
 
 // "O que mudou na cena": as linhas de ficha, diário e XP do turno numa faixa de chips no fim da cena, por personagem
 // ("Samuel: Fome 1 → 2 · +1 Mancha"). Chips discretos na cor do tema; o detalhe (o motivo que o mestre deu) aparece ao passar o
@@ -105,7 +106,7 @@ export function Mudancas({
                       </span>
                     ) : (
                       <span aria-hidden className="leitor-chip-icone">
-                        {c.icone}
+                        <TextoComIcones texto={c.icone} />
                       </span>
                     )}
                     <span className={c.riscado ? "line-through decoration-current/50" : ""}>{c.rotulo}</span>

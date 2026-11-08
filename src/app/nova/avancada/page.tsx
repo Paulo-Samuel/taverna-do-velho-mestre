@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { FormularioPersonagem } from "@/components/ficha/formulario-personagem";
 import { aventurasPublicas } from "@/lib/aventuras";
 import { sistemasPublicos } from "@/lib/sistemas";
@@ -33,6 +34,13 @@ export default async function NovaCampanha(props: PageProps<"/nova/avancada">) {
           subtitulo: "Escolha as regras, monte o personagem e diga onde a história começa. O mestre cuida do resto, inclusive de arruinar seus planos.",
         }}
       />
+      <p className="mt-6 text-center text-sm text-muted">
+        Prefere responder três perguntas e deixar o resto com o mestre?{" "}
+        <Link href="/nova" className="text-ambar underline-offset-4 hover:underline">
+          Vá pelo modo história
+        </Link>
+        .
+      </p>
     </main>
   );
 }

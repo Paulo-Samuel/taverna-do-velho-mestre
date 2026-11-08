@@ -5,19 +5,19 @@
    Contraste conferido: texto, muted, âmbar e âmbar-forte ficam acima de 4.5:1 sobre o fundo e as superfícies. */
 
 /* registradas como cor para a troca de tema virar transição suave (variável comum muda de uma vez) */
-@property --background { syntax: "<color>"; inherits: true; initial-value: #120d0a; }
-@property --surface { syntax: "<color>"; inherits: true; initial-value: #1c1511; }
-@property --surface-2 { syntax: "<color>"; inherits: true; initial-value: #261c16; }
-@property --foreground { syntax: "<color>"; inherits: true; initial-value: #eadfc8; }
-@property --muted { syntax: "<color>"; inherits: true; initial-value: #a39580; }
-@property --border { syntax: "<color>"; inherits: true; initial-value: #3a2c22; }
-@property --ambar { syntax: "<color>"; inherits: true; initial-value: #e0a24a; }
-@property --ambar-forte { syntax: "<color>"; inherits: true; initial-value: #b9792a; }
-@property --sangue { syntax: "<color>"; inherits: true; initial-value: #b23a2c; }
-@property --pergaminho { syntax: "<color>"; inherits: true; initial-value: #f1e4c4; }
-@property --botao { syntax: "<color>"; inherits: true; initial-value: #e0a24a; }
-@property --botao-texto { syntax: "<color>"; inherits: true; initial-value: #1a120c; }
-@property --botao-hover { syntax: "<color>"; inherits: true; initial-value: #f0b762; }
+@property --background { syntax: "<color>"; inherits: true; initial-value: #0B0908; }
+@property --surface { syntax: "<color>"; inherits: true; initial-value: #17120F; }
+@property --surface-2 { syntax: "<color>"; inherits: true; initial-value: #211A15; }
+@property --foreground { syntax: "<color>"; inherits: true; initial-value: #F0E6D3; }
+@property --muted { syntax: "<color>"; inherits: true; initial-value: #AC9F8B; }
+@property --border { syntax: "<color>"; inherits: true; initial-value: #3B2F25; }
+@property --ambar { syntax: "<color>"; inherits: true; initial-value: #D9A54E; }
+@property --ambar-forte { syntax: "<color>"; inherits: true; initial-value: #B8842F; }
+@property --sangue { syntax: "<color>"; inherits: true; initial-value: #D65C4D; }
+@property --pergaminho { syntax: "<color>"; inherits: true; initial-value: #F1E4C4; }
+@property --botao { syntax: "<color>"; inherits: true; initial-value: #D9A54E; }
+@property --botao-texto { syntax: "<color>"; inherits: true; initial-value: #1A120C; }
+@property --botao-hover { syntax: "<color>"; inherits: true; initial-value: #EFBE6B; }
 
 /* na camada base: elemento com a classe `transition` do Tailwind (hover) continua mandando na própria transição */
 @layer base {
@@ -46,9 +46,37 @@
   }
 }
 
-/* Padrão (e modo história): taverna à luz de vela, madeira escura, pergaminho, âmbar e sangue. */
+/* Padrão: a cor do site (cabeçalho, home, páginas sem sistema). Cada sistema tem o bloco dele mais abaixo. */
 :root,
-[data-tema="padrao"],
+[data-tema="padrao"] {
+  --background: #0B0908;
+  --surface: #17120F;
+  --surface-2: #211A15;
+  --foreground: #F0E6D3;
+  --muted: #AC9F8B;
+  --border: #3B2F25;
+  --ambar: #D9A54E;
+  --ambar-forte: #B8842F;
+  --sangue: #D65C4D;
+  --musgo: #8FAF72;
+  --pergaminho: #F1E4C4;
+  --botao: #D9A54E;
+  --botao-texto: #1A120C;
+  --botao-hover: #EFBE6B;
+  /* 10 de dado normal (parada de d10) */
+  --critico: #F0CD7C;
+  --font-titulo: var(--fonte-fell);
+  --titulo-espaco: 0.02em;
+  --ornamento: "✦";
+  /* grão de madeira + brilho de lareira no canto */
+  --textura:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012 .5' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .6 0 0 0 0 .4 0 0 0 0 .25 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(900px 600px at 100% 100%, rgba(224, 162, 74, 0.13), transparent 60%),
+    radial-gradient(700px 500px at 0% 0%, rgba(178, 58, 44, 0.1), transparent 60%);
+  --textura-cartao: radial-gradient(420px 220px at 100% 0%, rgba(224, 162, 74, 0.07), transparent 70%);
+}
+
+/* Modo história: a taverna de madeira escura e âmbar quente, como era antes do rebranding do site. */
 [data-tema="historia"] {
   --background: #120d0a;
   --surface: #1c1511;

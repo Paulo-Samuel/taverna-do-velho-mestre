@@ -14,6 +14,7 @@ import { BotaoImprimir } from "./botao-imprimir";
 import { dataPorExtenso, montarLivro, romano, statusDaMissao, tituloDoCapitulo, type Bloco, type FichaResumo } from "./montar";
 import { Prosa } from "./prosa";
 import "./livro.css";
+import { Icone } from "@/components/icones";
 
 // Livro da campanha: a história inteira como um livro, da capa às fichas e ao diário. Mesmo controle de acesso da mesa.
 // Tema do sistema (modo história: céu estrelado e letra gótica). Imprime limpo (livro.css) e baixa em Markdown.
@@ -66,7 +67,7 @@ function DesenharBloco({ b, ornamento, capitular }: { b: Bloco; ornamento: strin
   if (b.tipo === "nota")
     return (
       <p className="livro-nota">
-        <span aria-hidden>🎲 </span>
+        <Icone nome="dice" />
         {b.texto}
       </p>
     );
@@ -176,7 +177,7 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
                   <li key={f.id} className="flex w-28 flex-col items-center gap-2">
                     <Rosto f={f} historia={historia} tamanho={72} />
                     <span className="w-full text-sm font-semibold leading-tight text-pergaminho">{f.nome}</span>
-                    {f.linha && <span className="-mt-1 w-full text-[11px] leading-tight text-muted">{f.linha}</span>}
+                    {f.linha && <span className="-mt-1 w-full text-xs leading-tight text-muted">{f.linha}</span>}
                   </li>
                 ))}
               </ul>
@@ -194,7 +195,7 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
             <ol className="mt-4 space-y-1.5">
               {livro.capitulos.map((c) => (
                 <li key={c.numero}>
-                  {c.noite && <p className="mb-1 mt-3 text-center text-[10.5px] font-semibold uppercase tracking-[0.3em] text-ambar/80">Noite {c.noite}{c.noiteData ? ` · ${c.noiteData}` : ""}</p>}
+                  {c.noite && <p className="mb-1 mt-3 text-center text-[11px] font-semibold uppercase tracking-[0.3em] text-ambar/80">Noite {c.noite}{c.noiteData ? ` · ${c.noiteData}` : ""}</p>}
                   <a href={`#capitulo-${c.numero}`} className="flex items-baseline gap-2 text-foreground/90 hover:text-ambar">
                     <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted">{romano(c.numero)}</span>
                     <span className="min-w-0 flex-1 truncate">{tituloDoCapitulo(c)}</span>
@@ -262,7 +263,7 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
                     </p>
                   )}
                   {f.historia && <p className="mt-2 line-clamp-6 text-sm italic leading-relaxed text-foreground/80">{f.historia}</p>}
-                  {f.jogador && <p className="mt-2 text-[11px] text-muted">Jogado por {f.jogador}</p>}
+                  {f.jogador && <p className="mt-2 text-xs text-muted">Jogado por {f.jogador}</p>}
                 </div>
               ))}
             </div>
@@ -290,9 +291,7 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
                   <ul className="mt-2 space-y-1.5">
                     {livro.fatos.map((f, i) => (
                       <li key={i} className="flex gap-2 text-[0.98rem] leading-relaxed text-foreground/90">
-                        <span className="text-ambar/70" aria-hidden>
-                          📌
-                        </span>
+                        <Icone nome="pin" className="text-ambar/70" />
                         {f}
                       </li>
                     ))}

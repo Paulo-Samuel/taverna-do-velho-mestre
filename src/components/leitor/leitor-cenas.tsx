@@ -13,6 +13,7 @@ import { CONSULTA_LARGO, useConsulta, useMenosMovimento, usePreferenciasLeitor }
 import { capitularCabe, EstiloProsa } from "./prosa";
 import { agruparTurnos, SEPARADOR, type Turno } from "./turnos";
 import { suportaRevelar, useRevelar, type Transicao } from "./use-revelar";
+import { TextoComIcones } from "@/components/icones";
 
 // Leitor cena a cena das duas mesas (modo história e avançado), no lugar da conversa que rola.
 // O palco é sempre a cena atual (o último turno): a ação do jogador discreta no topo, a narração se revelando aos poucos, os
@@ -106,7 +107,7 @@ export function AcaoTopo({
     );
   return (
     <div className="flex min-w-0 flex-wrap items-start gap-x-2.5 gap-y-1 text-[0.92rem] leading-snug sm:flex-nowrap" title={t.length > 160 ? t : undefined}>
-      {icone && <span className="mt-px shrink-0 opacity-90">{icone}</span>}
+      {icone && <span className="mt-px shrink-0 opacity-90">{typeof icone === "string" ? <TextoComIcones texto={icone} /> : icone}</span>}
       <p className="line-clamp-2 min-w-0 flex-1 break-words text-foreground/75 baixo:line-clamp-1">
         <span
           className={`font-semibold tracking-[0.06em] [font-variant-caps:all-small-caps] ${cor ? "" : "text-ambar"}`}
@@ -205,12 +206,12 @@ function FaixaMudancas({
           type="button"
           onClick={() => setManual(!aberta)}
           aria-expanded={aberta}
-          className="flex min-h-7 shrink-0 items-center gap-1.5 whitespace-nowrap text-[10.5px] font-semibold uppercase tracking-[0.22em] text-muted transition hover:text-ambar"
+          className="flex min-h-7 shrink-0 items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.22em] text-muted transition hover:text-ambar"
           title={aberta ? "Recolher o que mudou na cena" : "Mostrar o que mudou na cena"}
         >
           <span>O que mudou</span>
           <span className="tabular-nums tracking-normal text-muted/70">· {total}</span>
-          <span aria-hidden className="text-[9px]">
+          <span aria-hidden className="text-[11px]">
             {aberta ? "▾" : "▸"}
           </span>
         </button>
@@ -218,7 +219,7 @@ function FaixaMudancas({
           <div className="relative min-w-0 flex-1 py-0.5">
             <Mudancas grupos={grupos} corDe={corDe} variante="faixa" className={revelados ? "" : "leitor-mudancas-oculta"} />
             {!revelados && (
-              <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center text-[11px] italic text-muted/70" aria-hidden>
+              <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center text-xs italic text-muted/70" aria-hidden>
                 …no fim da cena
               </span>
             )}

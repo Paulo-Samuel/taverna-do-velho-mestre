@@ -9,6 +9,7 @@ import { Dado3D } from "./dado-3d";
 import { lerParada, ParadaDados, PASSO_MS, qtdDados, type Parada, type ResultadoParada } from "./parada-dados";
 import { Retrato } from "./retrato";
 import { usaD20 } from "./usa-d20";
+import { Icone } from "@/components/icones";
 
 // O momento principal do modo história: o mestre pediu um teste e o jogador rola na tela.
 // Pendente → cartão grande com os dados e o botão. Rolado aqui → d20 3D gira e assenta na face do servidor; nos outros sistemas a
@@ -229,7 +230,7 @@ function Chips({ d, parada, d20, bonus, alvo }: { d: DadosPedido; parada: Parada
   for (const [i, c] of (Array.isArray(d.custos) ? d.custos : []).entries()) {
     chips.push(
       <Chip key={`custo${i}`} tom="border-sangue/50 text-sangue">
-        {/^surto/i.test(c) ? "⚡" : "🩸"} {c}
+        <Icone nome={/^surto/i.test(c) ? "bolt" : "drop"} /> {c}
       </Chip>,
     );
   }
@@ -386,7 +387,7 @@ export function PedidoTeste({
         aoRerrolar={aoRerrolar}
       />
     ) : d.aceitoSozinho ? (
-      <p className="mt-1 text-[11px] italic text-muted">ninguém decidiu a tempo: ficou o resultado do dado</p>
+      <p className="mt-1 text-xs italic text-muted">ninguém decidiu a tempo: ficou o resultado do dado</p>
     ) : null;
   const opcaoSurto = (Array.isArray(d.antes) ? d.antes : []).find((o) => o.id === "surto");
 
@@ -553,7 +554,7 @@ export function PedidoTeste({
       )}
       {!rolagem && d.status === "pendente" && opcaoSurto && podeRolar && (
         <label className="mx-auto mt-2.5 flex w-fit cursor-pointer items-center gap-2 rounded-full border border-sangue/50 bg-sangue/5 px-3 py-1 text-xs text-sangue" data-pd-surto>
-          <input type="checkbox" checked={surto} onChange={(e) => setSurto(e.target.checked)} className="accent-[var(--sangue)]" />⚡ {opcaoSurto.rotulo}
+          <input type="checkbox" checked={surto} onChange={(e) => setSurto(e.target.checked)} className="accent-[var(--sangue)]" /><Icone nome="bolt" />  {opcaoSurto.rotulo}
           {opcaoSurto.efeito ? ` (${opcaoSurto.efeito})` : ""}{" "}
           <span className="text-muted">· rola um Despertar antes</span>
         </label>
@@ -622,8 +623,7 @@ export function PedidoTeste({
             data-rolar
             className="btn-ambar mt-5 min-h-12 w-full max-w-xs px-8 text-base focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ambar sm:w-auto"
             onClick={() => void clicar()}
-          >
-            🎲 {d20 ? "Rolar o dado" : "Rolar os dados"}
+          ><Icone nome="dice" />  {d20 ? "Rolar o dado" : "Rolar os dados"}
             {opcaoSurto && surto ? " com Surto" : ""}
           </button>
           {perguntar && (
