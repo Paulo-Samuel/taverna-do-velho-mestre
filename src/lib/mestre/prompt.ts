@@ -501,7 +501,8 @@ Formato, em português, no máximo ${MAX_PALAVRAS_RESUMO} palavras no total, exa
 ## Estado do grupo
 (só o que a ficha não mostra: ferimentos narrativos, dívidas, onde o grupo está; "—" se nada)
 ## Divergências
-(frases dos acontecimentos novos que contradizem o diário, ex.: "o diário diz Vera aliada, mas ela atacou o grupo"; "—" se nenhuma)
+(frases dos acontecimentos novos que contradizem o diário, ex.: "o diário diz Vera aliada, mas ela atacou o grupo"; "—" se nenhuma.
+O diário pode estar à frente destes acontecimentos: as mensagens mais recentes ficam fora deste trecho. Fato do diário que não aparece aqui, ou que aqui "ainda não aconteceu", NÃO é divergência; só a contradição direta conta)
 Seja factual; não invente nada que não esteja no texto. Responda só com o resumo.`;
 
 export function promptDoResumo(resumoAtual: string, novas: Mensagem[], personagens: Personagem[], diario = "") {

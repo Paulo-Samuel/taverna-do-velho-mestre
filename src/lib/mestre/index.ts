@@ -786,6 +786,6 @@ async function atualizarResumo(campanhaId: number) {
   const { resumo, divergencias } = separarDivergencias(novo.trim());
   salvarResumo(campanhaId, resumo, saindo[saindo.length - 1].id);
   if (divergencias.length) {
-    recadoDeSistema(campanhaId, `O diário e o resumo discordam: ${divergencias.slice(0, 3).join(" · ")}. Se for o caso, fixe o fato certo ou corrija o diário.`, "divergencia");
+    recadoDeSistema(campanhaId, `O diário e o resumo discordam: ${divergencias.slice(0, 3).map((d) => d.replace(/[.;\s]+$/, "")).join(" · ")}. Se for o caso, fixe o fato certo ou corrija o diário.`, "divergencia");
   }
 }
