@@ -27,10 +27,11 @@ export function motivosDeXp(fichas: Ficha[]): string[] {
 }
 
 export const FIM_DE_SESSAO_VTM: FimDeSessaoSistema = {
-  xp: "conceder_xp de 1 a 3 para cada personagem (XP é moeda que o jogador gasta na ficha; nunca suba Potência por isso), com o motivo: 1 pela noite jogada, +1 se perseguiu a Ambição ou pôs as Convicções à prova, +1 por missão concluída no diário desde o último fechamento",
+  xp: "conceder_xp de 1 a 3 para cada personagem (XP é moeda que o jogador gasta na ficha; nunca suba Potência por isso), com o motivo tirado da noite inteira (bloco \"Nesta sessão\"): 1 pela noite jogada, +1 se perseguiu a Ambição ou pôs as Convicções à prova, +1 por missão concluída no diário desde o último fechamento; XP que já aparece como concedido nesta noite conta dentro desses 3",
   passosExtras(fichas) {
     const passos: string[] = [];
     const nomes = comManchas(fichas);
+    // quem rolou o Remorso na tela (rota /remorso) já está sem Manchas e não aparece aqui; sobra o caminho "o mestre decide"
     if (nomes.length) passos.push(`teste_de_remorso para ${nomes.join(", ")} (tem Manchas); o resultado entra no fechamento (a consciência pesa ou cede)`);
     const motivos = motivosDeXp(fichas);
     if (motivos.length) passos.push(`para o motivo do XP, compare a noite com: ${motivos.join(" · ")}`);

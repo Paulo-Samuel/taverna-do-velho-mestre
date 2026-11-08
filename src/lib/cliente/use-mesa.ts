@@ -8,6 +8,7 @@ import type { EventoMesa, Jogador } from "@/lib/tempo-real";
 import * as identidade from "./identidade";
 import { postarJson } from "./http";
 import { FIM_DE_SESSAO, RESULTADO_TESTE } from "@/lib/constantes";
+import { proximoFechando } from "@/components/sessao/noite";
 
 // Estado vivo de uma mesa no navegador: começa com o estado do servidor e segue o fluxo de eventos (SSE).
 
@@ -35,6 +36,13 @@ export type Mesa = {
   fila: AcaoPendente[];
   /** a fila bruta só tem ação interna (resultado de teste, fim da noite) esperando o mestre: ele "lê o resultado" */
   lendoResultado: boolean;
+  /**
+   * A noite está sendo fechada: o FIM_DE_SESSAO entrou na fila (ou este aparelho pediu o encerramento) e o marcador de fim
+   * ainda não chegou. Fica ligado enquanto o mestre narra o fechamento (a fila já esvaziou) e cai com o marcador.
+   */
+  fechando: boolean;
+  /** número da noite em andamento segundo o servidor (W21: marcador ou intervalo de 5 h); null em taverna sem o contador */
+  sessao: number | null;
   ocupado: boolean;
   presenca: Jogador[];
   provedor: string;
@@ -63,6 +71,8 @@ export type AcoesMesa = {
   limparErro: () => void;
   /** registra uma mensagem recebida fora do fluxo (ex.: resposta de uma rota) sem duplicar */
   receberMensagem: (m: Mensagem) => void;
+  /** O servidor aceitou o "Encerrar a noite" deste aparelho: liga o `fechando` já, sem esperar a fila chegar pelos eventos. */
+  marcarFechando: () => void;
   /**
    * Rola um teste que o mestre pediu (mensagem 'dado' com dados.tipo "pedido_teste" e status "pendente").
    * O servidor sorteia o d20 e devolve o resultado (ResultadoTeste) para a animação do dado; a mensagem
@@ -82,6 +92,9 @@ const semInternas = (fila: AcaoPendente[]) => fila.filter((a) => !interna(a));
 
 /** Só ação interna esperando: o mestre ainda não pegou o resultado (modo rodada esperando os outros, ou o instante antes de narrar). */
 const soInternas = (fila: AcaoPendente[]) => fila.length > 0 && fila.every(interna);
+
+/** A mensagem é o marcador de fim da noite (dado com dados.tipo "fim_sessao"). */
+const ehMarcadorFim = (m: Mensagem) => m.tipo === "dado" && (m.dados as { tipo?: string } | null)?.tipo === "fim_sessao";
 
 /**
  * Personagem ativo ao abrir a mesa: o salvo neste aparelho, se ainda existir. Sem nada salvo, a máquina da taverna (hot-seat) e
@@ -104,6 +117,8 @@ function deEstado(e: EstadoMesa) {
     diario: e.diario,
     fila: semInternas(e.fila),
     lendoResultado: soInternas(e.fila),
+    fechando: proximoFechando(false, e as { ocupado: boolean; fila: AcaoPendente[]; fechando?: boolean }),
+    sessao: typeof (e as { sessao?: unknown }).sessao === "number" ? ((e as { sessao?: number }).sessao ?? null) : null,
     ocupado: e.ocupado,
     presenca: e.presenca,
     provedor: e.provedor,
@@ -162,7 +177,11 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
       case "mensagem":
         if (ev.mensagem.tipo === "mestre") setAoVivo("");
         if (ev.mensagem.tipo === "dado") setNovas((s) => new Set(s).add(ev.mensagem.id));
-        setBase((b) => (b.mensagens.some((m) => m.id === ev.mensagem.id) ? b : { ...b, mensagens: [...b.mensagens, ev.mensagem] }));
+        setBase((b) =>
+          b.mensagens.some((m) => m.id === ev.mensagem.id)
+            ? b
+            : { ...b, mensagens: [...b.mensagens, ev.mensagem], fechando: ehMarcadorFim(ev.mensagem) ? false : b.fechando },
+        );
         break;
       case "mensagem_atualizada":
         if (ev.mensagem.tipo === "dado") setNovas((s) => new Set(s).add(ev.mensagem.id));
@@ -187,7 +206,14 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
         setBase((b) => ({ ...b, diario: ev.entradas }));
         break;
       case "estado":
-        setBase((b) => ({ ...b, ocupado: ev.ocupado, fila: semInternas(ev.fila), lendoResultado: soInternas(ev.fila) }));
+        setBase((b) => ({
+          ...b,
+          ocupado: ev.ocupado,
+          fila: semInternas(ev.fila),
+          lendoResultado: soInternas(ev.fila),
+          fechando: proximoFechando(b.fechando, ev as typeof ev & { fechando?: boolean }),
+          ...(typeof (ev as { sessao?: unknown }).sessao === "number" ? { sessao: (ev as { sessao?: number }).sessao ?? null } : {}),
+        }));
         if (!ev.ocupado) setAoVivo("");
         break;
       case "presenca":
@@ -329,6 +355,7 @@ export function useMesa(inicial: EstadoMesa): [Mesa, AcoesMesa] {
       [id, setErro],
     ),
     receberMensagem: useCallback((m: Mensagem) => aplicar({ e: "mensagem", mensagem: m }), [aplicar]),
+    marcarFechando: useCallback(() => setBase((b) => ({ ...b, fechando: true })), []),
   };
 
   return [{ ...base, local: inicial.local, aoVivo, limite, erro, erroInfo, conexao, semSinal, novas, eu }, acoes];

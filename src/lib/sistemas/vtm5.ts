@@ -29,11 +29,13 @@ import {
   listaExtra,
   manchaDe,
   NOME_FRENESI,
+  poderesDe,
   potenciaDe,
   ressonanciaDe,
   resolver,
   surtoPendenteDe,
   textoRessonancia,
+  type PoderVtm,
   type ResultadoVtm,
 } from "./vtm5/testes";
 import { CONDICAO_FAMINTO, INTENSIDADES, RESSONANCIAS } from "./vtm5/sangue";
@@ -196,6 +198,78 @@ function distribuirDisciplinas(ficha: Ficha, cla: ClaVtm, predador: PredadorVtm,
   return nota;
 }
 
+/**
+ * Um poder escrito na criação: o formato da tela ("dominacao|1|0|Nublar Memória|Manipulação + Dominação") ou texto livre
+ * ("Dominação ● Nublar Memória (sem custo)", "Celeridade ●● Piscar, custo 1"). null quando não dá para saber a disciplina.
+ */
+export function lerPoderEscrito(texto: string): PoderVtm | null {
+  const bruto = texto.trim();
+  if (!bruto) return null;
+  if (bruto.includes("|")) {
+    const [disc, nivel, custo, nome, parada] = bruto.split("|").map((x) => x.trim());
+    const x = DISCIPLINAS.find((y) => y.id === disc || normalizar(y.nome) === normalizar(disc));
+    if (!x || !nome) return null;
+    return {
+      disciplina: x.id,
+      nivel: limitar(Math.round(Number(nivel) || 1), 1, 5),
+      nome: nome.slice(0, 60),
+      custo: limitar(Math.round(Number(custo === "" ? 1 : custo)), 0, 3) || 0,
+      ...(parada ? { parada: parada.slice(0, 80) } : {}),
+    };
+  }
+  const t = normalizar(bruto);
+  const x = DISCIPLINAS.find((y) => [y.nome, ...(y.apelidos ?? [])].some((n) => n.length > 3 && t.includes(normalizar(n))));
+  if (!x) return null;
+  const bolas = bruto.match(/●+/)?.[0].length ?? Number(t.match(/nivel\s*(\d)/)?.[1] ?? 1);
+  const custo = /sem custo|custo\s*0|gratis|nao custa/.test(t) ? 0 : Number(t.match(/custo\s*(\d)/)?.[1] ?? 1);
+  const nomeDisc = [x.nome, ...(x.apelidos ?? [])].find((n) => t.includes(normalizar(n))) ?? x.nome;
+  const nome = bruto
+    .replace(new RegExp(nomeDisc.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), "")
+    .replace(/●+/g, "")
+    .replace(/\((?:[^)]*custo[^)]*|sem custo)\)/gi, "")
+    .replace(/,?\s*custo\s*\d/gi, "")
+    .replace(/^[\s:—–-]+|[\s:—–,-]+$/g, "")
+    .trim();
+  if (!nome) return null;
+  return { disciplina: x.id, nivel: limitar(bolas || 1, 1, 5), nome: nome.slice(0, 60), custo: limitar(custo, 0, 3) };
+}
+
+/** Poderes escolhidos na criação: um por ponto de disciplina, no nível que o personagem tem (o resto vira nota). */
+function distribuirPoderes(ficha: Ficha): string {
+  const escritos = listaExtra(ficha, "disciplinaPoderes");
+  delete ficha.extras.disciplinaPoderes;
+  if (!escritos.length) return "";
+  const disc = disciplinasDe(ficha);
+  const usados: Record<string, number> = {};
+  const poderes: PoderVtm[] = [];
+  const recusados: string[] = [];
+  for (const texto of escritos) {
+    // linha da tela sem nome = ponto ainda sem poder escolhido
+    if (texto.includes("|") && !(texto.split("|")[3] ?? "").trim()) continue;
+    const p = lerPoderEscrito(texto);
+    if (!p) {
+      recusados.push(`"${texto}" (disciplina não reconhecida)`);
+      continue;
+    }
+    const pontos = disc[p.disciplina] ?? 0;
+    if (p.nivel > pontos || (usados[p.disciplina] ?? 0) >= pontos) {
+      recusados.push(`${p.nome} (${nomeDisciplina(p.disciplina)} ${pontos})`);
+      continue;
+    }
+    if (poderes.some((x) => normalizar(x.nome) === normalizar(p.nome))) continue;
+    usados[p.disciplina] = (usados[p.disciplina] ?? 0) + 1;
+    poderes.push(p);
+  }
+  if (poderes.length) ficha.extras.poderes = poderes;
+  return recusados.length ? `poderes fora do que a ficha permite, não entraram: ${recusados.join(", ")}` : "";
+}
+
+/** "Nublar Memória (●, sem custo)", "Hipnose (●●, 1 Despertar; Manipulação + Dominação)". */
+function textoPoder(p: PoderVtm): string {
+  const custo = p.custo === 0 ? "sem custo" : `${p.custo} Despertar${p.custo > 1 ? "es" : ""}`;
+  return `${p.nome} (${"●".repeat(p.nivel)}, ${custo}${p.parada ? `; ${p.parada}` : ""})`;
+}
+
 function paradaCaca(ficha: Ficha): string {
   const pred = predadorDe(ficha);
   if (!pred.parada) return pred.paradaTexto;
@@ -321,6 +395,14 @@ const OPCOES: OpcaoCriacao[] = [
     opcoes: PREDADORES.flatMap((p) => p.disciplinas.map((x) => ({ id: `${p.id}:${x}`, nome: nomeDisciplina(x), ancestralidades: [p.id] }))),
   },
   {
+    id: "disciplinaPoderes",
+    rotulo: "Poderes de disciplina (um por ponto)",
+    ajuda: "Um poder para cada ponto de disciplina, no nível que você já tem: “Dominação ● Nublar Memória (sem custo)”, “Celeridade ●● Piscar”. Custo = Despertares ao usar (0 a 3; padrão 1). O mestre só usa os poderes listados.",
+    tipo: "lista-texto",
+    max: 6,
+    classes: CLAS.filter((c) => c.id !== "sangue_ralo").map((c) => c.id),
+  },
+  {
     id: "recursos",
     rotulo: "Recursos (vantagem)",
     ajuda: "Dinheiro e bens, de 0 a 5. Em branco, 1.",
@@ -358,9 +440,9 @@ export const SECOES_REGRAS: SecaoRegras[] = [
     id: "TESTES",
     teto: 2000,
     texto: `TESTES — parada de d10 = atributo + perícia (ou atributo + atributo, ou atributo + disciplina). Cada dado 6+ é um sucesso; cada PAR de 10 vale 4 sucessos no total.
-- Nome do teste (teste ou pedir_teste): "Destreza + Furtividade", "Raciocínio + Percepção", "Carisma + Persuasão"; só a perícia ("Furtividade") usa o atributo usual; só o atributo ("Força") faz par com outro atributo; disciplina ("Dominação", "Presença", "Auspícios", "Celeridade"...) soma o atributo usual (pode dizer "Carisma + Dominação"). Especialidade: o foco entre parênteses ("Lábia (sedução)") dá +1 dado se a ficha tiver.
+- Nome do teste (teste ou pedir_teste): "Destreza + Furtividade", "Raciocínio + Percepção", "Carisma + Persuasão"; só a perícia ("Furtividade") usa o atributo usual; só o atributo ("Força") faz par com outro atributo; disciplina ("Dominação", "Presença", "Auspícios", "Celeridade"...) soma o atributo usual (pode dizer "Carisma + Dominação"); o nome de um poder da ficha ("Nublar Memória") já traz parada, nível e custo. Especialidade: o foco entre parênteses ("Lábia (sedução)") dá +1 dado se a ficha tiver.
 - Especiais: "Ataque" (Briga, Armas Brancas ou Armas de Fogo pela arma citada), "Iniciativa" (Raciocínio + Percepção, sem dificuldade), "Força de Vontade".
-- alvo = DIFICULDADE em sucessos (padrão 1): 1 rotineiro, 2 direto, 3 moderado, 4 desafiador, 5 muito difícil, 6+ quase impossível. Em disputa, role o NPC com rolar_dados (Nd10, conte 6+) e use os sucessos dele como alvo.
+- alvo = DIFICULDADE em sucessos (padrão 1): 1 rotineiro, 2 direto, 3 moderado, 4 desafiador, 5 muito difícil, 6+ quase impossível. Disputa com NPC: sem alvo, oposicao_nome + oposicao_parada (dados dele); o servidor rola os dois e o empate fica com o NPC.
 - Ajuda ou atrapalho = ±2 dados (modificador, mínimo 1 dado).
 - Total ≥ alvo = Sucesso; com par de 10 = Crítico. Se faltar pouco (0 < sucessos < alvo), ofereça VITÓRIA A UM CUSTO (dano, Mancha, barulho, testemunha, Fome).`,
   },
@@ -394,7 +476,7 @@ export const SECOES_REGRAS: SecaoRegras[] = [
   {
     id: "DANO",
     teto: 1000,
-    texto: `DANO — Saúde = Vigor + 3 (pv). Ataque: atacante vs. defesa do alvo (Destreza + Atletismo para esquivar, Força + Briga para bloquear); dano = margem + arma (soco +0, faca +1, espada ou taco +2, pistola +2, espingarda +4). Superficial: vampiro divide por 2 (para cima) ANTES do alterar_ficha pv −N. Agravado (fogo, sol, garras e presas de lobisomem, alguns poderes) entra inteiro, com a condição "agravado N" (cura só com noites de descanso e muito sangue). Mortais e lacaios caem rápido (Saúde 3–7).
+    texto: `DANO — Saúde = Vigor + 3 (pv). Ataque: oposicao_parada = defesa do alvo (Destreza + Atletismo para esquivar, Força + Briga para bloquear) e arma (soco 0, faca 1, espada, taco ou pistola 2, espingarda 4); o resultado traz o dano sugerido (margem + arma) para atualizar_cena. Superficial: vampiro divide por 2 (para cima) ANTES do alterar_ficha pv −N. Agravado (fogo, sol, garras e presas de lobisomem, alguns poderes) entra inteiro, com a condição "agravado N" (cura só com noites de descanso e muito sangue). Mortais e lacaios caem rápido (Saúde 3–7).
 TORPOR E MORTE FINAL — Saúde 0 por dano superficial = torpor (o servidor marca "inconsciente": trate como torpor, de dias a anos). Saúde 0 por agravado, estaca no coração + fogo ou sol, ou decapitação = Morte Final. Estaca no coração paralisa, não mata.`,
   },
   {
@@ -420,6 +502,7 @@ XP — você só CONCEDE (conceder_xp: 1 a 3 por personagem no fim da noite, +1 
 - Horror pessoal: o monstro é o personagem. Cada noite traz uma tentação e um preço; deixe-o escolher e cobre depois. O caminho humano custa caro; o fácil é monstruoso.
 - Convicções e Pedras de Toque no centro: a cada sessão, uma cena com uma das Pedras de Toque ou uma Convicção em risco (doença, polícia, um Membro curioso); confronte as Convicções com dilemas sem saída limpa. A Ambição move o arco; o Desejo da noite gera cenas; a Perdição do clã entra em cena.
 - Anciões mentem, aliados cobram, ninguém é só vilão.
+- Disciplinas: ficha com poderes listados usa só esses; disciplina sem ponto ou poder acima do nível não acontece (o servidor recusa).
 - A Besta só tem voz (rosna, empurra, comenta) com Fome 3+, Falha Bestial, Crítico Sujo ou frenesi; com Fome 0–2 ela não aparece na narração. Vozes por dentro (Crueldade, alma diablerizada) são raras: uma cena sim, várias não, nunca como bordão de parágrafo.
 - Relógio: o sol nasce. Marque a hora com atualizar_cena e aperte quando a noite acaba; o refúgio é a única segurança e pode cair.
 - Tom: íntimo, urbano, sensual e sujo; violência rápida e feia; o horror vem do que o personagem faz e do que perde, não de sustos. A cidade é personagem: bairros, transporte, polícia e imprensa locais. Anote todo NPC relevante (Príncipe, Xerife, Barão, senhor, Pedras de Toque, rivais).`,
@@ -527,6 +610,8 @@ export const vtm5: Sistema = {
     ficha.extras.especialidades = [espPredador, ...doJogador.filter((e) => normalizar(e) !== normalizar(espPredador))];
 
     const notaDisciplina = distribuirDisciplinas(ficha, cla, predador, idade.disciplinaExtra);
+    const notaPoderes = cla.id === "sangue_ralo" ? "" : distribuirPoderes(ficha);
+    if (cla.id === "sangue_ralo") delete ficha.extras.disciplinaPoderes;
 
     ficha.nivel = cla.id === "sangue_ralo" ? 0 : limitar(idade.potencia + (predador.potencia ?? 0), 0, 10);
     ficha.extras.geracao = cla.id === "sangue_ralo" ? 14 : idade.geracao;
@@ -558,7 +643,7 @@ export const vtm5: Sistema = {
     }
     ficha.extras.conviccoes = conviccoes;
     ficha.extras.pedrasToque = pedras;
-    ficha.extras.notasCriacao = [notaDisciplina, completadas.length ? `perícias completadas: ${completadas.join(", ")}` : "", notaPar].filter(Boolean);
+    ficha.extras.notasCriacao = [notaDisciplina, notaPoderes, completadas.length ? `perícias completadas: ${completadas.join(", ")}` : "", notaPar].filter(Boolean);
     ficha.inventario = ["celular", "chaves do refúgio", "documentos (talvez falsos)", "roupas escuras", ...predador.equipamento];
     return ficha;
   },
@@ -580,10 +665,16 @@ export const vtm5: Sistema = {
     const seita = SEITAS.find((s) => s.id === textoExtra(ficha, "seita"))?.nome;
     const atributos = CATEGORIAS_ATRIBUTOS.map((c) => `${c.titulo}: ${c.ids.map((id) => `${nomeAtributo(id)} ${ficha.atributos[id] ?? 1}`).join(", ")}`).join(" · ");
     const pericias = PERICIAS.filter((p) => ficha.pericias[p.id]).map((p) => `${p.nome} ${ficha.pericias[p.id]}`).join(", ");
+    const poderes = poderesDe(ficha);
     const disciplinas = Object.entries(disciplinasDe(ficha))
       .filter(([, v]) => v > 0)
-      .map(([id, v]) => `${nomeDisciplina(id)} ${v} (${nomeAtributo(DISCIPLINAS.find((x) => x.id === id)?.atributo ?? "")} + ${nomeDisciplina(id)})`)
-      .join(", ");
+      .map(([id, v]) => {
+        const deste = poderes.filter((p) => p.disciplina === id).map(textoPoder);
+        // ficha antiga (sem nenhum poder anotado) fica como era: o mestre escolhe poderes dentro do nível
+        const sufixo = !poderes.length ? "" : deste.length ? ` — poderes: ${deste.join(", ")}` : " — sem poder anotado";
+        return `${nomeDisciplina(id)} ${v} (${nomeAtributo(DISCIPLINAS.find((x) => x.id === id)?.atributo ?? "")} + ${nomeDisciplina(id)})${sufixo}`;
+      })
+      .join(poderes.length ? "; " : ", ");
     const lista = (id: string) => listaExtra(ficha, id).join("; ");
     const mancha = manchaDe(ficha);
     const linhas = [
@@ -664,6 +755,14 @@ export const vtm5: Sistema = {
     if (esp.length) blocos.push({ tipo: "etiquetas", titulo: "Especialidades", itens: esp });
     const disc = Object.entries(disciplinasDe(ficha)).filter(([, v]) => v > 0);
     blocos.push({ tipo: "etiquetas", titulo: "Disciplinas", itens: disc.length ? disc.map(([id, v]) => `${nomeDisciplina(id)} ${pontos(v)}`) : ["nenhuma"] });
+    const poderesFicha = poderesDe(ficha);
+    if (poderesFicha.length) {
+      blocos.push({
+        tipo: "lista",
+        titulo: "Poderes",
+        itens: poderesFicha.map((p) => `${nomeDisciplina(p.disciplina)} · ${textoPoder(p)}`),
+      });
+    }
     if (textoConhecimentos(ficha, "rituais").length) blocos.push({ tipo: "etiquetas", titulo: "Rituais", itens: textoConhecimentos(ficha, "rituais") });
     if (textoConhecimentos(ficha, "formulas").length) blocos.push({ tipo: "etiquetas", titulo: "Fórmulas", itens: textoConhecimentos(ficha, "formulas") });
     blocos.push({

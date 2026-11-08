@@ -316,6 +316,9 @@ export function LeitorCenas({
   const { animar } = usePreferenciasLeitor();
   const menos = useMenosMovimento();
   const anima = animar && !menos && suportaRevelar();
+  // a cena fecha a noite (tem o marcador de fim): ver o efeito "abre na última página" abaixo
+  const fechaNoite = turno.itens.some((m) => dadosFimSessao(m) !== null);
+  const releuNoFim = useRef("");
 
   const { visor, fluxo, layout, completa, terminou, revelarPagina, revelarAte, paginaDe } = useRevelar({
     chave: turno.chave,
@@ -355,6 +358,14 @@ export function LeitorCenas({
     }, 700);
     return () => clearTimeout(t);
   }, [rumo, paginaDoDestaque, paginaAtual, turno.chave, destaque, lido, revelarAte]);
+  // a cena termina com o fim da noite (lida ao abrir ou com o marcador chegando ao vivo): o leitor vai à última página, onde
+  // ficam o marcador e o "Reabrir a noite". Acompanha a medição (o número de páginas cresce enquanto o layout assenta), mas
+  // quem volta à mão para reler as páginas anteriores não é puxado de novo nesta cena.
+  useEffect(() => {
+    if (!fechaNoite || !medido || paginas <= 1 || paginaAtual >= paginas - 1 || releuNoFim.current === turno.chave) return;
+    revelarAte(paginas - 2);
+    setPagina(paginas - 1);
+  }, [fechaNoite, medido, paginas, paginaAtual, turno.chave, revelarAte]);
   /** O "continuar para o dado ▸": vai direto à página do cartão, dando por lido o que vem antes. */
   const seguirAoDado = () => {
     if (paginaDoDestaque === null) return avancar();
@@ -373,6 +384,7 @@ export function LeitorCenas({
     if (maisPaginas) setPagina(paginaAtual + 1);
   };
   const voltar = () => {
+    if (fechaNoite) releuNoFim.current = turno.chave;
     if (paginaAtual > 0) setPagina(paginaAtual - 1);
   };
 
@@ -591,7 +603,10 @@ export function LeitorCenas({
                     <button
                       key={k}
                       type="button"
-                      onClick={() => setPagina(k)}
+                      onClick={() => {
+                        if (fechaNoite && k < paginaAtual) releuNoFim.current = turno.chave;
+                        setPagina(k);
+                      }}
                       aria-label={`Página ${k + 1} de ${paginas}`}
                       aria-current={k === paginaAtual ? "page" : undefined}
                       className="group grid size-7 place-items-center sm:size-6"

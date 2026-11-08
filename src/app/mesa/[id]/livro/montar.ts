@@ -1,7 +1,7 @@
 import "server-only";
 import { dadosFimSessao, ehPassagemDeVez, recadosDoTurno } from "@/components/leitor/cena";
 import { agruparTurnos } from "@/components/leitor/turnos";
-import { listarDiario, listarFatos, listarMensagens, listarPersonagens, obterCampanha, type Campanha, type Mensagem, type Personagem } from "@/lib/db";
+import { listarDiario, listarFatos, listarMensagens, listarPersonagens, noitesDaCampanha, obterCampanha, type Campanha, type Mensagem, type Personagem } from "@/lib/db";
 import { obterSistema } from "@/lib/sistemas";
 import type { EntradaDiario, Sistema } from "@/lib/sistemas/tipos";
 
@@ -25,8 +25,10 @@ export type Capitulo = {
   titulo: string | null;
   local: string | null;
   momento: string | null;
-  /** a noite (sessão) que este capítulo abre, depois de um fim de sessão */
+  /** a noite (sessão) que este capítulo abre: depois de um fim de sessão ou de um intervalo de 5 h sem mensagem */
   noite: number | null;
+  /** quando essa noite começou, por extenso curto ("26 de outubro"); null fora do começo de noite */
+  noiteData: string | null;
   blocos: Bloco[];
 };
 
@@ -100,16 +102,25 @@ export function montarLivro(campanhaId: number): Livro | null {
   const nomeDe = (id: number | null) => personagens.find((p) => p.id === id)?.ficha.nome ?? null;
 
   const capitulos: Capitulo[] = [];
-  let atual: Capitulo = { numero: 1, titulo: null, local: null, momento: null, noite: null, blocos: [] };
+  let atual: Capitulo = { numero: 1, titulo: null, local: null, momento: null, noite: null, noiteData: null, blocos: [] };
+  const temHistoria = (x: Capitulo) => x.blocos.some((b) => b.tipo === "narracao" || b.tipo === "acao");
   const abrir = (titulo: string | null, local: string | null, momento: string | null) => {
     // capítulo ainda vazio (ex.: o título da primeira cena logo na abertura) só ganha o nome
-    if (!atual.blocos.some((b) => b.tipo === "narracao" || b.tipo === "acao")) {
+    if (!temHistoria(atual)) {
       Object.assign(atual, { titulo, local, momento });
       return;
     }
     capitulos.push(atual);
-    atual = { numero: atual.numero + 1, titulo, local, momento, noite: null, blocos: [] };
+    atual = { numero: atual.numero + 1, titulo, local, momento, noite: null, noiteData: null, blocos: [] };
   };
+
+  // noites pelo relógio (constantes.ts, dividirNoites): a primeira mensagem de cada noite a partir da 2ª abre a noite no livro,
+  // também quando ninguém apertou "Encerrar a noite" (intervalo de 5 h ou mais)
+  const noites = noitesDaCampanha(c.id);
+  const comecoDaNoite = new Map<number, { numero: number; data: string; porIntervalo: boolean }>();
+  for (let i = 1; i < noites.length; i++) {
+    comecoDaNoite.set(noites[i].inicioId, { numero: noites[i].numero, data: dataCurta(noites[i].inicio), porIntervalo: !noites[i - 1].fechadaPeloBotao });
+  }
 
   const mensagens = listarMensagens(c.id);
   // recados do mestre que não são história (os mesmos que o leitor esconde)
@@ -122,6 +133,15 @@ export function montarLivro(campanhaId: number): Livro | null {
   }
 
   for (const m of mensagens) {
+    const noite = comecoDaNoite.get(m.id);
+    if (noite) {
+      // depois do marcador o capítulo da noite seguinte já está aberto (vazio); depois do intervalo, abre aqui
+      if (noite.porIntervalo && temHistoria(atual)) {
+        capitulos.push(atual);
+        atual = { numero: atual.numero + 1, titulo: null, local: null, momento: null, noite: null, noiteData: null, blocos: [] };
+      }
+      if (!temHistoria(atual)) Object.assign(atual, { noite: noite.numero, noiteData: noite.data });
+    }
     if (m.tipo === "mestre") {
       if (fora.has(m.id)) continue;
       const texto = ultimaDoTurno.has(m.id) ? semVezNoFim(m.texto) : m.texto.trim();
@@ -137,7 +157,12 @@ export function montarLivro(campanhaId: number): Livro | null {
         // fecha o capítulo da noite; o que vier depois abre a noite seguinte
         atual.blocos.push({ tipo: "fim", id: m.id, sessao: fim.sessao });
         capitulos.push(atual);
-        atual = { numero: atual.numero + 1, titulo: null, local: null, momento: null, noite: fim.sessao !== null ? fim.sessao + 1 : null, blocos: [] };
+        atual = { numero: atual.numero + 1, titulo: null, local: null, momento: null, noite: fim.sessao !== null ? fim.sessao + 1 : null, noiteData: null, blocos: [] };
+        continue;
+      }
+      // cartão "Noite N" que o servidor grava no começo da noite: marca a noite, não renomeia o capítulo
+      if (d.tipo === "cena_titulo" && typeof d.sessao === "number") {
+        if (!temHistoria(atual)) atual.noite = d.sessao;
         continue;
       }
       if (d.tipo === "cena_titulo") {
@@ -211,6 +236,11 @@ export function statusDaMissao(status: string): string {
   return "em aberto";
 }
 
+/** Data do SQLite (UTC) curta: "25 de outubro" (o começo de cada noite no livro). */
+export function dataCurta(dataSqlite: string): string {
+  return new Date(dataSqlite.replace(" ", "T") + "Z").toLocaleDateString("pt-BR", { day: "numeric", month: "long" });
+}
+
 /** Data do SQLite (UTC) por extenso: "25 de outubro de 2026". */
 export function dataPorExtenso(dataSqlite: string): string {
   return new Date(dataSqlite.replace(" ", "T") + "Z").toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" });
@@ -231,7 +261,7 @@ export function livroEmMarkdown(l: Livro): string {
 
   for (const c of l.capitulos) {
     linhas.push("---", "", `## ${c.numero === 1 && !c.titulo && !c.local ? "Prólogo" : `Capítulo ${romano(c.numero)}`}${c.titulo || c.local ? ` — ${tituloDoCapitulo(c)}` : ""}`, "");
-    const onde = [c.noite ? `Noite ${c.noite}` : null, c.titulo ? c.local : null, c.momento].filter(Boolean).join(" · ");
+    const onde = [c.noite ? `Noite ${c.noite}` : null, c.noite ? c.noiteData : null, c.titulo ? c.local : null, c.momento].filter(Boolean).join(" · ");
     if (onde) linhas.push(`*${onde}*`, "");
     for (const b of c.blocos) {
       if (b.tipo === "narracao") linhas.push(b.texto.replace(/^#{1,6}\s+/gm, ""), "");

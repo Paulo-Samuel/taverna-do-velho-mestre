@@ -35,7 +35,22 @@ const somar = (a: Pendente, b: Pendente): Pendente => {
 const vazio = (p: Pendente) => !p.pv && !p.dinheiro && Object.values(p.recursos).every((d) => !d);
 
 /** `alemDoMax`: o "+" continua valendo no máximo (Mancha do Vampiro sem caixa livre vira degeneração no servidor). */
-export type ValorMarcador = { rotulo: string; atual: number; min: number; max: number; pendente: boolean; alemDoMax?: boolean };
+export type ValorMarcador = {
+  rotulo: string;
+  atual: number;
+  min: number;
+  max: number;
+  pendente: boolean;
+  alemDoMax?: boolean;
+  /** só o "+" (Mancha do Vampiro: quem limpa as Manchas é o teste de Remorso, nunca a mão) */
+  soSobe?: boolean;
+  /** só muda no modo de ajuste e com confirmação (Humanidade: pela regra, só o Remorso ou a degeneração mexem nela) */
+  protegido?: boolean;
+};
+
+/** Pergunta feita a cada clique em −/+ da Humanidade (modo de ajuste). */
+export const AVISO_HUMANIDADE =
+  "Pela regra, a Humanidade só muda no teste de Remorso ou por degeneração. Ajustar mesmo assim (correção do mestre)?";
 
 export type AjusteFicha = {
   editando: boolean;
@@ -133,8 +148,15 @@ export function useAjusteFicha(personagem: PersonagemVisivel, rotulos: { pv: str
     if (vazio(pacote)) return;
     setEnviado((e) => somar(e, pacote));
     const recursos = Object.fromEntries(Object.entries(pacote.recursos).filter(([, d]) => d));
+    // Humanidade do Vampiro: a pessoa já confirmou no clique (BotoesMarcador); o servidor recusa sem o `confirmado`
+    const confirmado = ficha.sistema === "vtm5" && Boolean(recursos.humanidade);
     void enviar(
-      { ...(pacote.pv ? { pv: pacote.pv } : {}), ...(pacote.dinheiro ? { dinheiro: pacote.dinheiro } : {}), ...(Object.keys(recursos).length ? { recursos } : {}) },
+      {
+        ...(pacote.pv ? { pv: pacote.pv } : {}),
+        ...(pacote.dinheiro ? { dinheiro: pacote.dinheiro } : {}),
+        ...(Object.keys(recursos).length ? { recursos } : {}),
+        ...(confirmado ? { confirmado: true } : {}),
+      },
       () => setEnviado(VAZIO),
     );
   }
@@ -157,13 +179,25 @@ export function useAjusteFicha(personagem: PersonagemVisivel, rotulos: { pv: str
     // Vampiro: as caixas de Mancha são o que sobra da Humanidade (o servidor recalcula igual)
     const humanidade = ficha.sistema === "vtm5" && alvo.id === "mancha" ? valor({ tipo: "recurso", id: "humanidade" }) : null;
     const max = humanidade ? Math.max(0, 10 - humanidade.atual) : r.max;
-    return { rotulo: r.rotulo, atual: Math.max(0, Math.min(max, r.atual + d)), min: 0, max, pendente: d !== 0, ...(humanidade ? { alemDoMax: true } : {}) };
+    const protegido = ficha.sistema === "vtm5" && alvo.id === "humanidade";
+    return {
+      rotulo: r.rotulo,
+      atual: Math.max(0, Math.min(max, r.atual + d)),
+      min: 0,
+      max,
+      pendente: d !== 0,
+      ...(humanidade ? { alemDoMax: true, soSobe: true } : {}),
+      ...(protegido ? { protegido: true } : {}),
+    };
   }
 
   function mudar(alvo: AlvoMarcador, delta: number) {
     if (bloqueado) return;
     const v = valor(alvo);
     if (!v) return;
+    // Manchas não descem à mão; Humanidade só no modo de ajuste (a confirmação mora no botão)
+    if (v.soSobe && delta < 0) return;
+    if (v.protegido && !editando) return;
     // Mancha no máximo: o +1 vai assim mesmo (o servidor baixa a Humanidade e a caixa liberada recebe a Mancha)
     const efetivo = v.alemDoMax && delta > 0 && v.atual >= v.max ? delta : Math.max(v.min, Math.min(v.max, v.atual + delta)) - v.atual;
     if (!efetivo) return;
@@ -290,19 +324,30 @@ export function BotoesMarcador({
 }) {
   const v = ajuste.valor(alvo);
   if (!v) return <>{children}</>;
+  // Humanidade do Vampiro: fora do modo de ajuste não tem −/+ (pela regra ela só muda no Remorso ou na degeneração)
+  if (v.protegido && !ajuste.editando) return <>{children}</>;
   const revelar = classeRevelar(ajuste);
   const motivo = ajuste.bloqueado ? " (o mestre está narrando)" : "";
   // no modo de edição (celular) os botões crescem para caber o dedo
   const grande = ajuste.editando && !compacto;
+  const mudar = (delta: number) => {
+    if (v.protegido && !window.confirm(AVISO_HUMANIDADE)) return;
+    ajuste.mudar(alvo, delta);
+  };
   return (
     <span className={`inline-flex items-center gap-1 ${classe}`}>
-      <Botao rotulo={`Diminuir ${v.rotulo}${motivo}`} simbolo="−" desligado={ajuste.bloqueado || v.atual <= v.min} aoClicar={() => ajuste.mudar(alvo, -1)} grande={grande} classe={revelar} />
+      {/* Manchas: só o "+" (quem limpa é o teste de Remorso); o espaço do "−" fica vazio para o número não pular */}
+      {v.soSobe ? (
+        <span className={grande ? "size-7 shrink-0" : "size-5 shrink-0"} aria-hidden />
+      ) : (
+        <Botao rotulo={`Diminuir ${v.rotulo}${motivo}`} simbolo="−" desligado={ajuste.bloqueado || v.atual <= v.min} aoClicar={() => mudar(-1)} grande={grande} classe={revelar} />
+      )}
       {children}
       <Botao
         rotulo={`Aumentar ${v.rotulo}${v.alemDoMax && v.atual >= v.max ? " (sem caixa livre: degeneração, −1 de Humanidade)" : ""}${motivo}`}
         simbolo="+"
         desligado={ajuste.bloqueado || (v.atual >= v.max && !v.alemDoMax)}
-        aoClicar={() => ajuste.mudar(alvo, 1)}
+        aoClicar={() => mudar(1)}
         grande={grande}
         classe={revelar}
       />
@@ -591,6 +636,87 @@ export function NotasJogador({ campanhaId, personagemId, linhas = 5 }: { campanh
           {situacao}
         </span>
       </p>
+    </div>
+  );
+}
+
+/** Manchas de um personagem do Vampiro (null fora do V5): `cheias` quando não sobra caixa (o Remorso é obrigatório no fim da noite). */
+export function manchasDe(p: Pick<PersonagemVisivel, "ficha">): { atual: number; max: number; cheias: boolean } | null {
+  if (p.ficha.sistema !== "vtm5") return null;
+  const mancha = p.ficha.recursos.mancha;
+  if (!mancha) return null;
+  const humanidade = p.ficha.recursos.humanidade?.atual ?? 7;
+  const max = Math.max(0, 10 - humanidade);
+  return { atual: mancha.atual, max, cheias: max > 0 && mancha.atual >= max };
+}
+
+/**
+ * Pede o teste de Remorso (rota do pacote W21): o servidor cria o pedido de teste pendente e o jogador rola no cartão do dado.
+ * Devolve o id da mensagem do pedido, ou o recado de erro.
+ */
+export async function pedirRemorso(campanhaId: number, personagemId: number): Promise<{ mensagemId: number | null } | { erro: string }> {
+  try {
+    const r = await fetch(`/api/campanhas/${campanhaId}/personagens/${personagemId}/remorso`, { method: "POST" });
+    const j = (await r.json().catch(() => null)) as { erro?: string; mensagemId?: number } | null;
+    if (r.ok) return { mensagemId: j?.mensagemId ?? null };
+    if (r.status === 404 && !j?.erro) return { erro: "O teste de Remorso ainda não chegou a esta taverna (atualize a taverna)." };
+    return { erro: j?.erro ?? `Não deu para pedir o Remorso (erro ${r.status}).` };
+  } catch {
+    return { erro: "Sem conexão com a taverna." };
+  }
+}
+
+/**
+ * "Rolar Remorso" na ficha (Vampiro, com Manchas > 0): o teste vira um cartão de dado na mesa, que o jogador rola como os
+ * outros; o resultado aplica a regra (Humanidade mantida ou perdida, Manchas limpas). `aoPedir` leva até o dado.
+ */
+export function BotaoRemorso({
+  personagem,
+  bloqueado = false,
+  aoPedir,
+  className = "",
+}: {
+  personagem: PersonagemVisivel;
+  bloqueado?: boolean;
+  aoPedir?: (mensagemId: number | null) => void;
+  className?: string;
+}) {
+  const [indo, setIndo] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const m = manchasDe(personagem);
+  if (!m || m.atual <= 0) return null;
+  async function pedir() {
+    if (indo || bloqueado) return;
+    setIndo(true);
+    setErro(null);
+    const r = await pedirRemorso(personagem.campanhaId, personagem.id);
+    setIndo(false);
+    if ("erro" in r) setErro(r.erro);
+    else aoPedir?.(r.mensagemId);
+  }
+  return (
+    <div className={className} data-remorso>
+      <button
+        type="button"
+        onClick={() => void pedir()}
+        disabled={indo || bloqueado}
+        title={bloqueado ? "Espere o mestre terminar de narrar" : "Teste de Remorso: role contra as Manchas; ao passar, a Humanidade fica; ao falhar, cai 1"}
+        className={`inline-flex min-h-9 items-center gap-1.5 rounded-md border px-2.5 text-xs transition disabled:opacity-50 ${
+          m.cheias ? "border-sangue/70 bg-sangue/10 text-foreground hover:border-sangue" : "border-border text-muted hover:border-ambar/60 hover:text-ambar"
+        }`}
+        data-rolar-remorso
+      >
+        <span aria-hidden>🩸</span>
+        {indo ? "Pedindo…" : "Rolar Remorso"}
+        <span className="tabular-nums text-muted">
+          ({m.atual} {m.atual === 1 ? "Mancha" : "Manchas"})
+        </span>
+      </button>
+      {erro && (
+        <p className="mt-1 text-[11px] leading-snug text-sangue" role="alert">
+          {erro}
+        </p>
+      )}
     </div>
   );
 }

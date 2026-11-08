@@ -127,6 +127,36 @@ export const provedorFalso: Provedor = {
       return;
     }
 
+    // Fim da noite ("Encerrar a noite"): segue o roteiro do pedido (Remorso de quem tem Manchas, fechamento, diário, XP).
+    // Campanha com "(rebelde)" no nome ignora o roteiro de propósito (abre luta e cena nova, não rola Remorso nem dá XP), para
+    // ensaiar a rede de segurança do servidor (index.ts: guardaDoFim e redeDoFim).
+    if (prompt.includes("[fim da sessão]")) {
+      if (/\(rebelde\)/i.test(sistema)) {
+        await usar("atualizar_cena", {
+          titulo: "Emboscada no Beco",
+          musica: { humor: "combate", energia: "alta" },
+          combate: { acao: "iniciar", inimigos: [{ nome: "Carniçal", pv: escala.inimigo.pv, pvMax: escala.inimigo.pv, defesa: escala.inimigo.defesa }] },
+        });
+        await usar("rolar_dados", { expressao: "1d10", motivo: "Só para ver o que acontece" });
+        await diga("Um carniçal salta do escuro e a noite, que devia acabar, recomeça. Quem age primeiro?");
+        return;
+      }
+      const remorso = prompt.match(/teste_de_remorso para ([^(\n]+?) \(tem Manchas\)/);
+      for (const nome of remorso ? remorso[1].split(/,\s*/).filter(Boolean) : []) await usar("teste_de_remorso", { personagem: nome.trim() });
+      await usar("narrar", {
+        texto:
+          "A noite se recolhe devagar. Você volta ao refúgio com o gosto do que fez ainda na boca, e o silêncio do dia que chega pesa mais que qualquer conversa.\n\nAmanhã alguém vai bater à sua porta com perguntas. Por hoje, só o escuro.",
+      });
+      await usar("anotar_diario", { tipo: "nota", titulo: "Fim da noite", texto: "A noite terminou no refúgio; há perguntas esperando." });
+      if (!/NÃO chame conceder_xp/.test(prompt)) {
+        await usar("conceder_xp", { personagens: "todos", quantidade: /moeda/.test(prompt) ? 1 : 100, motivo: "pela noite jogada" });
+        // "(xp por motivo)" no nome: uma chamada por motivo, como as regras de XP pedem (o servidor aceita as duas)
+        if (/\(xp por motivo\)/i.test(sistema)) await usar("conceder_xp", { personagens: "todos", quantidade: 1, motivo: "pela Ambição perseguida" });
+      }
+      await diga("—");
+      return;
+    }
+
     // modo história: cena com título e música, NPC com personalidade, teste rolado pelo jogador e ações sugeridas
     if (tem("pedir_teste") || tem("sugerir_acoes")) {
       const sugerir = () =>
@@ -304,7 +334,11 @@ export const provedorFalso: Provedor = {
     await diga("\n\nO que vocês fazem?");
   },
 
-  async texto() {
+  async texto({ sistema }) {
+    // recapitulação do fim da noite (SISTEMA_RECAPITULACAO): o "Anteriormente…" de teste
+    if (/Anteriormente/.test(sistema)) {
+      return "Anteriormente… você chegou à taverna atrás de respostas, trocou golpes com quem não devia e voltou ao refúgio antes do sol, com uma pergunta ainda sem dono.";
+    }
     return "Resumo de teste: o grupo chegou à taverna, brigou com um bandido e sobreviveu, por enquanto.";
   },
 };

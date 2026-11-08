@@ -73,9 +73,20 @@ function campanhaDaUrl(): number | null {
 
 /**
  * sistema: id do sistema de regras (muda o estilo da trilha); sem ele, a fantasia do modo história.
- * compacto: no celular vira um botão só (abre o popover, que tem o liga/desliga), para caber em cabeçalhos cheios.
+ * compacto: um botão só de 40x40 (cabeçalho das mesas) que abre o popover, onde estão o liga/desliga e o volume.
+ * fimDaNoite: a noite foi encerrada; a trilha cai para o calmo e baixa o volume (a escolha manual de humor continua valendo).
  */
-export function Musica({ musica, sistema = "historia", compacto = false }: { musica: Cena["musica"]; sistema?: string; compacto?: boolean }) {
+export function Musica({
+  musica,
+  sistema = "historia",
+  compacto = false,
+  fimDaNoite = false,
+}: {
+  musica: Cena["musica"];
+  sistema?: string;
+  compacto?: boolean;
+  fimDaNoite?: boolean;
+}) {
   const prefs = useSyncExternalStore(assinarPreferenciasMusica, preferenciasMusica, preferenciasMusicaServidor);
   const estado = useSyncExternalStore(assinarEstadoMusica, estadoMusica, () => ESTADO_INICIAL);
   const [aberto, setAberto] = useState(false);
@@ -92,8 +103,11 @@ export function Musica({ musica, sistema = "historia", compacto = false }: { mus
   const manual = useSyncExternalStore(assinarHumorManual, () => humorManual(campanhaId), humorManualServidor);
 
   // sem música definida: taverna baixinho; a escolha manual do jogador vence a cena
-  const humorCena: HumorMusical = musica?.humor ?? "taverna";
-  const energiaCena: Energia = musica?.energia ?? "baixa";
+  // noite encerrada: as velas se apagam, a trilha acalma
+  const humorCena: HumorMusical = fimDaNoite ? "calmo" : (musica?.humor ?? "taverna");
+  const energiaCena: Energia = fimDaNoite ? "baixa" : (musica?.energia ?? "baixa");
+  /** volume que vai ao motor: no fim da noite, 40% do escolhido (a preferência salva não muda) */
+  const volumeEfetivo = fimDaNoite ? prefs.volume * 0.4 : prefs.volume;
   const humor = manual.humor ?? humorCena;
   const energia = manual.energia ?? energiaCena;
   const ehManual = manual.humor !== null || manual.energia !== null;
@@ -152,8 +166,8 @@ export function Musica({ musica, sistema = "historia", compacto = false }: { mus
   }, [humor, energia, estilo]);
 
   useEffect(() => {
-    motor.current?.definirPreferencias(prefs.ligado, prefs.volume);
-  }, [prefs.ligado, prefs.volume]);
+    motor.current?.definirPreferencias(prefs.ligado, volumeEfetivo);
+  }, [prefs.ligado, volumeEfetivo]);
 
   // popover: fecha com Esc ou clique fora
   useEffect(() => {
@@ -175,7 +189,7 @@ export function Musica({ musica, sistema = "historia", compacto = false }: { mus
     salvarPreferenciasMusica({ ligado });
     // ainda dentro do gesto: Safari só deixa criar/retomar o áudio aqui
     motor.current?.desbloquear();
-    motor.current?.definirPreferencias(ligado, prefs.volume);
+    motor.current?.definirPreferencias(ligado, volumeEfetivo);
   }
 
   function mudarVolume(volume: number) {
@@ -207,6 +221,21 @@ export function Musica({ musica, sistema = "historia", compacto = false }: { mus
 
   return (
     <div ref={caixa} className="relative inline-flex shrink-0 items-center">
+      {compacto ? (
+        // cabeçalho das mesas: um botão só, como os vizinhos; o liga/desliga e o volume moram no popover
+        <button
+          type="button"
+          onClick={() => setAberto((a) => !a)}
+          title={dica}
+          aria-label={`Som: ${prefs.ligado ? "ligado" : "desligado"}. Abrir a trilha sonora`}
+          aria-expanded={aberto}
+          aria-haspopup="dialog"
+          className={`botao-cabecalho ${prefs.ligado ? "text-foreground/85" : ""} ${aberto ? "text-ambar" : ""}`}
+          data-botao-som
+        >
+          <IconeSom ligado={prefs.ligado} />
+        </button>
+      ) : (
       <div className="inline-flex items-center overflow-hidden rounded-md border border-border">
         <button
           type="button"
@@ -233,6 +262,7 @@ export function Musica({ musica, sistema = "historia", compacto = false }: { mus
           <span aria-hidden>▾</span>
         </button>
       </div>
+      )}
 
       {aberto && (
         // no celular o popover fica preso às bordas da tela (o botão pode estar no meio do cabeçalho)
@@ -243,7 +273,7 @@ export function Musica({ musica, sistema = "historia", compacto = false }: { mus
         >
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="titulo text-sm text-ambar">Trilha sonora</span>
-            <button type="button" onClick={alternar} className="text-xs text-muted hover:text-ambar">
+            <button type="button" onClick={alternar} className="min-h-9 rounded-md border border-border px-2.5 text-xs text-muted hover:border-ambar/60 hover:text-ambar" data-som-alternar>
               {prefs.ligado ? "Desligar" : "Ligar"}
             </button>
           </div>

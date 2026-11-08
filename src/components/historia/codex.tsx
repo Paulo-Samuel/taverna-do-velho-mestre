@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BotaoFixar } from "@/components/fatos/fixar-selecao";
 import { PainelFatos } from "@/components/fatos/painel-fatos";
 import { resumoDaEntrada, type ControleFatos } from "@/components/fatos/use-fatos";
@@ -10,7 +10,7 @@ import { MenuLeitura } from "@/components/leitor/menu-leitura";
 import type { AcoesMesa, Mesa } from "@/lib/cliente/use-mesa";
 import type { PersonagemVisivel } from "@/lib/mesa";
 import type { BlocoFicha, EntradaDiario } from "@/lib/sistemas/tipos";
-import { AvisoAjuste, BotoesMarcador, NotasJogador, useAjusteFicha, type AjusteFicha } from "@/components/ficha/ajuste-ficha";
+import { AvisoAjuste, BotaoRemorso, BotoesMarcador, NotasJogador, useAjusteFicha, type AjusteFicha } from "@/components/ficha/ajuste-ficha";
 import { corDoNome } from "./cores";
 import { fonteGotica } from "./fonte-gotica";
 import { Retrato, RetratoSVG } from "./retrato";
@@ -155,13 +155,13 @@ function Bloco({ b, ajuste }: { b: BlocoFicha; ajuste?: AjusteFicha }) {
   }
 }
 
-function AbaPersonagem({ mesa, p }: { mesa: Mesa; p: PersonagemVisivel | null }) {
+function AbaPersonagem({ mesa, p, aoRemorso }: { mesa: Mesa; p: PersonagemVisivel | null; aoRemorso?: (mensagemId: number | null) => void }) {
   if (!p) return <p className="text-sm italic text-muted">Nenhum personagem nesta mesa ainda.</p>;
   // key: trocar de personagem zera os cliques pendentes e reabre as anotações do outro
-  return <FichaCodex key={p.id} mesa={mesa} p={p} />;
+  return <FichaCodex key={p.id} mesa={mesa} p={p} aoRemorso={aoRemorso} />;
 }
 
-function FichaCodex({ mesa, p }: { mesa: Mesa; p: PersonagemVisivel }) {
+function FichaCodex({ mesa, p, aoRemorso }: { mesa: Mesa; p: PersonagemVisivel; aoRemorso?: (mensagemId: number | null) => void }) {
   const ajuste = useAjusteFicha(p, mesa.sistema.rotulos, mesa.ocupado);
   const s = mesa.sistema;
   const origem = s.ancestralidades.find((a) => a.id === p.ficha.ancestralidade)?.nome ?? p.ficha.ancestralidade;
@@ -190,6 +190,8 @@ function FichaCodex({ mesa, p }: { mesa: Mesa; p: PersonagemVisivel }) {
           {ajuste.editando ? "✓ pronto" : "✎ ajustar"}
         </button>
       </div>
+      {/* Vampiro: as Manchas só sobem à mão; quem as limpa é o teste de Remorso, rolado aqui */}
+      {podeAssumir(mesa, p) && <BotaoRemorso personagem={p} bloqueado={mesa.ocupado} aoPedir={aoRemorso} className="mt-2" />}
       <AvisoAjuste ajuste={ajuste} />
       {!temBarras && <Barra rotulo={s.rotulos.pv} atual={p.ficha.pv} max={p.ficha.pvMax} cor="vida" ajuste={ajuste} />}
       {p.blocos.length ? (
@@ -448,9 +450,15 @@ export function Codex({
   aoMudarAba,
   fatos,
   aoEncerrar,
+  aoRemorso,
+  novidades,
 }: {
-  /** "Encerrar a noite" deu certo (o menu de leitura do celular mora aqui) */
+  /** 🌙 Encerrar a noite: abre o diálogo do ritual (no celular o botão mora no pé do códex) */
   aoEncerrar?: () => void;
+  /** pediu o teste de Remorso na ficha: a mesa fecha o códex e leva até o dado */
+  aoRemorso?: (mensagemId: number | null) => void;
+  /** abas com anotações novas do mestre desde a última vez que o códex foi aberto */
+  novidades?: Partial<Record<AbaCodex, number>>;
   mesa: Mesa;
   acoes: AcoesMesa;
   /** fatos fixados (aba 📌 e o 📌 de cada entrada) */
@@ -463,6 +471,18 @@ export function Codex({
   const painel = useRef<HTMLElement>(null);
   const ativo = mesa.personagens.find((p) => p.id === mesa.eu.personagemId) ?? mesa.personagens[0] ?? null;
   const missoesAbertas = mesa.diario.filter((e) => e.tipo === "missao" && e.status === "aberta").length;
+
+  // abrir uma aba zera a novidade dela: guarda quantas novidades havia quando foi vista (o ponto só volta se chegar outra);
+  // ao fechar o códex a mesa zera tudo e isto recomeça
+  // (ajustado durante a renderização, quando aberto/aba/novidades mudam, em vez de num efeito: sem renderização em cascata)
+  const novasDaAba = novidades?.[aba] ?? 0;
+  const [vistas, setVistas] = useState<Partial<Record<AbaCodex, number>>>(() => (aberto ? { [aba]: novasDaAba } : {}));
+  const [visto, setVisto] = useState({ aberto, aba, novasDaAba });
+  if (visto.aberto !== aberto || visto.aba !== aba || visto.novasDaAba !== novasDaAba) {
+    setVisto({ aberto, aba, novasDaAba });
+    setVistas((v) => (!aberto ? (Object.keys(v).length ? {} : v) : v[aba] === novasDaAba ? v : { ...v, [aba]: novasDaAba }));
+  }
+  const temNovidade = (id: AbaCodex) => (novidades?.[id] ?? 0) > (vistas[id] ?? 0) && !(aberto && aba === id);
 
   // Esc fecha; o foco vai para dentro da gaveta ao abrir (teclado e leitor de tela)
   useEffect(() => {
@@ -543,6 +563,9 @@ export function Codex({
                 </span>
               )}
               {id === "grupo" && mesa.personagens.length > 1 && <span className="shrink-0 text-[10px] text-muted">{mesa.personagens.length}</span>}
+              {temNovidade(id) && (
+                <span className="size-1.5 shrink-0 rounded-full bg-ambar" data-novidade-aba={id} title="Anotação nova do mestre" aria-label="novidade" />
+              )}
             </button>
           ))}
         </nav>
@@ -553,7 +576,7 @@ export function Codex({
           role="tabpanel"
           aria-labelledby={`codex-aba-${aba}`}
         >
-          {aba === "personagem" && <AbaPersonagem mesa={mesa} p={ativo} />}
+          {aba === "personagem" && <AbaPersonagem mesa={mesa} p={ativo} aoRemorso={aoRemorso} />}
           {aba === "missoes" && <AbaMissoes entradas={mesa.diario} fatos={fatos} />}
           {aba === "pessoas" && <AbaPessoas entradas={mesa.diario} fatos={fatos} />}
           {aba === "lugares" && <AbaLugares mesa={mesa} fatos={fatos} />}
@@ -576,8 +599,23 @@ export function Codex({
             <span aria-hidden>⚙</span> Ajustes da mesa
           </Link>
           {/* no celular o cabeçalho não tem espaço: o modo de leitura (cena a cena / rolagem) mora aqui */}
-          <MenuLeitura acima className="sm:hidden" campanhaId={mesa.campanha.id} aoEncerrar={aoEncerrar ?? aoFechar} />
+          <MenuLeitura acima className="sm:hidden" />
         </div>
+        {/* no celular o 🌙 Encerrar a noite sai do cabeçalho e mora no pé do códex, em destaque */}
+        {aoEncerrar && (
+          <div className="border-t border-border/70 px-3 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 sm:hidden">
+            <button
+              type="button"
+              onClick={aoEncerrar}
+              className="flex min-h-11 w-full items-center gap-2 rounded-md border border-ambar/50 bg-ambar/10 px-3 text-left text-sm text-ambar hover:bg-ambar/20 focus-visible:outline-2 focus-visible:outline-ambar"
+              data-encerrar-painel
+            >
+              <span aria-hidden>🌙</span>
+              <span className="font-semibold">Encerrar a noite</span>
+              <span className="min-w-0 truncate text-xs text-muted">· XP, Remorso e marcador no livro</span>
+            </button>
+          </div>
+        )}
       </aside>
     </>
   );

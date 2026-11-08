@@ -80,8 +80,33 @@ function TrocarPin({ campanhaId, temPin, aoMudar }: { campanhaId: number; temPin
   );
 }
 
-/** `compacto`: no celular vira só o ícone (cabeçalho apertado da mesa avançada). */
-export function Convite({ campanhaId, temPin, compacto = false }: { campanhaId: number; temPin: boolean; compacto?: boolean }) {
+/** Ícone do convite no cabeçalho: pessoa com um "+". */
+function IconeConvite() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="9" cy="8" r="3.5" fill="currentColor" fillOpacity={0.15} />
+      <path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5M18.5 8v6M15.5 11h6" />
+    </svg>
+  );
+}
+
+/**
+ * compacto: o botão de 40x40 do cabeçalho das mesas (ícone; "Convidar" escrito só em telas largas).
+ * linha: uma linha do menu "⋯" do cabeçalho (celular).
+ */
+export function Convite({
+  campanhaId,
+  temPin,
+  compacto = false,
+  linha = false,
+  className = "",
+}: {
+  campanhaId: number;
+  temPin: boolean;
+  compacto?: boolean;
+  linha?: boolean;
+  className?: string;
+}) {
   const [aberto, setAberto] = useState(false);
   const [info, setInfo] = useState<InfoRede | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -121,19 +146,32 @@ export function Convite({ campanhaId, temPin, compacto = false }: { campanhaId: 
 
   return (
     <>
-      {compacto ? (
+      {linha ? (
         <button
           type="button"
-          className="btn-borda h-10 shrink-0 px-2.5 py-0 focus-visible:outline-2 focus-visible:outline-ambar sm:px-3"
+          role="menuitem"
+          className={`flex min-h-11 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground/90 hover:bg-surface-2/60 hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar ${className}`}
           onClick={() => setAberto(true)}
-          title="Chamar gente pela rede local"
-          aria-label="Convidar pela rede local"
+          data-convidar
         >
-          <span aria-hidden>📜</span>
-          <span className="hidden sm:inline">Convidar</span>
+          <span className="text-muted">
+            <IconeConvite />
+          </span>
+          Convidar pela rede
+        </button>
+      ) : compacto ? (
+        <button
+          type="button"
+          className={`botao-cabecalho ${className}`}
+          onClick={() => setAberto(true)}
+          title="Convidar: chamar gente pela rede local"
+          aria-label="Convidar pela rede local"
+          data-convidar
+        >
+          <IconeConvite />
         </button>
       ) : (
-        <button type="button" className="btn-borda px-3 py-1.5" onClick={() => setAberto(true)} title="Chamar gente pela rede local">
+        <button type="button" className={`btn-borda px-3 py-1.5 ${className}`} onClick={() => setAberto(true)} title="Chamar gente pela rede local">
           <span aria-hidden>📜</span> Convidar
         </button>
       )}

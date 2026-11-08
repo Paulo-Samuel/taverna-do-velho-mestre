@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { aventurasPublicas, type AventuraPublica } from "@/lib/aventuras";
 import { listarCampanhas, listarMensagens, listarPersonagens, type Campanha, type Personagem } from "@/lib/db";
+import { resumoDasNoites, type ResumoNoites } from "@/lib/mesa";
 import { lerAjustesMestre, provedorAtual } from "@/lib/mestre";
 import { obterSistema } from "@/lib/sistemas";
 import { dadosDoTema, temaDoSistema } from "@/lib/temas";
@@ -51,7 +52,7 @@ function corDaVida(pv: number, max: number) {
   return f > 0.5 ? "bg-musgo" : f > 0.25 ? "bg-ambar" : "bg-sangue";
 }
 
-type CampanhaListada = Omit<Campanha, "sistema"> & { sistema: ReturnType<typeof obterSistema>; personagens: Personagem[] };
+type CampanhaListada = Omit<Campanha, "sistema"> & { sistema: ReturnType<typeof obterSistema>; personagens: Personagem[]; noites: ResumoNoites };
 
 /** Plaquinhas do cartão: sistema (o modo história já é o próprio "sistema"), modo de jogo, rodada e PIN. */
 function Etiquetas({ c }: { c: CampanhaListada }) {
@@ -234,7 +235,12 @@ function AventurasProntas() {
 
 export default function Inicio() {
   // listarCampanhas já vem da jogada mais recente para a mais antiga
-  const campanhas: CampanhaListada[] = listarCampanhas().map((c) => ({ ...c, sistema: obterSistema(c.sistema), personagens: listarPersonagens(c.id) }));
+  const campanhas: CampanhaListada[] = listarCampanhas().map((c) => ({
+    ...c,
+    sistema: obterSistema(c.sistema),
+    personagens: listarPersonagens(c.id),
+    noites: resumoDasNoites(c.id),
+  }));
   const provedor = provedorAtual();
   const configurado = Boolean(lerAjustesMestre().provedor);
   const aviso =
@@ -355,7 +361,13 @@ export default function Inicio() {
                 </Link>
               </div>
               <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-2 text-xs text-muted">
-                <span title={dataDoBanco(c.atualizadaEm).toLocaleString("pt-BR")}>Última jogada: {haQuanto(c.atualizadaEm)}</span>
+                {c.noites.quantas && c.noites.ultima ? (
+                  <span title={`Última jogada: ${dataDoBanco(c.noites.ultima.fim).toLocaleString("pt-BR")}`}>
+                    {c.noites.quantas} {c.noites.quantas === 1 ? "noite" : "noites"} · última jogada {haQuanto(c.noites.ultima.fim)}
+                  </span>
+                ) : (
+                  <span title={dataDoBanco(c.atualizadaEm).toLocaleString("pt-BR")}>Última jogada: {haQuanto(c.atualizadaEm)}</span>
+                )}
                 <Link
                   href={`/mesa/${c.id}/livro`}
                   className="ml-auto inline-flex min-h-8 items-center gap-1 rounded-sm hover:text-ambar"

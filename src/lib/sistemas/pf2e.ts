@@ -745,10 +745,25 @@ function escolhas(ficha: Ficha): string[] {
 
 const BASICOS = ["mochila", "saco de dormir", "corda de 15 m", "pederneira", "rações para 2 semanas", "tochas (5)", "odre"];
 
+/**
+ * Teste oposto pedido pelo mestre: o servidor rola 1d20 + bônus do NPC e o total vira a CD (igualar a CD é sucesso, como sempre
+ * no PF2e; os graus de ±10 valem contra ela). A prévia não rola nada.
+ */
+function comOposicao(pedido: PedidoTeste): { pedido: PedidoTeste; oposicao?: NonNullable<ResultadoTeste["oposicao"]> } {
+  const o = pedido.oposicao ?? (pedido.opcoes?.oposicao as PedidoTeste["oposicao"] | undefined);
+  if (!o || typeof o.bonus !== "number" || !Number.isFinite(o.bonus)) return { pedido };
+  if (pedido.previa) return { pedido: { ...pedido, alvo: null } };
+  const bonus = Math.round(o.bonus);
+  const natural = d(20);
+  const oposicao = { nome: o.nome || "a oposição", expressao: `1d20${sinal(bonus)}`, dados: [natural], total: natural + bonus };
+  return { pedido: { ...pedido, alvo: oposicao.total }, oposicao };
+}
+
 export const pf2e: Sistema = {
   id: "pf2e",
   nome: "Pathfinder 2e (Remaster)",
   nomeCurto: "PF2e",
+  extensoesMestre: ["oposicao"],
   descricao: "Graus de sucesso, três ações por turno e uma montanha de ancestralidades e classes.",
   licenca: "ORC License (Paizo) — Player Core, Player Core 2 e livros Remaster; alguns livros antigos sob OGL 1.0a",
   dadoPrincipal: "d20",
@@ -874,7 +889,8 @@ export const pf2e: Sistema = {
     return ficha;
   },
 
-  resolverTeste(ficha: Ficha, pedido: PedidoTeste): ResultadoTeste {
+  resolverTeste(ficha: Ficha, pedidoOriginal: PedidoTeste): ResultadoTeste {
+    const { pedido, oposicao } = comOposicao(pedidoOriginal);
     const op = pedido.opcoes ?? {};
     const numeroOp = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
     const calc = calcular(ficha, pedido.teste, 0, { numeroAtaque: numeroOp(op.numeroAtaque), ataquesNoTurno: numeroOp(op.ataquesNoTurno) });
@@ -908,6 +924,16 @@ export const pf2e: Sistema = {
     // Recuperação: o servidor aplica o grau no moribundo (aposTeste); o mestre só narra
     const recuperacao = pedido.previa ? null : moribundoDepois(ficha, resultado);
     if (recuperacao) resultado.avisoMestre = [resultado.avisoMestre, avisoRecuperacao(ficha.nome, recuperacao)].filter(Boolean).join(" ");
+    if (oposicao) {
+      resultado.oposicao = oposicao;
+      resultado.detalhes = [resultado.detalhes, `${oposicao.nome}: ${oposicao.expressao} = ${oposicao.total} (CD)`].filter(Boolean).join(" · ");
+      resultado.avisoMestre = [
+        resultado.avisoMestre,
+        `${oposicao.nome} rolou ${oposicao.total} (${oposicao.expressao}); ${ficha.nome} tirou ${resultado.total}: ${resultado.rotuloGrau}.`,
+      ]
+        .filter(Boolean)
+        .join(" ");
+    }
     return resultado;
   },
 

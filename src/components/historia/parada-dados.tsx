@@ -27,6 +27,10 @@ export type ResultadoParada = {
   /** Vampiro: Despertares rolados junto (poder da disciplina, Surto) e pílulas do que mudou (Fome, Ressonância, frenesi) */
   despertares?: unknown;
   efeitos?: unknown;
+  /** teste oposto: o lado de quem resiste ({nome, expressao, dados, total}), rolado pelo servidor */
+  oposicao?: unknown;
+  /** dano sugerido pelo teste ({valor, tipo?, texto?}), ex.: ataque oposto do Vampiro */
+  dano?: unknown;
   /** Vampiro: dados rerrolados com Força de Vontade (índice em `dados`, face antes e depois) */
   rerrolado?: { dados?: { indice: number; antes: number; depois: number }[]; vontade?: { antes: number; depois: number; max?: number }; grauAntes?: string };
 };

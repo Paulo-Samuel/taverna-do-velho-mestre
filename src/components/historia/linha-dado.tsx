@@ -238,15 +238,26 @@ function LinhaTeste({ r }: { r: Dados }) {
   const conta =
     natural !== null && (r.dados?.length ?? 1) <= 2
       ? `${natural} ${bonus >= 0 ? "+" : "−"} ${Math.abs(bonus)} = ${r.total}`
-      : `${r.expressao ?? ""} = ${r.total}`;
+      : `${String(r.expressao ?? "").replace(/\s+vs\s+.*$/, "")} = ${r.total}`;
+  // teste oposto: no lugar do "vs alvo", quem resistiu e quanto tirou
+  const o = r.oposicao as { nome?: unknown; expressao?: unknown; total?: unknown } | undefined;
+  const contra = o && typeof o.nome === "string" && typeof o.total === "number" ? `contra ${o.nome} (${String(o.expressao ?? "")} → ${o.total})` : null;
+  const dano = r.dano as { texto?: unknown; valor?: unknown } | undefined;
   return (
     <Linha icone="🎲" titulo={r.motivo}>
       <Nome nome={r.personagem} /> · {r.teste}: <span className="not-italic tabular-nums text-foreground/85">{conta}</span>
-      {alvo !== null && <span className="not-italic tabular-nums text-foreground/85"> vs {alvo}</span>}
+      {contra ? (
+        <span className="not-italic tabular-nums text-foreground/85"> {contra}</span>
+      ) : (
+        alvo !== null && <span className="not-italic tabular-nums text-foreground/85"> vs {alvo}</span>
+      )}
       {" · "}
       <span className="not-italic font-semibold" style={{ color: COR_GRAU[r.grau] }}>
         {r.rotuloGrau}
       </span>
+      {dano && typeof dano.valor === "number" && (
+        <span className="not-italic text-foreground/85"> · {typeof dano.texto === "string" && dano.texto ? dano.texto : `${dano.valor} de dano`}</span>
+      )}
     </Linha>
   );
 }

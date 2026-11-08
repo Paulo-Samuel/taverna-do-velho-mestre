@@ -20,6 +20,15 @@ const ESQUEMA = z.union([
       foco: z.string().trim().max(60).optional(),
       nivel: z.number().int().min(1).max(5).optional(),
       de: z.number().int().min(0).max(10).optional(),
+      // disciplina: o poder que o ponto novo traz (vtm5/xp.ts confere nível e nome)
+      poder: z
+        .object({
+          nome: z.string().trim().min(1).max(60),
+          nivel: z.number().int().min(1).max(5).optional(),
+          custo: z.number().int().min(0).max(3).optional(),
+          parada: z.string().trim().max(80).optional(),
+        })
+        .optional(),
     }),
   }),
   z.object({ autor: z.string().trim().max(40).optional(), desfazer: z.literal(true) }),

@@ -435,6 +435,22 @@ export function dadosFimSessao(m: Mensagem): { sessao: number | null; data: stri
   return { sessao: num(d.sessao), data: typeof d.data === "string" ? d.data : null };
 }
 
+/** Fechamento narrado e "Anteriormente…" que o servidor grava no marcador do fim da noite (vazios quando não vieram). */
+export function textosDoFim(m: Mensagem): { fechamento: string | null; recapitulacao: string | null; retroativo: boolean } | null {
+  if (!dadosFimSessao(m)) return null;
+  const d = (m.dados ?? {}) as { fechamento?: unknown; recapitulacao?: unknown; retroativo?: unknown };
+  const t = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  return { fechamento: t(d.fechamento), recapitulacao: t(d.recapitulacao), retroativo: d.retroativo === true };
+}
+
+/** Cartão "Noite N" que o servidor grava no começo de uma noite nova (cena_titulo com `sessao`): o número, ou null. */
+export function dadosInicioNoite(m: Mensagem): { sessao: number } | null {
+  const d = (m.dados ?? {}) as { tipo?: string; sessao?: unknown };
+  if (m.tipo !== "dado" || d.tipo !== "cena_titulo") return null;
+  const sessao = num(d.sessao);
+  return sessao !== null ? { sessao } : null;
+}
+
 /** As peças da cena e o fim da noite que a fecha (vem depois dos chips de "o que mudou"). */
 export function separarFecho(pecas: Peca[]): { corpo: Peca[]; fecho: Peca[] } {
   let k = pecas.length;

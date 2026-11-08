@@ -12,6 +12,7 @@ import { randomInt } from "node:crypto";
 //   dhX / dlX  descarta os X maiores / menores (4d6dl1)
 //   !          explode no valor máximo (1d6!)
 //   +K / -K    constantes e outros termos      (1d8+1d6+3)
+//   Nd10s      parada de sucessos do Vampiro: conta as faces 6+, e cada par de 10 vale 2 a mais (5d10s)
 
 export type TermoDados = {
   termo: string;
@@ -21,7 +22,16 @@ export type TermoDados = {
   /** índices de `valores` que contam para o total */
   mantidos: number[];
   subtotal: number;
+  /** Nd10s: o subtotal é a contagem de sucessos (6+, pares de 10 valem +2), não a soma das faces */
+  sucessos?: true;
 };
+
+/** Sucessos de uma parada de d10: cada 6+ conta 1, e cada par de 10 soma mais 2 (10+10 = 4). */
+export function contarSucessosD10(faces: number[]): number {
+  const base = faces.filter((f) => f >= 6).length;
+  const dez = faces.filter((f) => f === 10).length;
+  return base + Math.floor(dez / 2) * 2;
+}
 
 export type TermoConstante = { termo: string; sinal: 1 | -1; constante: number; subtotal: number };
 
@@ -56,7 +66,7 @@ export function dadoFate(): number {
   return gerador(-1, 2);
 }
 
-const TERMO = /([+-]?)(?:(\d*)d(\d+|%|f)((?:k[hl]?|d[hl])\d+)?(!)?|(\d+))/gi;
+const TERMO = /([+-]?)(?:(\d*)d(\d+|%|f)((?:k[hl]?|d[hl])\d+)?(!|s)?|(\d+))/gi;
 
 export function expressaoValida(expressao: string): boolean {
   const limpa = expressao.replace(/\s+/g, "");
@@ -94,6 +104,16 @@ export function rolar(expressao: string): Rolagem {
     const fate = ladosTxt === "f";
     const lados = fate ? ("F" as const) : ladosTxt === "%" ? 100 : Number(ladosTxt);
     if (typeof lados === "number" && (lados < 2 || lados > MAX_LADOS)) throw new Error(`Dado d${lados} não existe nesta taverna.`);
+
+    if (explode === "s") {
+      // parada de sucessos (Vampiro): só d10, sem manter/descartar
+      if (lados !== 10 || mantemTxt) throw new Error(`"${termo}": a contagem de sucessos (s) só vale para d10 puro, como 5d10s.`);
+      const valores = Array.from({ length: qtd }, () => d(10));
+      const subtotal = sinal * contarSucessosD10(valores);
+      partes.push({ termo, sinal, lados, valores, mantidos: valores.map((_, i) => i), subtotal, sucessos: true });
+      total += subtotal;
+      continue;
+    }
 
     const valores: number[] = [];
     for (let i = 0; i < qtd; i++) {
@@ -144,6 +164,7 @@ export function descreverRolagem(r: Rolagem): string {
       const face = p.lados === "F" ? (v > 0 ? "+" : v < 0 ? "−" : "0") : String(v);
       return p.mantidos.includes(j) ? face : `~${face}`;
     });
+    if (p.sucessos) return `${sinal}${p.termo} [${faces.join(", ")}] (${Math.abs(p.subtotal)} sucesso${Math.abs(p.subtotal) === 1 ? "" : "s"})`;
     return `${sinal}${p.termo} [${faces.join(", ")}]`;
   });
   return `${pedacos.join("")} = ${r.total}`;

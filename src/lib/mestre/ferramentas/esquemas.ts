@@ -19,6 +19,14 @@ export const combatenteEntrada = z.object({
 
 export const HUMORES = ["taverna", "calmo", "exploracao", "misterio", "tensao", "combate", "triste", "vitoria", "sombrio"] as const;
 
+/** Teste oposto: quem resiste (o servidor rola a parada V5 ou o 1d20 + bônus) e a arma de um Ataque V5. */
+const OPOSICAO = {
+  oposicao_nome: z.string().trim().max(60).optional(),
+  oposicao_parada: z.number().int().min(1).max(20).optional(),
+  oposicao_bonus: z.number().int().min(-10).max(40).optional(),
+  arma: z.number().int().min(0).max(4).optional(),
+};
+
 export const ENTRADAS = {
   teste: z.object({
     personagem: z.string().optional(),
@@ -30,6 +38,7 @@ export const ENTRADAS = {
     custo_despertar: z.number().int().min(0).max(3).optional(),
     nivel_poder: z.number().int().min(1).max(5).optional(),
     compulsao: z.enum(["serve", "contra", "sortear"]).optional(),
+    ...OPOSICAO,
   }),
   rolar_dados: z.object({ expressao: z.string().min(1), motivo: z.string().default(""), secreta: z.boolean().optional() }),
   alterar_ficha: z.object({
@@ -49,7 +58,8 @@ export const ENTRADAS = {
   pedir_teste: z.object({
     personagem: z.string().optional(),
     teste: z.string().min(1),
-    alvo: z.number().int(),
+    // sem alvo só quando há oposição (o servidor rola a defesa do NPC); o executor recusa os dois ausentes
+    alvo: z.number().int().optional(),
     modo: z.enum(["normal", "vantagem", "desvantagem"]).optional(),
     modificador: z.number().int().optional(),
     perigoso: z.boolean().optional(),
@@ -57,6 +67,7 @@ export const ENTRADAS = {
     custo_despertar: z.number().int().min(0).max(3).optional(),
     nivel_poder: z.number().int().min(1).max(5).optional(),
     compulsao: z.enum(["serve", "contra", "sortear"]).optional(),
+    ...OPOSICAO,
   }),
   despertar_sangue: z.object({
     personagem: z.string().optional(),

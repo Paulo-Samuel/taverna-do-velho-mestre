@@ -1194,6 +1194,102 @@ const CABECALHO_GRUPOS: Record<GrupoOpcao, { titulo: string; ajuda: (classe: str
   alma: { titulo: "Quem você é", ajuda: () => "O que sobrou de humano e o que a eternidade fez com isso. Os marcados com * são obrigatórios; o 🎲 sugere." },
 };
 
+// ---------- poderes de disciplina (Vampiro) ----------
+
+/** Opção "um poder por ponto de disciplina" do Vampiro; cada linha vai como "disciplina|nível|custo|nome|parada". */
+const ID_PODERES = "disciplinaPoderes";
+
+type LinhaPoder = { disciplina: string; nivel: number; custo: number; nome: string; parada: string };
+
+const lerLinhaPoder = (v: string): LinhaPoder | null => {
+  const [disciplina, nivel, custo, nome = "", parada = ""] = v.split("|");
+  if (!disciplina || nivel === undefined) return null;
+  return { disciplina, nivel: Number(nivel) || 1, custo: custo === "" || custo === undefined ? 1 : Number(custo), nome, parada };
+};
+const escreverLinhaPoder = (l: LinhaPoder) => [l.disciplina, l.nivel, l.custo, l.nome.replace(/\|/g, "/"), l.parada.replace(/\|/g, "/")].join("|");
+
+/**
+ * Pontos de disciplina que a ficha vai ter, do jeito que o servidor distribui (vtm5.ts, distribuirDisciplinas): principal ●●,
+ * secundária ● (+1 da Ancila) e +1 do tipo de predador. Escolha em branco = a primeira opção, como no servidor.
+ */
+function disciplinasDaCriacao(e: Escolhas, opcoes: OpcaoCriacao[]): { id: string; nome: string; pontos: number }[] {
+  const op = (id: string) => opcoes.find((o) => o.id === id);
+  const pri = op(`disciplinaPrincipal_${e.classe}`);
+  const sec = op(`disciplinaSecundaria_${e.classe}`);
+  if (!pri?.opcoes?.length) return [];
+  const nomeDe = (id: string) => pri.opcoes?.find((x) => x.id === id)?.nome ?? op("disciplinaPredador")?.opcoes?.find((x) => x.id.endsWith(`:${id}`))?.nome ?? id;
+  const principal = e.extras[pri.id]?.[0] && pri.opcoes.some((x) => x.id === e.extras[pri.id][0]) ? e.extras[pri.id][0] : pri.opcoes[0].id;
+  const pedidaSec = e.extras[sec?.id ?? ""]?.[0];
+  const secundaria = pedidaSec && pedidaSec !== principal ? pedidaSec : (pri.opcoes.find((x) => x.id !== principal)?.id ?? "");
+  const pontos: Record<string, number> = { [principal]: 2 };
+  if (secundaria) pontos[secundaria] = 1 + (e.antecedente === "ancila" ? 1 : 0);
+  const [pred, disc] = (e.extras.disciplinaPredador?.[0] ?? "").split(":");
+  if (pred === e.ancestralidade && disc) pontos[disc] = Math.min(5, (pontos[disc] ?? 0) + 1);
+  return Object.entries(pontos).map(([id, n]) => ({ id, nome: nomeDe(id), pontos: n }));
+}
+
+/** Uma linha por ponto de disciplina: nome do poder, nível (até os pontos da disciplina), custo em Despertares e parada opcional. */
+function CampoPoderes({ e, opcoes, valores, mudar }: { e: Escolhas; opcoes: OpcaoCriacao[]; valores: string[]; mudar: (v: string[]) => void }) {
+  const discs = disciplinasDaCriacao(e, opcoes);
+  if (!discs.length) return <p className="text-xs text-muted">Escolha o clã e as disciplinas primeiro.</p>;
+  const linhas = valores.map(lerLinhaPoder).filter((l): l is LinhaPoder => l !== null);
+  // vagas: a k-ésima linha da disciplina d ocupa a vaga k; o que sobrou de disciplina trocada some
+  const vagas = discs.flatMap((d) => {
+    const dela = linhas.filter((l) => l.disciplina === d.id);
+    return Array.from({ length: d.pontos }, (_, k) => ({ d, k, linha: dela[k] ?? { disciplina: d.id, nivel: Math.min(k + 1, d.pontos), custo: 1, nome: "", parada: "" } }));
+  });
+  const trocar = (i: number, parcial: Partial<LinhaPoder>) => mudar(vagas.map((v, j) => escreverLinhaPoder(j === i ? { ...v.linha, ...parcial } : v.linha)));
+  return (
+    <div className="space-y-3">
+      {discs.map((d) => (
+        <div key={d.id} className="rounded-lg border border-border/70 p-2.5">
+          <p className="mb-1.5 text-sm text-pergaminho">
+            {d.nome} <span className="tracking-wider text-ambar">{"●".repeat(d.pontos)}</span>
+          </p>
+          <div className="space-y-2">
+            {vagas.map((v, i) =>
+              v.d.id !== d.id ? null : (
+                <div key={`${d.id}-${v.k}`} className="grid grid-cols-2 items-center gap-2 sm:grid-cols-[minmax(0,1.4fr)_5rem_9rem_minmax(0,1fr)] [&>*]:w-full [&>input:first-child]:col-span-2 sm:[&>input:first-child]:col-span-1 [&>input:last-child]:col-span-2 sm:[&>input:last-child]:col-span-1">
+                  <input
+                    value={v.linha.nome}
+                    onChange={(ev) => trocar(i, { nome: ev.target.value })}
+                    maxLength={60}
+                    placeholder={`poder ${v.k + 1} de ${d.nome}`}
+                    aria-label={`Poder ${v.k + 1} de ${d.nome}`}
+                    className="campo min-w-0 flex-1 basis-40 px-2 py-1.5 text-sm"
+                  />
+                  <select value={Math.min(v.linha.nivel, d.pontos)} onChange={(ev) => trocar(i, { nivel: Number(ev.target.value) })} aria-label={`Nível do poder ${v.k + 1} de ${d.nome}`} className="campo px-1.5 py-1.5 text-sm">
+                    {Array.from({ length: d.pontos }, (_, n) => n + 1).map((n) => (
+                      <option key={n} value={n}>
+                        {"●".repeat(n)}
+                      </option>
+                    ))}
+                  </select>
+                  <select value={v.linha.custo} onChange={(ev) => trocar(i, { custo: Number(ev.target.value) })} aria-label={`Custo do poder ${v.k + 1} de ${d.nome}`} className="campo px-1.5 py-1.5 text-sm">
+                    <option value={0}>sem custo</option>
+                    <option value={1}>1 Despertar</option>
+                    <option value={2}>2 Despertares</option>
+                    <option value={3}>3 Despertares</option>
+                  </select>
+                  <input
+                    value={v.linha.parada}
+                    onChange={(ev) => trocar(i, { parada: ev.target.value })}
+                    maxLength={80}
+                    placeholder="parada (opcional)"
+                    aria-label={`Parada do poder ${v.k + 1} de ${d.nome} (opcional)`}
+                    className="campo min-w-0 basis-36 px-2 py-1.5 text-sm"
+                  />
+                </div>
+              ),
+            )}
+          </div>
+        </div>
+      ))}
+      <p className="text-[11px] text-muted">Em branco, o ponto fica sem poder anotado e o mestre não inventa um: combine depois e anote ao gastar XP.</p>
+    </div>
+  );
+}
+
 export function PassoOpcoes({ sistema, e, atualizar, opcoes, sortearOpcoes, grupo }: PropsOpcoes) {
   const classe = sistema.classes.find((c) => c.id === e.classe);
   const anc = sistema.ancestralidades.find((a) => a.id === e.ancestralidade);
@@ -1225,15 +1321,19 @@ export function PassoOpcoes({ sistema, e, atualizar, opcoes, sortearOpcoes, grup
           {o.classes?.length ? <Selo destaque>de {classe?.nome ?? "classe"}</Selo> : null}
         </legend>
         {o.ajuda && <p className="mb-2 text-xs leading-relaxed text-muted">{o.ajuda}</p>}
-        <CampoOpcao
-          opcao={o}
-          destaque={anc?.nome}
-          valores={e.extras[o.id] ?? []}
-          mudar={(v) => atualizar({ extras: { ...e.extras, [o.id]: v } })}
-          bloqueados={o.exclusivaCom?.length ? bloqueadosPara(o, opcoes, e.extras) : undefined}
-          exemplo={exemploDoCampo(campo, ctx)}
-          sugerir={campo?.gerar ? (linhas) => sugerirTexto(sistema.id, o.id, e, { ...e.extras, [o.id]: linhas }) : undefined}
-        />
+        {o.id === ID_PODERES && sistema.id === "vtm5" ? (
+          <CampoPoderes e={e} opcoes={opcoes} valores={e.extras[o.id] ?? []} mudar={(v) => atualizar({ extras: { ...e.extras, [o.id]: v } })} />
+        ) : (
+          <CampoOpcao
+            opcao={o}
+            destaque={anc?.nome}
+            valores={e.extras[o.id] ?? []}
+            mudar={(v) => atualizar({ extras: { ...e.extras, [o.id]: v } })}
+            bloqueados={o.exclusivaCom?.length ? bloqueadosPara(o, opcoes, e.extras) : undefined}
+            exemplo={exemploDoCampo(campo, ctx)}
+            sugerir={campo?.gerar ? (linhas) => sugerirTexto(sistema.id, o.id, e, { ...e.extras, [o.id]: linhas }) : undefined}
+          />
+        )}
       </fieldset>
     );
   };

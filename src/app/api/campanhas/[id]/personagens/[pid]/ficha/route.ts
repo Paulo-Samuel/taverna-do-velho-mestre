@@ -4,7 +4,7 @@ import { publicarPersonagem } from "@/lib/mesa";
 import { mesaOcupada } from "@/lib/mestre";
 import { obterSistema } from "@/lib/sistemas";
 import { publicar } from "@/lib/tempo-real";
-import { alvoDaRota, aplicarAjuste } from "./ajustar";
+import { AjusteRecusado, alvoDaRota, aplicarAjuste } from "./ajustar";
 
 // PATCH: o jogador ajusta à mão os marcadores da ficha (vida, recursos, dinheiro) e mexe em condições e inventário.
 // Variações, não valores: {pv: -2, recursos: {vontade: -1}}. Grava, avisa todos os aparelhos e deixa uma linha no chat.
@@ -20,6 +20,7 @@ const ESQUEMA = z.object({
   removerCondicoes: z.array(texto).max(10).optional(),
   adicionarItens: z.array(texto).max(10).optional(),
   removerItens: z.array(z.string().min(1).max(500)).max(10).optional(),
+  confirmado: z.boolean().optional(),
 });
 
 export async function PATCH(request: Request, ctx: RouteContext<"/api/campanhas/[id]/personagens/[pid]/ficha">) {
@@ -36,7 +37,14 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/campanhas/
 
   const sistema = obterSistema(campanha.sistema);
   const ficha = personagem.ficha;
-  const { mudancas, pvAntes } = aplicarAjuste(ficha, pedido, sistema.rotulos);
+  let ajuste: ReturnType<typeof aplicarAjuste>;
+  try {
+    ajuste = aplicarAjuste(ficha, pedido, sistema.rotulos);
+  } catch (e) {
+    if (e instanceof AjusteRecusado) return Response.json({ erro: e.message }, { status: 409 });
+    throw e;
+  }
+  const { mudancas, pvAntes } = ajuste;
   if (!mudancas.length) return Response.json({ ok: true, mudancas });
 
   salvarFicha(personagem.id, ficha);

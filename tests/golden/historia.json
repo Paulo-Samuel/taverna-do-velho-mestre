@@ -51,7 +51,7 @@
     },
     {
       "name": "rolar_dados",
-      "description": "Rola dados livres: dano, ataques e testes de inimigos, tabelas aleatórias, tesouro, reação de NPCs. Notação: 2d6+3, 1d20, 4d6kh3, 2d20kl1, 4dF, d%, 1d6! (explosivo).",
+      "description": "Rola dados livres: dano, ataques e testes de inimigos, tabelas aleatórias, tesouro, reação de NPCs. Notação: 2d6+3, 1d20, 4d6kh3, 2d20kl1, 4dF, d%, 1d6! (explosivo), 5d10s (parada de sucessos: conta 6+, par de 10 vale +2).",
       "input_schema": {
         "type": "object",
         "properties": {

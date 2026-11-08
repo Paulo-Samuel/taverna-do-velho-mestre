@@ -14,7 +14,7 @@ import type { Ficha, OpcaoCriacao } from "./sistemas/tipos";
 /** Escolhas fechadas que só descrevem o personagem (as demais, como "recursos" e "estilo" do Vampiro, mudam número). */
 const ESCOLHAS_NARRATIVAS = new Set(["seita", "alinhamento", "fobia"]);
 /** Campos de texto que valem como regra: o mestre lê como lista do que o personagem pode fazer. */
-const TEXTOS_MECANICOS = new Set(["magias", "invocacoes", "facanhas", "saberes"]);
+const TEXTOS_MECANICOS = new Set(["magias", "invocacoes", "facanhas", "saberes", "disciplinaPoderes"]);
 
 /** Opções de criação do sistema que dá para editar nesta ficha (respeita classe e ancestralidade dela). */
 export function opcoesEditaveis(opcoes: OpcaoCriacao[] | undefined, ficha: Pick<Ficha, "classe" | "ancestralidade">): OpcaoCriacao[] {

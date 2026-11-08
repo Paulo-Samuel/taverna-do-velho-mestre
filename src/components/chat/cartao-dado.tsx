@@ -196,6 +196,41 @@ function LinhaTeste({ r }: { r: Dados }) {
   );
 }
 
+type OposicaoNoCartao = { nome: string; expressao: string; dados: number[]; total: number };
+
+/** O lado do NPC num teste oposto (campo genérico `oposicao`), ou null. */
+export function lerOposicao(v: unknown): OposicaoNoCartao | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Partial<OposicaoNoCartao>;
+  if (typeof o.nome !== "string" || typeof o.total !== "number") return null;
+  return { nome: o.nome, expressao: String(o.expressao ?? ""), dados: Array.isArray(o.dados) ? o.dados.filter((x): x is number => typeof x === "number") : [], total: o.total };
+}
+
+/** Texto do lado do NPC: "Vera: 5d10 → 2 sucessos" (parada de d10) ou "Vera: 1d20+3 = 15". */
+export function textoOposicaoCartao(o: OposicaoNoCartao): string {
+  if (/d10$/.test(o.expressao)) return `${o.nome}: ${o.expressao} → ${o.total} sucesso${o.total === 1 ? "" : "s"}`;
+  return `${o.nome}: ${o.expressao} = ${o.total}`;
+}
+
+/** Linha do NPC no cartão do teste oposto, com as faces dele em miniatura. */
+export function LinhaOposicao({ r, novo = false }: { r: { oposicao?: unknown }; novo?: boolean }) {
+  const o = lerOposicao(r.oposicao);
+  if (!o) return null;
+  const d10 = /d10$/.test(o.expressao);
+  return (
+    <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted" title="o servidor rolou a parada de quem resiste; empate fica com quem resiste">
+      <span aria-hidden>⚔</span>
+      <span className="text-foreground/85">{textoOposicaoCartao(o)}</span>
+      {d10 &&
+        o.dados.map((v, i) => (
+          <span key={i} className={`grid size-5 place-items-center rounded border text-[10px] tabular-nums ${novo ? "cd-pop" : ""} ${v >= 6 ? "border-foreground/40 text-foreground/85" : "border-border text-muted/70"}`}>
+            {v}
+          </span>
+        ))}
+    </p>
+  );
+}
+
 /** Dano sugerido pelo teste (campo genérico `dano` do resultado), em qualquer sistema. */
 function LinhaDano({ r }: { r: Dados }) {
   const d = r.dano as { valor?: unknown; tipo?: unknown; texto?: unknown } | undefined;
@@ -237,6 +272,7 @@ function TesteD20({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: b
             {natural === 1 && <span className="text-sangue">1 natural…</span>}
             {r.detalhes && <span className="min-w-0 truncate">{mostrarPar ? String(r.detalhes).replace(/^(vantagem|desvantagem): \d+ e \d+( · )?/, "$1 ") : r.detalhes}</span>}
           </div>
+          <LinhaOposicao r={r} novo={novo} />
           <LinhaDano r={r} />
         </div>
         <Grau r={r} cor={cor} novo={novo} />
@@ -466,8 +502,9 @@ function TesteVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: b
           <p className="text-sm">
             <span className="text-pergaminho">{r.teste}</span>{" "}
             <span className="text-muted">
-              {r.expressao}
-              {num(r.margem) !== null && alvo !== null && !despertar && <span className="text-muted/80"> ({r.margem >= 0 ? `+${r.margem}` : r.margem})</span>}
+              {/* teste oposto: o lado do NPC tem linha própria embaixo dos dados */}
+              {lerOposicao(r.oposicao) ? String(r.expressao ?? "").replace(/\s+vs\s+.*$/, "") : r.expressao}
+              {num(r.margem) !== null && alvo !== null && !despertar && !lerOposicao(r.oposicao) && <span className="text-muted/80"> ({r.margem >= 0 ? `+${r.margem}` : r.margem})</span>}
             </span>
           </p>
           {!despertar && (
@@ -498,6 +535,7 @@ function TesteVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: b
           <D10 key={`f${i}`} valor={v} fome despertar={despertar} i={normais.length + i} novo={novo} />
         ))}
       </div>
+      <LinhaOposicao r={r} novo={novo} />
       {despertares.map((x, k) => (
         <FaixaDespertar key={k} x={x} novo={novo} />
       ))}

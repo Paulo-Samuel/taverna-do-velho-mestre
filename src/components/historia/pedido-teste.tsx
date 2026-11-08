@@ -48,8 +48,48 @@ type DadosPedido = {
   modo?: string;
   /** custos anunciados antes do clique (Vampiro: "Despertar · Celeridade ●●", "Surto +2") */
   custos?: string[];
+  /** opções guardadas no pedido; `oposicao` é quem resiste num teste oposto (o servidor rola o lado dele no clique) */
+  opcoes?: { oposicao?: { nome?: string; parada?: number; bonus?: number } };
   resultado?: Partial<ResultadoRolagem> & ResultadoParada & { bonus?: number; alvo?: number | null };
 };
+
+/** "contra Vera (5 dados)" ou "contra o guarda (+3)": o teste oposto antes do clique. */
+export function textoContraPedido(d: Pick<DadosPedido, "opcoes">): string | null {
+  const o = d.opcoes?.oposicao;
+  if (!o || (typeof o.parada !== "number" && typeof o.bonus !== "number")) return null;
+  const nome = o.nome?.trim() || "a oposição";
+  if (typeof o.parada === "number") return `contra ${nome} (${o.parada} ${o.parada === 1 ? "dado" : "dados"})`;
+  return `contra ${nome} (${sinal(o.bonus ?? 0)})`;
+}
+
+/** Depois do clique: "Vera tirou 2" (parada) ou "Vera tirou 15" (d20), do campo `oposicao` do resultado. */
+function textoOposicaoResultado(r: { oposicao?: unknown }): string | null {
+  const o = r.oposicao as { nome?: unknown; total?: unknown; expressao?: unknown } | undefined;
+  if (!o || typeof o.nome !== "string" || typeof o.total !== "number") return null;
+  const d10 = /d10$/.test(String(o.expressao ?? ""));
+  return d10 ? `${o.nome}: ${o.total} ${o.total === 1 ? "sucesso" : "sucessos"}` : `${o.nome}: ${String(o.expressao ?? "")} = ${o.total}`;
+}
+
+/** Dano sugerido pelo teste (ataque oposto do Vampiro, por exemplo). */
+function textoDano(r: { dano?: unknown }): string | null {
+  const d = r.dano as { valor?: unknown; texto?: unknown } | undefined;
+  if (!d || typeof d.valor !== "number") return null;
+  return typeof d.texto === "string" && d.texto ? d.texto : `${d.valor} de dano`;
+}
+
+/** Linha da oposição e do dano embaixo da conta (quando houver). */
+function LinhaDisputa({ r, centro = false }: { r: { oposicao?: unknown; dano?: unknown }; centro?: boolean }) {
+  const op = textoOposicaoResultado(r);
+  const dano = textoDano(r);
+  if (!op && !dano) return null;
+  return (
+    <p className={`mt-1 text-xs tabular-nums text-muted ${centro ? "mx-auto max-w-md" : ""}`}>
+      {op && <span>⚔ {op}</span>}
+      {op && dano && " · "}
+      {dano && <span className="text-foreground/85">🗡 {dano}</span>}
+    </p>
+  );
+}
 
 type Resultado = ResultadoRolagem & ResultadoParada;
 
@@ -119,7 +159,8 @@ function contaParada(p: Parada, r: ResultadoParada, alvoPedido: number | null) {
     if (r.vtm === "despertar") return r.rotuloGrau ?? "";
     const pares = Math.floor(dados.filter((v) => v === 10).length / 2);
     const partes = [`${total} ${total === 1 ? "sucesso" : "sucessos"}`];
-    if (typeof alvo === "number") partes.push(`dificuldade ${alvo}`);
+    // teste oposto: o alvo é "sucessos do NPC + 1"; quem resistiu aparece na linha da disputa
+    if (typeof alvo === "number" && !textoOposicaoResultado(r)) partes.push(`dificuldade ${alvo}`);
     if (pares) partes.push(`${pares} ${pares === 1 ? "par" : "pares"} de 10`);
     return partes.join(" · ");
   }
@@ -148,12 +189,15 @@ function Chip({ children, tom = "border-border/80 text-foreground/85" }: { child
 /** Pílulas abaixo do título: dificuldade, como rola e o aviso de perigo. */
 function Chips({ d, parada, d20, bonus, alvo }: { d: DadosPedido; parada: Parada; d20: boolean; bonus: number; alvo: number | null }) {
   const chips: ReactNode[] = [];
+  const contra = textoContraPedido(d);
   if (d20) {
-    if (typeof alvo === "number") chips.push(<Chip key="cd">CD {alvo}</Chip>);
+    if (contra) chips.push(<Chip key="contra">⚔ {contra}</Chip>);
+    else if (typeof alvo === "number") chips.push(<Chip key="cd">CD {alvo}</Chip>);
     chips.push(<Chip key="bonus">Bônus {sinal(bonus)}</Chip>);
     if (d.modo === "vantagem" || d.modo === "desvantagem") chips.push(<Chip key="modo">Com {d.modo}</Chip>);
   } else if (parada.sabor === "vtm5") {
-    if (typeof alvo === "number") chips.push(<Chip key="dif">Dificuldade {alvo}</Chip>);
+    if (contra) chips.push(<Chip key="contra">⚔ {contra}</Chip>);
+    else if (typeof alvo === "number") chips.push(<Chip key="dif">Dificuldade {alvo}</Chip>);
     chips.push(
       <Chip key="parada">
         {parada.qtd} {parada.qtd === 1 ? "dado" : "dados"}
@@ -408,6 +452,7 @@ export function PedidoTeste({
               {partesDoRotulo(r).resto && <span className="text-muted"> · {partesDoRotulo(r).resto}</span>}
             </span>
           </div>
+          <LinhaDisputa r={r} />
           <SangueDoResultado r={r} />
           <LinhaVontade r={r} />
           {r.detalhes && <p className="mt-1.5 line-clamp-2 text-xs text-muted">{r.detalhes}</p>}
@@ -438,12 +483,13 @@ export function PedidoTeste({
             · Teste de {tituloDoTeste(teste)}
           </p>
           <p className="tabular-nums">
-            <span className="text-foreground/80">{conta(r.natural, bonus, r.total ?? 0, alvo)}</span>
+            <span className="text-foreground/80">{conta(r.natural, bonus, r.total ?? 0, textoOposicaoResultado(r) ? null : alvo)}</span>
             <span className="text-muted"> · </span>
             <span className="font-semibold" style={{ color: COR_GRAU[grau] }}>
               {rotulo(r)}
             </span>
           </p>
+          <LinhaDisputa r={r} />
         </div>
       </div>
         <LinhaRecursoD20 r={r as Record<string, unknown>} />
@@ -546,6 +592,7 @@ export function PedidoTeste({
             </p>
           )}
           <p className="mt-1 text-sm tabular-nums text-foreground/85 sm:text-base">{contaParada(parada, resultado, alvo)}</p>
+          <LinhaDisputa r={resultado} centro />
           <SangueDoResultado r={resultado} centro novo />
           <LinhaVontade r={resultado} centro />
           {resultado.detalhes && <p className="mx-auto mt-2 max-w-md text-xs text-muted">{resultado.detalhes}</p>}
@@ -554,12 +601,13 @@ export function PedidoTeste({
       ) : pronto ? (
         <div className="surgir mt-4">
           <p className="text-lg tabular-nums sm:text-xl">
-            <span className="text-foreground/90">{conta(resultado.natural, bonus, resultado.total, alvo)}</span>
+            <span className="text-foreground/90">{conta(resultado.natural, bonus, resultado.total, textoOposicaoResultado(resultado) ? null : alvo)}</span>
             <span className="text-muted"> · </span>
             <span className="titulo font-semibold" style={{ color: corGrau }}>
               {rotulo(resultado)}
             </span>
           </p>
+          <LinhaDisputa r={resultado} centro />
           <LinhaRecursoD20 r={resultado as unknown as Record<string, unknown>} />
           {decisao(resultado)}
         </div>

@@ -19,8 +19,17 @@ export const extensaoVampiro: ExtensaoFerramentas = {
       enum: ["serve", "contra", "sortear"],
       description: "Com compulsão ativa: serve (a ação a satisfaz, sem −2) ou contra (padrão, −2). sortear: Crítico Sujo também sorteia uma.",
     },
+    oposicao_nome: { type: "string", description: "Teste oposto: quem resiste (NPC), mostrado no cartão." },
+    oposicao_parada: {
+      type: "integer",
+      minimum: 1,
+      maximum: 20,
+      description: "Teste oposto: dados da parada do NPC. O servidor rola (sem Fome); empate fica com o NPC. Com isto, omita alvo.",
+    },
+    arma: { type: "integer", minimum: 0, maximum: 4, description: "Ataque: dano da arma (soco 0, faca 1, taco ou pistola 2, espingarda 4). O dano sugerido vem no resultado." },
   },
-  notaTeste: " Vampiro: com disciplina na parada, o Despertar do poder vem junto. Caça, Frenesi, Remorso, Surto e Despertar avulso têm ferramentas próprias.",
+  notaTeste:
+    " Vampiro: disciplina na parada já rola o Despertar; poder da ficha pelo nome traz custo e parada. Disputa com NPC: oposicao_parada. Caça, Frenesi, Remorso, Surto e Despertar avulso têm ferramentas próprias.",
   resultadoComFicha: true,
   sincronizarCombateAposTeste: true,
 

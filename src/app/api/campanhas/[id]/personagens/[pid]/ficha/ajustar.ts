@@ -30,7 +30,25 @@ export type PedidoAjuste = {
   removerCondicoes?: string[];
   adicionarItens?: string[];
   removerItens?: string[];
+  /** o jogador confirmou na tela uma mudança que pede confirmação (Vampiro: Humanidade à mão) */
+  confirmado?: boolean;
 };
+
+/** Ajuste que a regra não deixa fazer à mão: a rota responde 409 com a mensagem, sem mexer na ficha. */
+export class AjusteRecusado extends Error {}
+
+/**
+ * Amarras do Vampiro no ajuste manual: Mancha só sai pelo teste de Remorso (tirar Mancha à mão apagaria o Remorso da noite) e
+ * Humanidade à mão só com `confirmado` (é a moral do personagem: perder ou ganhar é coisa de história, não de clique).
+ */
+function conferirAjuste(ficha: Ficha, p: PedidoAjuste) {
+  if (ficha.sistema !== "vtm5") return;
+  const r = p.recursos ?? {};
+  if ((r.mancha ?? 0) < 0) throw new AjusteRecusado("Manchas só saem pelo teste de Remorso (botão na ficha).");
+  if ((r.humanidade ?? 0) !== 0 && !p.confirmado) {
+    throw new AjusteRecusado("Humanidade só muda pela história (Remorso, degeneração). Para corrigir à mão, confirme o ajuste.");
+  }
+}
 
 /** Teto do dinheiro quando o sistema usa pontos em vez de moedas (Vampiro: Recursos 0–5). */
 const TETO_DINHEIRO: Record<string, number> = { vtm5: 5 };
@@ -45,8 +63,10 @@ function indice(lista: string[], texto: string): number {
 /**
  * Aplica o pedido na ficha (muta) respeitando mínimos, máximos e as amarras de cada sistema.
  * Devolve as mudanças em texto legível ("Força de Vontade 4 → 3"); lista vazia = nada mudou.
+ * Lança AjusteRecusado (antes de mexer em qualquer coisa) quando a regra não deixa: Mancha negativa e Humanidade sem confirmar.
  */
 export function aplicarAjuste(ficha: Ficha, p: PedidoAjuste, rotulos: RotulosSistema): { mudancas: string[]; pvAntes: number } {
+  conferirAjuste(ficha, p);
   const mudancas: string[] = [];
   const pvAntes = ficha.pv;
 

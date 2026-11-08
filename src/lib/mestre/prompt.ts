@@ -425,7 +425,19 @@ ${feitas} O que você escreveu no raciocínio interno não apareceu para ele. N�
  * Pedido do turno de fim de sessão: fechamento curto, XP pelas regras do sistema, passos próprios do sistema antes do
  * fechamento (Remorso no Vampiro), diário, sem sugestões. Monte com `fimDeSessao`.
  */
-export type FimDeSessao = { sessao: number; xp: string; passosExtras: string[] };
+export type FimDeSessao = {
+  sessao: number;
+  xp: string;
+  passosExtras: string[];
+  /** "Nesta sessão": linhas da noite inteira (ações, cenas, XP, missões), para o XP e o diário saírem dela e não da janela */
+  nestaSessao?: string[];
+  /** havia luta aberta ao encerrar: feche com um desfecho rápido ou deixe o gancho explícito */
+  combateAtivo?: boolean;
+  /** fechamento em retrospectiva (a noite terminou sem o botão e ninguém jogou desde então) */
+  retroativa?: { horas: number } | null;
+  /** o XP desta noite já saiu num Encerrar interrompido: true para a mesa toda, ou os nomes de quem já recebeu */
+  xpJaConcedido?: boolean | string[];
+};
 
 /** XP do fim da noite quando o sistema não declara o próprio (campo `fimDeSessao` do contrato), pela progressão. */
 const XP_FIM_GENERICO = {
@@ -433,32 +445,93 @@ const XP_FIM_GENERICO = {
   xp: "conceder_xp pelos marcos desta sessão (encontros vencidos, missões cumpridas, descobertas, boas ideias), na medida das regras do sistema, com o motivo",
 };
 
-/** O pedido de fim de sessão deste sistema, para estas fichas. */
-export function fimDeSessao(sistema: Sistema, sessao: number, fichas: Ficha[]): FimDeSessao {
+/**
+ * O pedido de fim de sessão deste sistema, para estas fichas. O texto do XP é do sistema (campo `fimDeSessao.xp` do contrato;
+ * o do Vampiro mora na pasta dele em sistemas/); sem ele, o genérico pela progressão.
+ */
+export function fimDeSessao(sistema: Sistema, sessao: number, fichas: Ficha[], extra: Omit<FimDeSessao, "sessao" | "xp" | "passosExtras"> = {}): FimDeSessao {
   const proprio = sistema.fimDeSessao;
   const xp = proprio?.xp ?? (sistema.progressao === "xp" ? XP_FIM_GENERICO.xp : XP_FIM_GENERICO.marcos);
-  return { sessao, xp, passosExtras: proprio?.passosExtras?.(fichas) ?? [] };
+  return { sessao, xp, passosExtras: proprio?.passosExtras?.(fichas) ?? [], ...extra };
+}
+
+/** Quantas linhas do "Nesta sessão" entram no pedido de fim (as mais recentes ficam). */
+const MAX_LINHAS_NOITE = 40;
+
+/**
+ * "Nesta sessão": a noite inteira em poucas linhas, para o XP e o diário do fechamento: ações dos jogadores (curtas),
+ * títulos de cena, XP já concedido, missões e testes marcantes. Sem narração (a janela recente já leva a dela).
+ */
+export function linhasDaNoite(mensagens: Mensagem[], personagens: Personagem[]): string[] {
+  const linhas: string[] = [];
+  for (const m of mensagens) {
+    const d = (m.dados ?? {}) as Record<string, unknown>;
+    if (m.tipo === "jogador") {
+      const t = m.texto.trim();
+      if (!t || t.startsWith("((")) continue;
+      linhas.push(`- ${nomeDoPersonagem(personagens, m.personagemId) ?? m.autor ?? "Jogador"}: ${encurtar(t.replace(/\s+/g, " "), 140)}`);
+    } else if (m.tipo === "dado") {
+      if (d.tipo === "cena_titulo") linhas.push(`- [cena] ${encurtar(m.texto.replace(/\s+/g, " "), 100)}`);
+      else if (d.tipo === "xp") linhas.push(`- [XP já concedido] ${encurtar(m.texto.replace(/\s+/g, " "), 140)}`);
+      else if (d.tipo === "diario" && ((d.entrada ?? {}) as { tipo?: string }).tipo === "missao") linhas.push(`- [missão] ${encurtar(m.texto.replace(/\s+/g, " "), 140)}`);
+      else if (d.tipo === "combate") linhas.push(`- [luta] ${encurtar(m.texto.replace(/\s+/g, " "), 100)}`);
+      else if ((d.tipo === "pedido_teste" && d.status === "resolvido") || (d.tipo === "teste" && !d.secreta)) linhas.push(`- [teste] ${encurtar(m.texto.replace(/\s+/g, " "), 140)}`);
+    }
+  }
+  return linhas.length > MAX_LINHAS_NOITE ? ["- (…começo da noite omitido)", ...linhas.slice(-MAX_LINHAS_NOITE)] : linhas;
 }
 
 function pedidoDeFim(f: FimDeSessao): string {
+  const fechamento = f.retroativa
+    ? `narrar com o FECHAMENTO da noite em retrospectiva, 1 parágrafo: a noite terminou há ${horasPorExtenso(f.retroativa.horas)} sem ser encerrada; feche onde a história parou, sem avançar a cena, sem criar NPC nem lugar novo, o peso do que aconteceu e um gancho para a próxima sessão. Sem pedir teste, sem perguntar o que ele faz, sem passar a vez`
+    : "narrar com o FECHAMENTO da noite, curto (1 a 2 parágrafos): onde o personagem fica (sem decidir escolhas novas por ele: corte para o amanhecer ou o refúgio), o peso do que aconteceu e um gancho para a próxima sessão. Sem pedir teste, sem perguntar o que ele faz, sem passar a vez";
   const passos = [
     ...f.passosExtras,
-    "narrar com o FECHAMENTO da noite, curto (1 a 2 parágrafos): onde o personagem fica (sem decidir escolhas novas por ele: corte para o amanhecer ou o refúgio), o peso do que aconteceu e um gancho para a próxima sessão. Sem pedir teste, sem perguntar o que ele faz, sem passar a vez",
+    f.combateAtivo ? "há uma luta aberta no rastreador: feche-a com um desfecho rápido (atualizar_cena com combate.acao \"encerrar\") ou deixe o cliffhanger explícito no fechamento; NÃO abra combate nem cena nova" : "",
+    fechamento,
     "anotar_diario para atualizar missões (status, pistas novas) e NPCs que mudaram",
-    f.xp,
+    f.xpJaConcedido === true
+      ? "o XP desta noite JÁ foi concedido (o encerramento anterior foi interrompido): NÃO chame conceder_xp"
+      : Array.isArray(f.xpJaConcedido) && f.xpJaConcedido.length
+        ? `${f.xp} (o encerramento anterior foi interrompido: ${f.xpJaConcedido.join(", ")} JÁ ${f.xpJaConcedido.length === 1 ? "recebeu" : "receberam"} o XP desta noite; conceda só a quem falta)`
+        : f.xp,
   ].filter(Boolean);
-  return `[fim da sessão]\n\nA mesa está encerrando a noite de jogo (fim da sessão ${f.sessao}). Faça nesta ordem:\n${passos.map((p, i) => `${i + 1}) ${p};`).join("\n")}\n${passos.length + 1}) e PARE: NÃO chame sugerir_acoes, não peça teste e não escreva nada depois das ferramentas, no máximo "—" (a tela mostra o XP e o marcador de fim de sessão).`;
+  const noite = f.nestaSessao?.length ? `\n\nNesta sessão (a noite inteira, para o motivo do XP e o status das missões):\n${f.nestaSessao.join("\n")}` : "";
+  return `[fim da sessão]\n\nA mesa está encerrando a noite de jogo (fim da sessão ${f.sessao}). Faça nesta ordem:\n${passos.map((p, i) => `${i + 1}) ${p};`).join("\n")}\n${passos.length + 1}) e PARE: NÃO chame sugerir_acoes, não peça teste, não abra combate nem cena nova e não escreva nada depois das ferramentas, no máximo "—" (a tela mostra o XP e o marcador de fim de sessão).${noite}`;
 }
 
-/** Primeira jogada depois de um fim de sessão: recapitulação antes de responder. */
-const RECAPITULAR =
-  "(Começa uma nova sessão de jogo depois do \"[fim da sessão]\". ABRA a narração com um parágrafo curto começando por \"Anteriormente…\": onde a história parou, o que pesa e o que está pendente. Só depois responda à ação abaixo, no mesmo texto narrado.)\n\n";
+/** "3 horas", "1 dia", "2 dias". */
+export function horasPorExtenso(horas: number): string {
+  if (horas < 36) {
+    const h = Math.max(1, Math.round(horas));
+    return `${h} hora${h === 1 ? "" : "s"}`;
+  }
+  const d = Math.round(horas / 24);
+  return `${d} dia${d === 1 ? "" : "s"}`;
+}
+
+/**
+ * Primeira jogada de uma noite nova (config.recapPendente). Com a recapitulação gravada no marcador, o servidor já a mostrou
+ * ao jogador antes da ação: o mestre só não repete. Sem ela, o mestre abre com o "Anteriormente…" num `narrar` próprio.
+ */
+export type Recapitular = { motivo: "marcador" | "intervalo"; horas?: number; jaMostrada?: boolean };
+
+function textoRecapitular(r: Recapitular): string {
+  if (r.jaMostrada) {
+    return "(Começa uma nova sessão de jogo. O \"Anteriormente…\" desta noite JÁ foi mostrado ao jogador logo antes da ação: NÃO recapitule nem repita o que ele diz; responda direto à ação abaixo.)\n\n";
+  }
+  const porque =
+    r.motivo === "intervalo"
+      ? `Voltando depois de ${horasPorExtenso(r.horas ?? 5)}; a noite anterior não foi encerrada.`
+      : "Começa uma nova sessão de jogo depois do \"[fim da sessão]\".";
+  return `(${porque} PRIMEIRO chame narrar SÓ com um parágrafo curto começando por "Anteriormente…": onde a história parou, o que pesa e o que está pendente. Depois, em OUTRO narrar, responda à ação abaixo.)\n\n`;
+}
 
 export function promptDoTurno(
   recentes: Mensagem[],
   personagens: Personagem[],
   acoes: AcaoDoTurno[] | "inicio" | FimDeSessao,
-  opcoes: { recapitular?: boolean } = {},
+  opcoes: { recapitular?: Recapitular | null } = {},
 ) {
   // a transcrição manda tudo depois de resumoAte; passar da janela significa que o resumo atrasou (nada se perde, mas avisa)
   if (recentes.length > JANELA_RECENTE) {
@@ -471,7 +544,7 @@ export function promptDoTurno(
       ? "[início da campanha]\n\nAbra a aventura nesta ordem: 1) atualizar_cena; 2) a ferramenta narrar com a CENA DE ABERTURA completa, no tamanho combinado para a abertura: onde o personagem está, o que vê, ouve e sente, quem está ali e o que diz, e o gancho ligado à história dele, terminando com a pergunta do que ele faz; 3) anotar_diario com a missão e os NPCs; 4) sugerir_acoes, e nada mais depois dele (no máximo —). O que você rascunha no raciocínio NÃO aparece para o jogador: sem o narrar ele não sabe onde está nem por quê."
       : !Array.isArray(acoes)
         ? pedidoDeFim(acoes)
-        : `${opcoes.recapitular ? RECAPITULAR : ""}${
+        : `${opcoes.recapitular ? textoRecapitular(opcoes.recapitular) : ""}${
             acoes.length === 1
               ? `Nova ação${acoes[0].personagem ? ` de ${acoes[0].personagem}` : ""}:\n${acoes[0].acao}`
               : `Ações desta rodada:\n${acoes.map((a) => `- ${a.personagem ?? a.autor}: ${a.acao}`).join("\n")}`
@@ -528,7 +601,40 @@ Formato, em português, no máximo ${MAX_PALAVRAS_RESUMO} palavras no total, exa
 ## Divergências
 (frases dos acontecimentos novos que contradizem o diário, ex.: "o diário diz Vera aliada, mas ela atacou o grupo"; "—" se nenhuma.
 O diário pode estar à frente destes acontecimentos: as mensagens mais recentes ficam fora deste trecho. Fato do diário que não aparece aqui, ou que aqui "ainda não aconteceu", NÃO é divergência; só a contradição direta conta)
+Texto puro: além dos quatro títulos "## " acima, NADA de markdown (sem negrito, itálico, asteriscos nem sublinhados; listas só com "- " simples). O jogador lê este resumo no cartão "Anteriormente…".
 Seja factual; não invente nada que não esteja no texto. Responda só com o resumo.`;
+
+/** Teto da recapitulação gravada no marcador de fim da noite, em palavras. */
+export const MAX_PALAVRAS_RECAPITULACAO = 120;
+
+/** Recapitulação da noite que acabou: gravada no marcador e lida na volta (cartão "Anteriormente…" e a abertura do mestre). */
+export const SISTEMA_RECAPITULACAO = `Você é o narrador de uma campanha de RPG e escreve o "Anteriormente…" da próxima sessão, em português do Brasil.
+Até ${MAX_PALAVRAS_RECAPITULACAO} palavras, um ou dois parágrafos, em segunda pessoa ("você"/"vocês"), no passado recente: onde a história parou, o que pesa sobre o personagem e o que ficou pendente. Comece com "Anteriormente…".
+Texto puro, sem markdown, sem títulos, sem listas, sem números de regra (XP, Manchas, dados). Seja fiel ao texto; não invente nada. Responda só com a recapitulação.`;
+
+/** Pedido da recapitulação: o resumo (enredo até antes da noite) e as mensagens da noite que acabou. */
+export function promptDaRecapitulacao(resumo: string, daNoite: Mensagem[], personagens: Personagem[]): string {
+  const linhas = daNoite
+    .filter((m) => !foraDaTranscricao(m))
+    .map((m) => linha(m, personagens))
+    .join("\n\n");
+  // a noite pode ser longa: o fim (o fechamento) importa mais que o começo
+  const texto = linhas.length > 24_000 ? `(…)\n${linhas.slice(-24_000)}` : linhas;
+  return `Resumo da campanha até aqui:\n${resumo.trim() || "(vazio)"}\n\nA noite que acabou de terminar:\n\n${texto}`;
+}
+
+/** Corta a recapitulação devolvida no teto de palavras (o modelo às vezes passa um pouco). */
+export function limparRecapitulacao(texto: string): string {
+  const t = texto
+    .replace(/[*_#`>]+/g, "")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+  const palavras = t.split(/\s+/);
+  if (palavras.length <= MAX_PALAVRAS_RECAPITULACAO + 10) return t;
+  const corte = palavras.slice(0, MAX_PALAVRAS_RECAPITULACAO).join(" ");
+  const ponto = corte.lastIndexOf(".");
+  return ponto > corte.length * 0.6 ? corte.slice(0, ponto + 1) : `${corte}…`;
+}
 
 export function promptDoResumo(resumoAtual: string, novas: Mensagem[], personagens: Personagem[], diario = "") {
   const doDiario = diario.trim()

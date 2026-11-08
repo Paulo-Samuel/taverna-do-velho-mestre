@@ -151,7 +151,7 @@ describe("subpassos das Escolhas (grupos)", () => {
   it("cada opção cai num grupo só e as exclusivas entre si moram no mesmo grupo", () => {
     const por = (g: "pericias" | "disciplinas" | "alma") => opcoesDoGrupo("vtm5", opcoes, g).map((o) => o.id);
     assert.deepEqual(por("pericias"), ["estilo", "pericias_3", "pericias_2", "pericias_1", "especialidades"]);
-    assert.deepEqual(por("disciplinas"), ["disciplinaPrincipal_brujah", "disciplinaSecundaria_brujah", "disciplinaPredador"]);
+    assert.deepEqual(por("disciplinas"), ["disciplinaPrincipal_brujah", "disciplinaSecundaria_brujah", "disciplinaPredador", "disciplinaPoderes"]);
     assert.ok(por("alma").includes("conceito") && por("alma").includes("conviccoes") && por("alma").includes("recursos"));
     assert.equal(por("pericias").length + por("disciplinas").length + por("alma").length, opcoes.length);
     for (const o of opcoes) for (const ex of o.exclusivaCom ?? []) {

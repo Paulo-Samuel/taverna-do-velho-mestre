@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, renameSync } from "node:fs";
 import path from "node:path";
 import { arquivoBanco, copiaAntesDeMigrar, gravarNaLixeira } from "./backup";
 import { aplicarMigracoes, atualizarExportacao, migracoesPendentes, VERSAO_ATUAL, versaoDoBanco, type DadosExportados } from "./db/migracoes";
+import { dividirNoites, PAUSA_NOITE_MS, type MensagemDaNoite, type Noite } from "./constantes";
 import type { Cena, EntradaDiario, Ficha, TipoDiario } from "./sistemas/tipos";
 
 // SQLite embutido no Node 24: nada de dependência nativa para compilar no Windows.
@@ -114,8 +115,48 @@ export type ConfigCampanha = {
   instrucoes?: string;
   /** id de uma aventura pronta (lib/aventuras): o roteiro secreto entra no prompt do mestre; ausente = campanha livre */
   aventura?: string;
-  /** próxima sessão (espelho: o número real vem dos marcadores fim_sessao no chat) */
+  /** próxima sessão (espelho: o número real vem de noitesDaCampanha, marcadores e intervalos) */
   sessao?: number;
+  /**
+   * A próxima jogada de verdade abre com "Anteriormente…": ligado ao gravar o marcador de fim (ou ao voltar depois de
+   * PAUSA_NOITE_MS sem marcador), desligado quando um turno com recapitulação termina. Não depende da ordem das mensagens:
+   * um aparte (( )) ou um turno com erro no meio não engolem a recapitulação.
+   */
+  recapPendente?: RecapPendente;
+  /**
+   * Encerramento em andamento (gravado pelo Encerrar, apagado com o marcador): de que noite, se o XP do fechamento já saiu
+   * (um segundo Encerrar depois de interromper não concede de novo) e as escolhas do jogador no Encerrar.
+   */
+  fimPendente?: FimPendente;
+};
+
+export type RecapPendente = {
+  /** a noite que começa */
+  sessao: number;
+  /** "marcador": a noite anterior foi encerrada pelo botão; "intervalo": ninguém encerrou, a pausa passou de 5 h */
+  motivo: "marcador" | "intervalo";
+  /** horas desde a última mensagem da noite anterior (só no intervalo) */
+  horas?: number;
+  /** id do cartão "Noite N" já gravado (um turno que falhou no meio não grava outro) */
+  cartao?: number;
+  /** o "Anteriormente…" pronto do marcador já entrou no chat: o mestre não recapitula de novo */
+  mostrada?: boolean;
+};
+
+export type FimPendente = {
+  sessao: number;
+  /** algum XP do fechamento já saiu (registro antigo sem `xpPara`: vale para a mesa inteira) */
+  xpConcedido: boolean;
+  /** ids dos personagens que já receberam XP neste fechamento: um Encerrar repetido só concede a quem falta */
+  xpPara?: number[];
+  /** "o mestre decide": encerrar com Manchas sem Remorso rolado na tela (o pedido mantém teste_de_remorso) */
+  semRemorso?: boolean;
+  /** fechamento depois do intervalo, sem jogada nova: em retrospectiva, com a data da última mensagem da noite */
+  retroativa?: boolean;
+  /** horas desde a última mensagem da noite (no retroativo) */
+  horas?: number;
+  /** última mensagem quando o Encerrar foi pedido: outro Encerrar sem jogada nova depois dela reaproveita este (e o XP dado) */
+  desde?: number;
 };
 
 export type Campanha = {
@@ -274,6 +315,8 @@ export function duplicarCampanha(id: number, opcoes: { zerarXp?: boolean } = {})
   const config: ConfigCampanha = { ...original.config };
   delete config.pin;
   delete config.sessao;
+  delete config.recapPendente;
+  delete config.fimPendente;
   db.exec("BEGIN");
   try {
     const novoId = criarCampanha({ nome: `${original.nome} (cópia)`.slice(0, 80), sistema: original.sistema, cenario: original.cenario, tom: original.tom, config });
@@ -456,6 +499,22 @@ export function testesPendentes(campanhaId: number): Mensagem[] {
   ).map(paraMensagem);
 }
 
+/**
+ * As noites de jogo da campanha (constantes.ts, dividirNoites): fecham num marcador fim_sessao e em cada intervalo de
+ * PAUSA_NOITE_MS ou mais entre mensagens seguidas. Recados de sistema (aviso, divergência) não contam como jogo.
+ */
+export function noitesDaCampanha(campanhaId: number, pausaMs = PAUSA_NOITE_MS): Noite[] {
+  const linhas = db
+    .prepare(
+      "SELECT id, criada_em, tipo, json_extract(dados, '$.tipo') AS dados_tipo, json_extract(dados, '$.retroativo') AS retroativo FROM mensagens WHERE campanha_id = ? ORDER BY id",
+    )
+    .all(campanhaId) as { id: number; criada_em: string; tipo: string; dados_tipo: string | null; retroativo: number | null }[];
+  const jogo: MensagemDaNoite[] = linhas
+    .filter((l) => !(l.tipo === "sistema" && (l.dados_tipo === "aviso" || l.dados_tipo === "divergencia")))
+    .map((l) => ({ id: l.id, criadaEm: l.criada_em, tipo: l.tipo, dadosTipo: l.dados_tipo, retroativo: Boolean(l.retroativo) }));
+  return dividirNoites(jogo, pausaMs);
+}
+
 /** Mensagens depois de um id (para o resumo incremental). */
 export function mensagensDepois(campanhaId: number, depoisDe: number): Mensagem[] {
   return (db.prepare("SELECT * FROM mensagens WHERE campanha_id = ? AND id > ? ORDER BY id").all(campanhaId, depoisDe) as LinhaMensagem[]).map(paraMensagem);
@@ -584,6 +643,11 @@ export type EstadoMesa = {
   diario: LinhaDiario[];
   /** mensagens que um turno pode reescrever (pedido de teste pendente vira resolvido) */
   editaveis: { id: number; texto: string; dados: string | null }[];
+  /**
+   * Só as chaves da noite em config (recapPendente, fimPendente): desfazer o fechamento ou a recapitulação volta com elas.
+   * O resto do config (PIN, estilo...) não volta: pode ter mudado de propósito no meio. Ausente nos instantâneos antigos.
+   */
+  noite?: { recapPendente: RecapPendente | null; fimPendente: FimPendente | null };
 };
 
 export type Instantaneo = {
@@ -611,9 +675,11 @@ const paraInstantaneo = (l: LinhaInstantaneo): Instantaneo => ({
 const MAX_INSTANTANEOS = 10;
 
 export function capturarEstado(campanhaId: number): EstadoMesa {
-  const c = db.prepare("SELECT cena, resumo, resumo_ate FROM campanhas WHERE id = ?").get(campanhaId) as Pick<LinhaCampanha, "cena" | "resumo" | "resumo_ate">;
+  const c = db.prepare("SELECT cena, resumo, resumo_ate, config FROM campanhas WHERE id = ?").get(campanhaId) as Pick<LinhaCampanha, "cena" | "resumo" | "resumo_ate" | "config">;
   const ultima = db.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM mensagens WHERE campanha_id = ?").get(campanhaId) as { id: number };
+  const config = JSON.parse(c.config || "{}") as ConfigCampanha;
   return {
+    noite: { recapPendente: config.recapPendente ?? null, fimPendente: config.fimPendente ?? null },
     ultimaMensagem: ultima.id,
     cena: c.cena,
     resumo: c.resumo,
@@ -633,6 +699,15 @@ export function restaurarEstado(campanhaId: number, e: EstadoMesa) {
     db.prepare("DELETE FROM mensagens WHERE campanha_id = ? AND id > ?").run(campanhaId, e.ultimaMensagem);
     for (const m of e.editaveis) db.prepare("UPDATE mensagens SET texto = ?, dados = ? WHERE id = ? AND campanha_id = ?").run(m.texto, m.dados, m.id, campanhaId);
     db.prepare("UPDATE campanhas SET cena = ?, resumo = ?, resumo_ate = ?, atualizada_em = datetime('now') WHERE id = ?").run(e.cena, e.resumo, e.resumoAte, campanhaId);
+    if (e.noite) {
+      const linha = db.prepare("SELECT config FROM campanhas WHERE id = ?").get(campanhaId) as { config: string } | undefined;
+      const config = JSON.parse(linha?.config || "{}") as ConfigCampanha;
+      if (e.noite.recapPendente) config.recapPendente = e.noite.recapPendente;
+      else delete config.recapPendente;
+      if (e.noite.fimPendente) config.fimPendente = e.noite.fimPendente;
+      else delete config.fimPendente;
+      db.prepare("UPDATE campanhas SET config = ? WHERE id = ?").run(JSON.stringify(config), campanhaId);
+    }
     for (const p of e.fichas) db.prepare("UPDATE personagens SET ficha = ? WHERE id = ? AND campanha_id = ?").run(p.ficha, p.id, campanhaId);
     db.prepare("DELETE FROM diario WHERE campanha_id = ?").run(campanhaId);
     const inserir = db.prepare("INSERT INTO diario (id, campanha_id, tipo, titulo, texto, status, dados, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");

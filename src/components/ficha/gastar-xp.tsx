@@ -11,7 +11,20 @@ import { temaDoSistema } from "@/lib/temas";
 // confirmação leve e "desfazer última compra". As regras moram no servidor (vtm5/xp.ts); aqui só desenha o que ele manda.
 // A ficha nova chega a todos pelo SSE {e:"personagem"}; quando ela muda, a vitrine se busca de novo.
 
-type Confirmacao = { corpo: { compra: CompraXp } | { desfazer: true }; pergunta: string; aviso?: string };
+/** `poder`: compra de disciplina pergunta qual poder o ponto novo traz (nível até `max`). */
+type Confirmacao = { corpo: { compra: CompraXp } | { desfazer: true }; pergunta: string; aviso?: string; poder?: { max: number; disciplina: string } };
+
+type PoderEscolhido = { nome: string; nivel: number; custo: number; parada: string };
+
+/** Poderes que a ficha já conhece (extras.poderes), para o jogador não repetir. */
+function poderesDaFicha(extras: Record<string, unknown>, disciplina?: string): string[] {
+  const v = extras.poderes;
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((p): p is { nome: string; nivel?: number; disciplina?: string } => Boolean(p) && typeof p === "object" && typeof (p as { nome?: unknown }).nome === "string")
+    .filter((p) => !disciplina || p.disciplina === disciplina)
+    .map((p) => `${p.nome}${p.nivel ? ` ${"●".repeat(p.nivel)}` : ""}`);
+}
 
 const bolinhas = (atual: number, max: number) => `${"●".repeat(Math.max(0, atual))}${"○".repeat(Math.max(0, max - atual))}`;
 const pontos = (n: number) => (n > 0 ? "●".repeat(n) : "—");
@@ -41,6 +54,7 @@ function PainelGastarXp({ personagem, aoFechar }: { personagem: PersonagemVisive
   const [enviando, setEnviando] = useState(false);
   const [aviso, setAviso] = useState<{ texto: string; tom: "ok" | "erro" } | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [poder, setPoder] = useState<PoderEscolhido>({ nome: "", nivel: 1, custo: 1, parada: "" });
   const fechar = useRef<HTMLButtonElement>(null);
   const url = `/api/campanhas/${personagem.campanhaId}/personagens/${personagem.id}/xp`;
   const ficha = personagem.ficha;
@@ -86,11 +100,16 @@ function PainelGastarXp({ personagem, aoFechar }: { personagem: PersonagemVisive
 
   async function enviar(c: Confirmacao) {
     setEnviando(true);
+    // disciplina: o poder escolhido vai junto com a compra
+    const corpo =
+      c.poder && "compra" in c.corpo
+        ? { compra: { ...c.corpo.compra, poder: { nome: poder.nome.trim(), nivel: poder.nivel, custo: poder.custo, ...(poder.parada.trim() ? { parada: poder.parada.trim() } : {}) } } }
+        : c.corpo;
     try {
       const r = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...c.corpo, autor: identidade.apelido() || undefined }),
+        body: JSON.stringify({ ...corpo, autor: identidade.apelido() || undefined }),
       });
       const j = (await r.json().catch(() => ({}))) as { oferta?: OfertaXp; resumo?: string; erro?: string };
       if (j.oferta) setOferta(j.oferta);
@@ -109,8 +128,15 @@ function PainelGastarXp({ personagem, aoFechar }: { personagem: PersonagemVisive
 
   function pedirCompra(compra: CompraXp, nome: string, custo: number, aviso?: string) {
     setAviso(null);
+    if (compra.tipo === "disciplina") {
+      const max = (compra.de ?? 0) + 1;
+      setPoder({ nome: "", nivel: max, custo: 1, parada: "" });
+      setConfirmacao({ corpo: { compra }, pergunta: `Comprar ${nome} por ${custo} XP?`, aviso, poder: { max, disciplina: compra.alvo ?? "" } });
+      return;
+    }
     setConfirmacao({ corpo: { compra }, pergunta: `Comprar ${nome} por ${custo} XP?`, aviso });
   }
+  const faltaPoder = Boolean(confirmacao?.poder) && poder.nome.trim().length < 2;
 
   const secao = oferta?.secoes.find((s) => s.id === aba) ?? oferta?.secoes[0];
   const ultima = oferta?.ultima;
@@ -193,11 +219,63 @@ function PainelGastarXp({ personagem, aoFechar }: { personagem: PersonagemVisive
           <div role="alertdialog" aria-label="Confirmar" className="shrink-0 border-t border-ambar/40 bg-ambar/10 px-4 py-2.5">
             <p className="text-sm text-pergaminho">{confirmacao.pergunta}</p>
             {confirmacao.aviso && <p className="mt-0.5 text-xs leading-snug text-ambar">⚠ {confirmacao.aviso}</p>}
+            {confirmacao.poder && (
+              <fieldset className="mt-2 space-y-1.5" aria-label="Qual poder o ponto novo traz">
+                <legend className="text-xs text-pergaminho">Qual poder? O mestre só usa os poderes anotados na ficha.</legend>
+                <input
+                  value={poder.nome}
+                  onChange={(e) => setPoder((p) => ({ ...p, nome: e.target.value }))}
+                  maxLength={60}
+                  placeholder="nome do poder (ex.: Nublar Memória)"
+                  aria-label="Nome do poder"
+                  className="campo w-full px-2 py-1.5 text-sm"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <label className="flex items-center gap-1 text-xs text-muted">
+                    nível
+                    <select value={poder.nivel} onChange={(e) => setPoder((p) => ({ ...p, nivel: Number(e.target.value) }))} aria-label="Nível do poder" className="campo px-1.5 py-1 text-sm">
+                      {Array.from({ length: confirmacao.poder.max }, (_, n) => n + 1).map((n) => (
+                        <option key={n} value={n}>
+                          {pontos(n)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1 text-xs text-muted">
+                    custo
+                    <select value={poder.custo} onChange={(e) => setPoder((p) => ({ ...p, custo: Number(e.target.value) }))} aria-label="Custo em Despertares" className="campo px-1.5 py-1 text-sm">
+                      <option value={0}>sem custo</option>
+                      <option value={1}>1 Despertar</option>
+                      <option value={2}>2 Despertares</option>
+                      <option value={3}>3 Despertares</option>
+                    </select>
+                  </label>
+                  <input
+                    value={poder.parada}
+                    onChange={(e) => setPoder((p) => ({ ...p, parada: e.target.value }))}
+                    maxLength={80}
+                    placeholder="parada (opcional): Carisma + Presença"
+                    aria-label="Parada do poder (opcional)"
+                    className="campo min-w-0 flex-1 px-2 py-1 text-sm"
+                  />
+                </div>
+                {poderesDaFicha(ficha.extras, confirmacao.poder.disciplina).length > 0 && (
+                  <p className="text-[11px] text-muted">Já conhece: {poderesDaFicha(ficha.extras, confirmacao.poder.disciplina).join(", ")}</p>
+                )}
+              </fieldset>
+            )}
             <div className="mt-2 flex justify-end gap-2">
               <button type="button" className="btn-borda px-3 py-1.5 text-sm" onClick={() => setConfirmacao(null)} disabled={enviando}>
                 Melhor não
               </button>
-              <button type="button" className="btn-ambar px-3 py-1.5 text-sm" onClick={() => void enviar(confirmacao)} disabled={enviando} autoFocus>
+              <button
+                type="button"
+                className="btn-ambar px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => void enviar(confirmacao)}
+                disabled={enviando || faltaPoder}
+                title={faltaPoder ? "Diga o nome do poder" : undefined}
+                autoFocus={!confirmacao.poder}
+              >
                 {enviando ? "Gastando…" : "desfazer" in confirmacao.corpo ? "Desfazer" : "Comprar"}
               </button>
             </div>

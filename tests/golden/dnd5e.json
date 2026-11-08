@@ -3,7 +3,7 @@
   "ferramentas": [
     {
       "name": "pedir_teste",
-      "description": "Pede um teste a um personagem do jogador (D&D 5e). Quem rola é o JOGADOR, clicando no dado na tela; depois você recebe o resultado como nova mensagem e continua. Use só quando o resultado for incerto e importar. Narre ANTES de pedir, terminando no suspense, sem contar o resultado; depois de pedir não escreva mais nada (no máximo chame sugerir_acoes). No máximo um teste por personagem por turno. Testes comuns: Atletismo, Acrobacia, Furtividade, Percepção, Investigação, Persuasão, Enganação, Intuição, Sobrevivência, Arcanismo, Resistência de DES, Resistência de CON, Resistência de SAB, Concentração, Ataque, Magia, Iniciativa, Teste contra a morte.",
+      "description": "Pede um teste a um personagem do jogador (D&D 5e). Quem rola é o JOGADOR, clicando no dado na tela; depois você recebe o resultado como nova mensagem e continua. Use só quando o resultado for incerto e importar. Narre ANTES de pedir, terminando no suspense, sem contar o resultado; depois de pedir não escreva mais nada (no máximo chame sugerir_acoes). No máximo um teste por personagem por turno. Testes comuns: Atletismo, Acrobacia, Furtividade, Percepção, Investigação, Persuasão, Enganação, Intuição, Sobrevivência, Arcanismo, Resistência de DES, Resistência de CON, Resistência de SAB, Concentração, Ataque, Magia, Iniciativa, Teste contra a morte. Disputa com NPC (agarrar, empurrar, enganar): oposicao_nome + oposicao_bonus, sem alvo; o servidor rola o d20 do NPC.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -17,7 +17,7 @@
           },
           "alvo": {
             "type": "integer",
-            "description": "Dificuldade (CD)."
+            "description": "Dificuldade (CD). Omita só em teste oposto (oposicao_*)."
           },
           "modo": {
             "type": "string",
@@ -39,11 +39,18 @@
           "motivo": {
             "type": "string",
             "description": "Frase curta do que está sendo tentado, mostrada no cartão do dado."
+          },
+          "oposicao_nome": {
+            "type": "string",
+            "description": "Teste oposto: quem resiste (NPC), mostrado no cartão."
+          },
+          "oposicao_bonus": {
+            "type": "integer",
+            "description": "Teste oposto: bônus do NPC no d20. O servidor rola 1d20 + bônus e usa como CD; omita alvo."
           }
         },
         "required": [
           "teste",
-          "alvo",
           "motivo"
         ],
         "additionalProperties": false
@@ -51,7 +58,7 @@
     },
     {
       "name": "rolar_dados",
-      "description": "Rola dados livres: dano, ataques e testes de inimigos, tabelas aleatórias, tesouro, reação de NPCs. Notação: 2d6+3, 1d20, 4d6kh3, 2d20kl1, 4dF, d%, 1d6! (explosivo).",
+      "description": "Rola dados livres: dano, ataques e testes de inimigos, tabelas aleatórias, tesouro, reação de NPCs. Notação: 2d6+3, 1d20, 4d6kh3, 2d20kl1, 4dF, d%, 1d6! (explosivo), 5d10s (parada de sucessos: conta 6+, par de 10 vale +2).",
       "input_schema": {
         "type": "object",
         "properties": {

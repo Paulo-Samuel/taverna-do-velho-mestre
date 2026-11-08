@@ -194,7 +194,7 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
             <ol className="mt-4 space-y-1.5">
               {livro.capitulos.map((c) => (
                 <li key={c.numero}>
-                  {c.noite && <p className="mb-1 mt-3 text-center text-[10.5px] font-semibold uppercase tracking-[0.3em] text-ambar/80">Noite {c.noite}</p>}
+                  {c.noite && <p className="mb-1 mt-3 text-center text-[10.5px] font-semibold uppercase tracking-[0.3em] text-ambar/80">Noite {c.noite}{c.noiteData ? ` · ${c.noiteData}` : ""}</p>}
                   <a href={`#capitulo-${c.numero}`} className="flex items-baseline gap-2 text-foreground/90 hover:text-ambar">
                     <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted">{romano(c.numero)}</span>
                     <span className="min-w-0 flex-1 truncate">{tituloDoCapitulo(c)}</span>

@@ -93,6 +93,10 @@ export type ResultadoVtm = ResultadoTeste & {
   compulsao?: CompulsaoVtm;
   /** rerrolagem com Força de Vontade (vtm5/forca-de-vontade.ts): índices em `dados` (só normais) e a Força de Vontade gasta */
   rerrolado?: RerroladoVtm;
+  /** Ataque: arma e contra quem (para o dano sugerido; a rerrolagem recalcula) */
+  golpe?: { arma: number; contra?: string };
+  /** poder da ficha usado no teste (extras.poderes) */
+  poder?: PoderVtm;
 };
 
 export type RerroladoVtm = {
@@ -316,6 +320,8 @@ type OpcoesVtm = {
   compulsao: "serve" | "contra" | "sortear" | null;
   /** caça: quem é a vítima (normalizado) */
   presa: string | null;
+  /** dano da arma num Ataque (0–4) */
+  arma?: number;
 };
 
 export function lerTipoFrenesi(v: unknown): TipoFrenesi | null {
@@ -341,7 +347,135 @@ function opcoesDe(pedido: PedidoTeste): OpcoesVtm {
     frenesi: lerTipoFrenesi(o.frenesi),
     compulsao: o.compulsao === "serve" || o.compulsao === "contra" || o.compulsao === "sortear" ? o.compulsao : null,
     presa: typeof o.presa === "string" && o.presa.trim() ? o.presa.trim() : null,
+    arma: n(o.arma, 0, 4),
   };
+}
+
+// ---------- testes opostos ----------
+
+/** Quem resiste ao teste: nome e parada do NPC (o servidor rola, sem Fome). O pedido pendente guarda em opcoes.oposicao. */
+export type OposicaoVtm = { nome: string; parada: number };
+
+export function oposicaoDe(pedido: PedidoTeste): OposicaoVtm | null {
+  const bruta = (pedido.oposicao ?? (pedido.opcoes?.oposicao as PedidoTeste["oposicao"] | undefined)) ?? null;
+  if (!bruta || typeof bruta !== "object") return null;
+  const parada = typeof bruta.parada === "number" && Number.isFinite(bruta.parada) ? limitar(Math.round(bruta.parada), 1, 20) : 0;
+  if (!parada) return null;
+  const nome = typeof bruta.nome === "string" && bruta.nome.trim() ? bruta.nome.trim().slice(0, 60) : "a oposição";
+  return { nome, parada };
+}
+
+/** Linha do NPC no cartão e no texto: "Vera: 5d10 → 2 sucessos". */
+export function textoOposicao(o: { nome: string; expressao: string; total: number }): string {
+  return `${o.nome}: ${o.expressao} → ${o.total} sucesso${o.total === 1 ? "" : "s"}`;
+}
+
+/**
+ * Dano sugerido de um Ataque: sucessos acima da defesa (do NPC, ou da dificuldade) + arma, mínimo 1 quando acerta.
+ * `null` quando errou. Recalculado também depois da rerrolagem com Força de Vontade.
+ */
+export function danoDoAtaque(r: Pick<ResultadoVtm, "total" | "alvo" | "sucesso" | "oposicao" | "golpe">): ResultadoTeste["dano"] | undefined {
+  if (!r.golpe || !r.sucesso) return undefined;
+  const defesa = r.oposicao ? r.oposicao.total : (r.alvo ?? 0);
+  const margem = Math.max(0, r.total - defesa);
+  const valor = Math.max(1, margem + r.golpe.arma);
+  const contra = r.oposicao?.nome ?? r.golpe.contra;
+  return {
+    valor,
+    tipo: "superficial",
+    texto: `${valor} de dano${contra ? ` em ${contra}` : ""} (margem ${margem}${r.golpe.arma ? ` + arma ${r.golpe.arma}` : ""})`,
+  };
+}
+
+// ---------- poderes de disciplina ----------
+
+/** Poder de disciplina que o personagem conhece (extras.poderes): escolhido na criação ou ao gastar XP. */
+export type PoderVtm = { disciplina: string; nivel: number; nome: string; custo: number; parada?: string };
+
+export function poderesDe(ficha: Ficha): PoderVtm[] {
+  const v = ficha.extras.poderes;
+  if (!Array.isArray(v)) return [];
+  const out: PoderVtm[] = [];
+  for (const x of v) {
+    if (!x || typeof x !== "object") continue;
+    const p = x as Partial<PoderVtm>;
+    const nome = typeof p.nome === "string" ? p.nome.trim() : "";
+    const disc = DISCIPLINAS.find((y) => y.id === p.disciplina || normalizar(y.nome) === normalizar(String(p.disciplina ?? "")));
+    if (!nome || !disc) continue;
+    out.push({
+      disciplina: disc.id,
+      nivel: limitar(Math.round(Number(p.nivel) || 1), 1, 5),
+      nome,
+      custo: limitar(Math.round(Number(p.custo ?? 1)), 0, 3),
+      ...(typeof p.parada === "string" && p.parada.trim() ? { parada: p.parada.trim() } : {}),
+    });
+  }
+  return out;
+}
+
+/** Sem acento, mas com a caixa original (as posições batem com o texto em minúsculas). */
+const semAcento = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+/** Palavras logo antes da menção que dizem que não é o personagem usando: "sem Hipnose", "resiste à Dominação", "sente o poder de Oblívio". */
+const NAO_E_USO = /(?:^|[^\p{L}])(sem|nao|nem|nunca|contra|resist\p{L}*|defend\p{L}*|sofr\p{L}*|sob|escap\p{L}*|livr\p{L}*|ignor\p{L}*|perceb\p{L}*|not\p{L}*|sent\p{L}*|detect\p{L}*|reconhec\p{L}*|imun\p{L}*)(?:\s+\p{L}{1,6}){0,3}\s+$/u;
+
+/**
+ * O texto cita `nome` como algo que o personagem USA? Casa a palavra inteira ("Voz" não casa "voz baixa" quando `maiuscula`,
+ * nem "Vozes"), e descarta a menção negada ou sofrida ("sem Hipnose", "resiste à Dominação") e a de outro dono
+ * ("a Dominação de Vera"). `maiuscula`: no motivo, nome de uma palavra só precisa vir com inicial maiúscula.
+ */
+function usaNoTexto(ficha: Ficha, texto: string, nome: string, maiuscula: boolean, inicioNaoConta = false): boolean {
+  const orig = semAcento(texto);
+  const baixo = orig.toLowerCase();
+  const alvo = semAcento(nome).toLowerCase().trim().replace(/\s+/g, " ");
+  if (alvo.length < 3) return false;
+  const escapado = alvo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s+");
+  const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapado}(?![\\p{L}\\p{N}])`, "gu");
+  const umaPalavra = !alvo.includes(" ");
+  const dono = normalizar(ficha.nome).split(" ")[0] ?? "";
+  for (const m of baixo.matchAll(re)) {
+    const i = m.index ?? 0;
+    if (maiuscula && umaPalavra && orig[i] === baixo[i]) continue;
+    // no motivo, a maiúscula do começo da frase não prova nada ("Presença de espírito diante do Príncipe", "Fortitude contra
+    // o frio"): ali só conta com o nível escrito logo depois ("Fortitude ●●")
+    if (inicioNaoConta && /(?:^|[.!?:;—–-])\s*$/.test(orig.slice(0, i)) && !/^\s*●/.test(orig.slice(i + m[0].length))) continue;
+    if (NAO_E_USO.test(baixo.slice(Math.max(0, i - 40), i))) continue;
+    const de = orig.slice(i + m[0].length).match(/^\s+(?:de|da|do|das|dos)\s+(\p{Lu}\p{L}*)/u);
+    if (de && de[1].toLowerCase() !== dono) continue;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Poder da ficha citado no teste ("Nublar Memória") ou no motivo ("usa Hipnose em Vera"): o de nome mais longo que aparece.
+ * No `motivo` a regra é mais estrita (nome de uma palavra só com inicial maiúscula), para "fala em voz baixa" não virar o poder "Voz".
+ */
+export function poderNoTexto(ficha: Ficha, texto: string, motivo = ""): PoderVtm | null {
+  if (!texto.trim() && !motivo.trim()) return null;
+  const achados = poderesDe(ficha).filter((p) => usaNoTexto(ficha, texto, p.nome, false) || usaNoTexto(ficha, motivo, p.nome, true));
+  return achados.sort((a, b) => b.nome.length - a.nome.length)[0] ?? null;
+}
+
+/** Recusa o uso de uma disciplina que o personagem não tem (ou não tem no nível pedido). */
+function exigirDisciplina(ficha: Ficha, discId: string, nivel: number, oQue?: string): void {
+  const x = DISCIPLINAS.find((y) => y.id === discId);
+  const nome = x?.nome ?? discId;
+  const pontos = disciplinasDe(ficha)[discId] ?? 0;
+  if (pontos >= nivel) return;
+  const tem = Object.entries(disciplinasDe(ficha))
+    .filter(([, v]) => v > 0)
+    .map(([id, v]) => `${DISCIPLINAS.find((y) => y.id === id)?.nome ?? id} ${v}`)
+    .join(", ");
+  const quais = poderesDe(ficha)
+    .filter((p) => p.disciplina === discId)
+    .map((p) => `${p.nome} (${"●".repeat(p.nivel)})`)
+    .join(", ");
+  throw new Error(
+    pontos === 0
+      ? `${ficha.nome} não tem ${nome}: o poder não acontece. Disciplinas da ficha: ${tem || "nenhuma"}.`
+      : `${oQue ?? `Poder de ${nome} ${"●".repeat(nivel)}`} pede ${nome} ${nivel}, e ${ficha.nome} tem ${pontos}: não acontece.${quais ? ` Poderes de ${nome} que ele conhece: ${quais}.` : ""}`,
+  );
 }
 
 /** Nível do poder escrito no texto: "Celeridade ●●", "nível 3", "3º nível". */
@@ -353,10 +487,18 @@ function nivelNoTexto(texto: string): number | null {
   return m ? limitar(Number(m[1]), 1, 5) : null;
 }
 
-/** Disciplina citada num texto livre (motivo do Despertar). "Potência de Sangue" não é a disciplina Potência. */
-function disciplinaNoTexto(texto: string) {
-  const t = normalizar(texto).replace(/potencia de sangue/g, "");
-  return DISCIPLINAS.find((x) => [x.nome, ...(x.apelidos ?? [])].some((n) => n.length > 3 && t.includes(normalizar(n)))) ?? null;
+/**
+ * Disciplina que o personagem usa segundo um texto livre (motivo do Despertar, motivo do teste). "Potência de Sangue" não é a
+ * disciplina Potência; "sem Dominação", "resiste à Dominação" e "a Dominação de Vera" não são uso. `maiuscula`: o nome tem
+ * de vir com inicial maiúscula ("presença de espírito" não é Presença), fora do começo da frase, e só pelo nome canônico (os
+ * apelidos verbais "Dominar", "Ofuscar", "Rapidez" descrevem ações mundanas), para o motivo do teste.
+ */
+function disciplinaNoTexto(ficha: Ficha, texto: string, maiuscula = false) {
+  const limpo = semAcento(texto).replace(/pot[eê]ncia de sangue/gi, "");
+  return (
+    DISCIPLINAS.find((x) => (maiuscula ? [x.nome] : [x.nome, ...(x.apelidos ?? [])]).some((n) => n.length > 3 && usaNoTexto(ficha, limpo, n, maiuscula, maiuscula))) ??
+    null
+  );
 }
 
 /** Potência de Sangue deixa rerrolar o Despertar de disciplinas até certo nível (tabela de Potência). */
@@ -565,8 +707,11 @@ function testeDespertar(ficha: Ficha, pedido: PedidoTeste, op: OpcoesVtm): Resul
   const qtd = op.vezes ?? limitar(Number(t.match(/(?:despertar|rouse)\D{0,3}(\d)\b/)?.[1] ?? 1), 1, 5);
   const ef = efeitosPotencia(ficha);
   const textoLivre = `${pedido.teste} ${pedido.motivo ?? ""}`;
-  const disc = disciplinaNoTexto(textoLivre);
-  const nivel = op.nivelPoder ?? nivelNoTexto(textoLivre) ?? (disc ? (disciplinasDe(ficha)[disc.id] ?? 1) : null);
+  const poder = poderNoTexto(ficha, textoLivre);
+  const disc = poder ? (DISCIPLINAS.find((y) => y.id === poder.disciplina) ?? null) : disciplinaNoTexto(ficha, textoLivre);
+  const nivel = op.nivelPoder ?? poder?.nivel ?? nivelNoTexto(textoLivre) ?? (disc ? (disciplinasDe(ficha)[disc.id] ?? 1) : null);
+  // Despertar para um poder que o personagem não tem não acontece
+  if (disc) exigirDisciplina(ficha, disc.id, nivel ?? 1, poder ? `${poder.nome} (${disc.nome} ${"●".repeat(poder.nivel)})` : undefined);
   const pelaPotencia = disc !== null && rerrolaPelaPotencia(ficha, nivel);
   // vantagem = rerrolar o Despertar (o mestre concede); Potência de Sangue rerrola poderes de disciplina de nível baixo
   const rerrolar = pedido.modo === "vantagem" || op.rerrolar || pelaPotencia;
@@ -822,6 +967,10 @@ export function resolver(ficha: Ficha, pedido: PedidoTeste): ResultadoVtm {
   let alvo: number | null = Math.max(0, pedido.alvo ?? 1);
   let vtm: TipoTesteVtm = "parada";
   let surtoNoTexto = false;
+  let ataque = false;
+  // poder da ficha citado no teste ou no motivo: dá custo, nível e (se tiver) a parada
+  const poder = /iniciativa|initiative|^(caca|cacar|cacada|alimentar|alimentacao|hunt)/.test(t) ? null : poderNoTexto(ficha, texto, pedido.motivo ?? "");
+  const poderNoNome = poder !== null && normalizar(texto).includes(normalizar(poder.nome));
 
   if (/iniciativa|initiative/.test(t)) {
     pecas = [acharPeca(ficha, "raciocinio")!, acharPeca(ficha, "percepcao")!];
@@ -853,15 +1002,34 @@ export function resolver(ficha: Ficha, pedido: PedidoTeste): ResultadoVtm {
   } else if (/^(ataque|atacar|attack)/.test(t)) {
     pecas = pecasAtaque(ficha, `${texto} ${pedido.motivo ?? ""}`);
     rotulo = `Ataque (${pecas[1].nome})`;
+    ataque = true;
+  } else if (poder && poderNoNome) {
+    // "Nublar Memória" (ou "Nublar Memória: Carisma + Dominação"): a parada do poder, ou a da disciplina
+    const resto = texto.includes(":") ? texto.slice(texto.indexOf(":") + 1).trim() : "";
+    const discNome = DISCIPLINAS.find((y) => y.id === poder.disciplina)!.nome;
+    pecas = pecasDoTexto(ficha, resto || poder.parada || discNome, notas);
+    rotulo = `${poder.nome} (${pecas.map((p) => p.nome).join(" + ")})`;
   } else {
     surtoNoTexto = /surto|blood surge/.test(t);
     pecas = pecasDoTexto(ficha, texto, notas);
     rotulo = pecas.map((p) => p.nome).join(" + ");
   }
 
+  // disciplina que o personagem não tem (ou não tem no nível do poder): o teste é recusado, não vira "só o atributo"
+  for (const p of pecas) if (p.tipo === "disciplina" && p.valor === 0) exigirDisciplina(ficha, p.id, 1);
+  if (poder) exigirDisciplina(ficha, poder.disciplina, poder.nivel, `${poder.nome} (${DISCIPLINAS.find((y) => y.id === poder.disciplina)?.nome} ${"●".repeat(poder.nivel)})`);
+  {
+    const discPeca = pecas.find((p) => p.tipo === "disciplina");
+    const nivelPedido = op.nivelPoder ?? nivelNoTexto(`${texto} ${pedido.motivo ?? ""}`);
+    // disciplina usada segundo o teste ou o motivo, mesmo fora da parada ("Força + Intimidação", motivo "garra de sombra de
+    // Oblívio ●●"): sem os pontos (ou sem o nível), o poder não acontece. Menção negada, sofrida ou de outro dono não conta.
+    const citada = discPeca || poder ? null : (disciplinaNoTexto(ficha, texto) ?? disciplinaNoTexto(ficha, pedido.motivo ?? "", true));
+    const alvoDisc = discPeca?.id ?? citada?.id ?? null;
+    if (alvoDisc && !poder) exigirDisciplina(ficha, alvoDisc, nivelPedido ?? 1);
+  }
+
   let paradaBase = pecas.reduce((s, p) => s + p.valor, 0);
   notas.push(pecas.map((p) => `${p.nome} ${p.valor}`).join(" + "));
-  for (const p of pecas) if (p.tipo === "disciplina" && p.valor === 0) notas.push(`sem pontos em ${p.nome}: só o atributo`);
   const esp = especialidade(ficha, texto, pecas);
   if (esp) {
     paradaBase += 1;
@@ -911,12 +1079,15 @@ export function resolver(ficha: Ficha, pedido: PedidoTeste): ResultadoVtm {
     }
   }
   // disciplina na parada = Despertar do poder (padrão 1; o mestre diz 0 para poder que não custa)
-  const custo = vtm === "iniciativa" ? 0 : (op.custoDespertar ?? (disc ? 1 : 0));
+  // poder da ficha: o custo e o nível vêm dele (custo 0 = sem Despertar), a não ser que o mestre diga outro
+  const custo = vtm === "iniciativa" ? 0 : (op.custoDespertar ?? poder?.custo ?? (disc ? 1 : 0));
+  if (poder) notas.push(`poder: ${poder.nome} (${"●".repeat(poder.nivel)}${poder.custo === 0 && op.custoDespertar === undefined ? ", sem custo" : ""})`);
   if (custo > 0) {
-    const nivel = op.nivelPoder ?? nivelNoTexto(`${texto} ${pedido.motivo ?? ""}`) ?? disc?.valor ?? null;
-    const pelaPotencia = disc !== null && rerrolaPelaPotencia(ficha, nivel);
+    const nivel = op.nivelPoder ?? poder?.nivel ?? nivelNoTexto(`${texto} ${pedido.motivo ?? ""}`) ?? disc?.valor ?? null;
+    const pelaPotencia = (disc !== null || poder !== null) && rerrolaPelaPotencia(ficha, nivel);
     const rerrolar = op.rerrolar || pelaPotencia;
-    const motivo = disc ? `${disc.nome}${nivel ? ` ${"●".repeat(nivel)}` : ""}` : "poder";
+    const discPoder = poder ? (DISCIPLINAS.find((y) => y.id === poder.disciplina)?.nome ?? "") : "";
+    const motivo = poder ? `${poder.nome} (${discPoder} ${"●".repeat(poder.nivel)})` : disc ? `${disc.nome}${nivel ? ` ${"●".repeat(nivel)}` : ""}` : "poder";
     const x = pedido.previa ? despertarPrevisto(fome, custo, rerrolar, motivo) : rolarDespertar(fome, custo, rerrolar, motivo);
     despertares.push(x);
     fome = x.fomeDepois;
@@ -924,7 +1095,7 @@ export function resolver(ficha: Ficha, pedido: PedidoTeste): ResultadoVtm {
     if (!x.previsto && pelaPotencia) notas.push(`Potência ${potenciaDe(ficha)} rerrola o Despertar de poderes até nível ${efeitosPotencia(ficha).rerrolagem}`);
     // rolado, o cartão desenha a faixa do Despertar; na prévia vira pílula do pedido ("Despertar · Celeridade ●●")
     if (x.previsto) efeitos.push(efeitoDespertar(x));
-    avisos.push(avisoDespertar(x, disc ? `o poder de ${disc.nome}` : "o poder"));
+    avisos.push(avisoDespertar(x, poder ? poder.nome : disc ? `o poder de ${disc.nome}` : "o poder"));
   } else if (disc && op.custoDespertar === 0) {
     notas.push("poder sem custo de Despertar");
   }
@@ -936,11 +1107,50 @@ export function resolver(ficha: Ficha, pedido: PedidoTeste): ResultadoVtm {
   const qtdFome = Math.min(fome, parada);
   const normais = rolarFaces(parada - qtdFome);
   const dadosFome = rolarFaces(qtdFome);
+  // teste oposto: o servidor rola a parada do NPC (sem Fome); empate fica com quem defende, então o alvo é NPC + 1
+  const opos = vtm === "iniciativa" ? null : oposicaoDe(pedido);
+  let oposicao: ResultadoTeste["oposicao"];
+  if (opos && pedido.previa) {
+    alvo = null;
+    notas.push(`contra ${opos.nome} (${opos.parada} dados)`);
+  } else if (opos) {
+    const faces = rolarFaces(opos.parada);
+    const npc = contarSucessos(faces).total;
+    oposicao = { nome: opos.nome, expressao: `${opos.parada}d10`, dados: faces, total: npc };
+    alvo = npc + 1;
+    notas.push(`${textoOposicao(oposicao)} (empate fica com ${opos.nome})`);
+  }
   const av = avaliar(normais, dadosFome, alvo);
-  const expressao = `${parada}d10${qtdFome ? ` (${qtdFome} de Fome)` : ""}${alvo !== null ? ` vs ${alvo}` : ""}`;
+  const expressao = `${parada}d10${qtdFome ? ` (${qtdFome} de Fome)` : ""}${oposicao ? ` vs ${oposicao.nome} (${oposicao.expressao} → ${oposicao.total})` : alvo !== null ? ` vs ${alvo}` : ""}`;
   const b = base(ficha, pedido, rotulo, expressao, normais, dadosFome, vtm);
   // na prévia (cartão do pedido) os dados não valem nada: as notas são só a composição da parada e quantos são de Fome
   const r = concluir(b, av, alvo, pedido.previa ? [...notas, qtdFome ? `${qtdFome} de Fome` : ""] : [...notas, ...notasDoGrau(av, alvo, fome, qtdFome > 0)]);
+  if (oposicao) r.oposicao = oposicao;
+  if (poder) r.poder = poder;
+  if (ataque && !pedido.previa && (oposicao || op.arma !== undefined)) {
+    r.golpe = { arma: op.arma ?? 0, ...(opos ? { contra: opos.nome } : {}) };
+    const dano = danoDoAtaque(r);
+    if (dano) {
+      r.dano = dano;
+      const quem = opos?.nome ?? "o alvo";
+      avisos.push(
+        `Dano sugerido: ${dano.texto}, Superficial. Aplique com atualizar_cena (combate.dano [{nome: "${quem}", pv: ${dano.valor}}]) — se ${quem} for vampiro, divida por 2 (para cima); fogo, garras e presas viram Agravado.`,
+      );
+    } else if (oposicao) {
+      const sobra = oposicao.total - r.total;
+      avisos.push(
+        sobra > 0
+          ? `${opos!.nome} se defendeu (${oposicao.total} contra ${r.total}): sem dano em ${opos!.nome}. Se ${opos!.nome} atacava ao mesmo tempo, a margem dele (${sobra}) + a arma DELE vira dano em ${ficha.nome} via alterar_ficha (Superficial: vampiro divide por 2).`
+          : `Empate (${r.total} a ${r.total}): fica com quem defende, ${opos!.nome} não sofre dano e ninguém fere ninguém neste golpe.`,
+      );
+    }
+  } else if (oposicao && !pedido.previa) {
+    avisos.push(
+      r.sucesso
+        ? `${ficha.nome} venceu ${oposicao.nome} por ${r.total - oposicao.total}.`
+        : `${oposicao.nome} venceu (${oposicao.total} contra ${r.total}${r.total === oposicao.total ? ", empate fica com quem resiste" : ""}).`,
+    );
+  }
 
   const falhas = despertares.reduce((s, x) => s + x.falhas, 0);
   if (falhas) r.falhasDespertar = falhas;

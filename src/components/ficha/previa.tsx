@@ -16,7 +16,12 @@ import { grupoDaOpcao } from "./sugestoes";
 export function respostasOpcoes(opcoes: OpcaoCriacao[], e: Escolhas): [string, string][] {
   return opcoes
     .map((o): [string, string] => {
-      const valores = (e.extras[o.id] ?? []).map((v) => v.trim()).filter(Boolean);
+      // poder do Vampiro vem codificado da tela ("dominacao|1|0|Nublar Memória|"): mostra "Nublar Memória ●"; linha sem nome some
+      const poder = (v: string) => {
+        const m = v.match(/^[a-z_]+\|(\d)\|\d\|([^|]*)/);
+        return m ? (m[2].trim() ? `${m[2].trim()} ${"●".repeat(Number(m[1]))}` : "") : v;
+      };
+      const valores = (e.extras[o.id] ?? []).map((v) => poder(v.trim())).filter(Boolean);
       const nomes = valores.map((v) => o.opcoes?.find((x) => x.id === v)?.nome ?? v);
       return [o.rotulo, nomes.join(", ")];
     })

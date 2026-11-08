@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { Desfeito } from "@/components/sessao/noite";
 
 // "↶ Desfazer" e "↻ Outra resposta" embaixo da última narração do mestre (as duas mesas; no leitor cena a cena, compactos na barra).
 // Apagam coisa, então pedem um segundo clique ("Tem certeza? Clique de novo") antes de chamar /api/campanhas/[id]/desfazer.
 // O servidor publica "recarregar" para todos; aqui só devolvemos a resposta para a mesa pôr a ação de volta no campo.
 
-export type Desfeito = { acoes: { personagemId: number | null; autor: string; acao: string }[]; abertura: boolean; restantes: number };
+export type { Desfeito };
 
 type Qual = "desfazer" | "refazer";
 
@@ -19,6 +20,7 @@ export function AcoesTurno({
   aoErro,
   className = "",
   compacto = false,
+  fechamento = false,
 }: {
   campanhaId: number;
   aoConcluir: (r: Desfeito, refazer: boolean) => void;
@@ -26,6 +28,8 @@ export function AcoesTurno({
   className?: string;
   /** barra do leitor cena a cena: no celular só os ícones (o "tem certeza?" encurta para caber) */
   compacto?: boolean;
+  /** turno de fechamento da noite: só "Reabrir a noite" (desfazer); "Outra resposta" refaria o fechamento inteiro */
+  fechamento?: boolean;
 }) {
   const [armado, setArmado] = useState<Qual | null>(null);
   const [indo, setIndo] = useState<Qual | null>(null);
@@ -95,21 +99,14 @@ export function AcoesTurno({
   };
 
   return (
-    <div className={`flex flex-wrap items-center gap-1 ${className}`} role="group" aria-label="Voltar o último turno do mestre">
-      {botao("desfazer", "↶", "Desfazer", "Apaga a última resposta do mestre e devolve a sua ação ao campo, para reescrever")}
-      {botao("refazer", "↻", "Outra resposta", "O mestre responde de novo às mesmas ações (a resposta atual some)", "Outra")}
+    <div className={`flex flex-wrap items-center gap-1 ${className}`} role="group" aria-label={fechamento ? "Reabrir a noite" : "Voltar o último turno do mestre"}>
+      {fechamento
+        ? botao("desfazer", "↶", "Reabrir a noite", "Desfaz o fechamento: some o marcador de fim, o XP e o Remorso da noite, e o jogo continua de onde parou", "Reabrir")
+        : botao("desfazer", "↶", "Desfazer", "Apaga a última resposta do mestre e devolve a sua ação ao campo, para reescrever")}
+      {!fechamento && botao("refazer", "↻", "Outra resposta", "O mestre responde de novo às mesmas ações (a resposta atual some)", "Outra")}
     </div>
   );
 }
 
-/** A ação que volta ao campo depois de desfazer: a do personagem ativo; sem ela, uma fala sem personagem. */
-export function acaoParaCampo(r: Desfeito, personagemId: number | null): string | null {
-  return (r.acoes.find((a) => a.personagemId === personagemId) ?? r.acoes.find((a) => a.personagemId === null))?.acao ?? null;
-}
-
-/** Aviso curto depois de desfazer/refazer. */
-export function avisoDoDesfeito(r: Desfeito, refazer: boolean, voltouAoCampo: boolean): string {
-  if (refazer) return "O mestre vai tentar de novo. Tomara que melhore.";
-  if (r.abertura) return "Abertura desfeita. A mesa voltou ao começo.";
-  return voltouAoCampo ? "Turno desfeito. Pode reescrever." : "Turno desfeito.";
-}
+// a ação que volta ao campo e o aviso depois de desfazer moram em sessao/noite.ts (funções puras, com teste)
+export { acaoParaCampo, avisoDoDesfeito, desfezFechamento } from "@/components/sessao/noite";

@@ -3,7 +3,7 @@ import { clonar, limitar, normalizar } from "../comum";
 import type { Ficha } from "../tipos";
 import { conhecimentosDe, mudancasPotencia, sincronizar } from "../vtm5";
 import { ATRIBUTOS, CATEGORIAS_ATRIBUTOS, CATEGORIAS_PERICIAS, CLAS, DISCIPLINAS, DISCIPLINAS_RESTRITAS, IDADES, PERICIAS } from "./dados";
-import { disciplinasDe, listaExtra, potenciaDe } from "./testes";
+import { disciplinasDe, listaExtra, poderesDe, potenciaDe, type PoderVtm } from "./testes";
 
 // Gastar XP no Vampiro V5: no V5 não há nível, o XP compra pontos um de cada vez (de ●● para ●●●● são duas compras).
 // Tabela do livro básico: atributo novo nível ×5 · perícia novo nível ×3 · especialidade 3 · disciplina do clã ×5, de fora ×7,
@@ -14,7 +14,17 @@ import { disciplinasDe, listaExtra, potenciaDe } from "./testes";
 export type TipoCompra = "atributo" | "pericia" | "especialidade" | "disciplina" | "ritual" | "formula" | "vantagem" | "potencia";
 
 /** Pedido de compra. alvo: id do atributo/perícia/disciplina, texto da vantagem ("recursos" = Recursos); nome/foco/nivel para itens novos. */
-export type CompraXp = { tipo: TipoCompra; alvo?: string; nome?: string; foco?: string; nivel?: number; /** valor que o jogador viu (evita compra dupla) */ de?: number };
+export type CompraXp = {
+  tipo: TipoCompra;
+  alvo?: string;
+  nome?: string;
+  foco?: string;
+  nivel?: number;
+  /** valor que o jogador viu (evita compra dupla) */
+  de?: number;
+  /** disciplina: o poder que o ponto novo traz (nível até o novo total; custo em Despertares, 0 a 3) */
+  poder?: { nome: string; nivel?: number; custo?: number; parada?: string };
+};
 
 export type GastoXp = {
   data: string;
@@ -29,6 +39,8 @@ export type GastoXp = {
   /** listas de texto (vantagens, especialidades): como estava e como ficou */
   textoAntes?: string;
   textoDepois?: string;
+  /** disciplina: nome do poder que entrou em extras.poderes (o desfazer tira) */
+  poder?: string;
 };
 
 export type ItemXp = {
@@ -162,13 +174,31 @@ function avaliar(ficha: Ficha, c: CompraXp): Avaliacao | Recusa {
       if (regra.bloqueio) return { erro: regra.bloqueio };
       const cheio = tirarDots(de, PONTOS_MAX, nome);
       if (cheio) return { erro: cheio };
+      // o ponto novo traz um poder (a tela pergunta qual); nível até o total novo, custo em Despertares
+      let poder: PoderVtm | null = null;
+      if (c.poder) {
+        const nomePoder = String(c.poder.nome ?? "").trim().slice(0, 60);
+        if (!nomePoder) return { erro: "Diga o nome do poder que o ponto novo traz." };
+        const nivel = Math.round(Number(c.poder.nivel ?? de + 1));
+        if (!Number.isFinite(nivel) || nivel < 1 || nivel > de + 1) return { erro: `O poder novo vai do nível 1 ao ${de + 1} (o total de ${nome} depois da compra).` };
+        const custo = Math.round(Number(c.poder.custo ?? 1));
+        if (!Number.isFinite(custo) || custo < 0 || custo > 3) return { erro: "O custo do poder vai de 0 a 3 Despertares." };
+        if (poderesDe(ficha).some((p) => normalizar(p.nome) === normalizar(nomePoder))) return { erro: `${ficha.nome} já conhece ${nomePoder}.` };
+        const parada = typeof c.poder.parada === "string" ? c.poder.parada.trim().slice(0, 80) : "";
+        poder = { disciplina: id, nivel, nome: nomePoder, custo, ...(parada ? { parada } : {}) };
+      }
       return {
         nome,
         de,
         para: de + 1,
         custo: regra.custo(de + 1),
         aviso: de === 0 ? regra.aviso : undefined,
-        aplicar: (f) => void (f.extras.disciplinas = { ...disciplinasDe(f), [id]: de + 1 }),
+        aplicar: (f) => {
+          f.extras.disciplinas = { ...disciplinasDe(f), [id]: de + 1 };
+          if (!poder) return;
+          f.extras.poderes = [...poderesDe(f), poder];
+          return { poder: poder.nome };
+        },
       };
     }
     case "potencia": {
@@ -290,6 +320,7 @@ function textoGasto(c: CompraXp, a: Avaliacao): string {
   if (c.tipo === "ritual" || c.tipo === "formula") return `${c.tipo === "ritual" ? "ritual" : "fórmula"} ${pontos(a.para)}: ${a.nome.replace(/ \((ritual|fórmula)\)$/, "")}`;
   if (c.tipo === "potencia") return `Potência de Sangue ${a.de} → ${a.para}`;
   if (c.tipo === "vantagem" && a.de === 0) return `vantagem nova: ${a.nome} ●`;
+  if (c.tipo === "disciplina" && c.poder?.nome?.trim()) return `${a.nome} ${pontos(a.de)} → ${pontos(a.para)} · poder: ${c.poder.nome.trim().slice(0, 60)}`;
   return `${a.nome} ${pontos(a.de)} → ${pontos(a.para)}`;
 }
 
@@ -397,6 +428,7 @@ export function desfazer(original: Ficha): ResultadoCompra {
         if (g.de > 0) disc[alvo] = g.de;
         else delete disc[alvo];
         ficha.extras.disciplinas = disc;
+        if (g.poder) ficha.extras.poderes = poderesDe(ficha).filter((p) => !(p.disciplina === alvo && p.nome === g.poder));
         break;
       }
       case "potencia":

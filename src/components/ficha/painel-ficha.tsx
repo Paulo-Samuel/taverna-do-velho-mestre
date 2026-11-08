@@ -7,6 +7,7 @@ import type { BlocoFicha, CondicaoDef, Ficha, SistemaPublico } from "@/lib/siste
 import {
   AdicionarNaLista,
   AvisoAjuste,
+  BotaoRemorso,
   BotaoRemover,
   BotoesMarcador,
   LinhaMarcador,
@@ -270,10 +271,12 @@ type PropsCartao = {
   acaoXp?: ReactNode;
   /** link para editar a parte narrativa da ficha (/mesa/[id]/personagens/[pid]/editar) */
   linkEditar?: string;
+  /** ação de regra logo abaixo do cabeçalho (Vampiro: "Rolar Remorso" quando há Manchas) */
+  acaoRegra?: ReactNode;
 };
 
 /** Cabeçalho + blocos. Usado na mesa (PainelFicha) e na prévia do formulário de criação. */
-export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste, rodape, acaoXp, linkEditar }: PropsCartao) {
+export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste, rodape, acaoXp, linkEditar, acaoRegra }: PropsCartao) {
   const classe = sistema.classes.find((c) => c.id === ficha.classe)?.nome ?? ficha.classe;
   const anc = sistema.ancestralidades.find((a) => a.id === ficha.ancestralidade)?.nome ?? ficha.ancestralidade;
   const antecedente = sistema.antecedentes?.find((a) => a.id === ficha.antecedente)?.nome;
@@ -342,10 +345,12 @@ export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste
         )}
       </header>
 
+      {acaoRegra}
       {ajuste && <AvisoAjuste ajuste={ajuste} />}
       {ajuste?.editando && (
         <p className="text-[11px] leading-snug text-muted">
           Modo de ajuste: o mestre esqueceu alguma coisa? Corrija aqui. Cada mudança vira uma linha no chat, para ninguém dizer que foi milagre.
+          {sistema.id === "vtm5" && " Manchas só sobem à mão (quem limpa é o Remorso); a Humanidade pede confirmação."}
         </p>
       )}
       {ajuste?.editando && ajuste.soltos.length > 0 && (
@@ -390,7 +395,14 @@ export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste
   );
 }
 
-type PropsPainel = { personagem: PersonagemVisivel; sistema: SistemaPublico; editavel?: boolean; ocupado?: boolean };
+type PropsPainel = {
+  personagem: PersonagemVisivel;
+  sistema: SistemaPublico;
+  editavel?: boolean;
+  ocupado?: boolean;
+  /** o Remorso foi pedido: a mesa leva até o cartão do dado (id da mensagem do pedido, quando o servidor devolve) */
+  aoRemorso?: (mensagemId: number | null) => void;
+};
 
 /** Ficha na mesa. `editavel` liga o ajuste manual e as anotações; `ocupado` (mestre narrando) desliga os botões. */
 export function PainelFicha(props: PropsPainel) {
@@ -398,7 +410,7 @@ export function PainelFicha(props: PropsPainel) {
   return <FichaDaMesa key={props.personagem.id} {...props} />;
 }
 
-function FichaDaMesa({ personagem, sistema, editavel = true, ocupado = false }: PropsPainel) {
+function FichaDaMesa({ personagem, sistema, editavel = true, ocupado = false, aoRemorso }: PropsPainel) {
   // o servidor manda o progresso de XP junto (visivel.ts); null = por marcos, e a ficha mostra só o XP acumulado
   const progresso = personagem.progresso ?? null;
   const ajuste = useAjusteFicha(personagem, sistema.rotulos, ocupado);
@@ -412,6 +424,7 @@ function FichaDaMesa({ personagem, sistema, editavel = true, ocupado = false }: 
       ajuste={editavel ? ajuste : undefined}
       acaoXp={editavel && sistema.id === "vtm5" ? <BotaoGastarXp personagem={personagem} /> : undefined}
       linkEditar={editavel ? `/mesa/${personagem.campanhaId}/personagens/${personagem.id}/editar` : undefined}
+      acaoRegra={editavel ? <BotaoRemorso personagem={personagem} bloqueado={ocupado} aoPedir={aoRemorso} /> : undefined}
       rodape={
         editavel ? (
           <Secao titulo="Minhas anotações" aberta={false}>

@@ -2,7 +2,7 @@ import "server-only";
 import { d } from "../../dados";
 import { clonar } from "../comum";
 import type { Ficha, ResultadoTeste } from "../tipos";
-import { avaliar, ID, notasDoGrau, vontadeDe, type ResultadoVtm } from "./testes";
+import { avaliar, danoDoAtaque, ID, notasDoGrau, vontadeDe, type ResultadoVtm } from "./testes";
 
 // Rerrolar com Força de Vontade (V5): depois de um teste, o personagem gasta 1 de Força de Vontade (1 dano superficial na trilha)
 // para rolar de novo até 3 dados NORMAIS — dados de Fome nunca. Uma vez por teste. Não vale em Despertar, Surto, Frenesi, Remorso,
@@ -91,10 +91,14 @@ export function rerrolarComVontade(original: Ficha, resultado: ResultadoTeste, e
   // o gasto e as trocas ficam em `rerrolado` (o cartão desenha a linha da Força de Vontade); aqui só o grau novo
   const notasAntigas = (r.detalhes ?? "").split(" · ").filter((n) => n && !NOTA_DE_GRAU.test(n) && !(semCompulsao && n.startsWith("Compulsão sorteada")));
   const detalhes = [...notasAntigas, ...notasDoGrau(av, r.alvo, fome.length, fome.length > 0)].filter(Boolean).join(" · ") || undefined;
+  // Ataque: o dano sugerido acompanha os sucessos novos
+  const sucesso = av.grau === "sucesso" || av.grau === "sucesso_critico";
+  const dano = r.golpe ? danoDoAtaque({ ...r, total: av.total, sucesso }) : r.dano;
   return {
     ficha,
     resultado: {
       ...r,
+      dano,
       ...(semCompulsao ? { compulsao: undefined, efeitos: r.efeitos?.filter((x) => !x.texto.startsWith("Compulsão:")) } : {}),
       dados: [...novos, ...fome],
       total: av.total,
@@ -113,5 +117,5 @@ export function textoRerrolagemParaMestre(r: ResultadoVtm): string {
   const x = r.rerrolado;
   if (!x) return "";
   const n = x.dados.length;
-  return `${r.personagem} gastou 1 de Força de Vontade (${x.vontade.antes} → ${x.vontade.depois}, dano superficial, já aplicado) e rerrolou ${n} dado${n > 1 ? "s" : ""} ${n > 1 ? "normais" : "normal"} (${x.dados.map((t) => `${t.antes}→${t.depois}`).join(", ")}): antes ${x.grauAntes}, agora ${r.rotuloGrau}.${x.grauAntes === "Falha Bestial" && r.grau !== "falha_critica" ? " A compulsão sorteada na Falha Bestial saiu da ficha." : ""} Narre o esforço de vontade; não role de novo.`;
+  return `${r.personagem} gastou 1 de Força de Vontade (${x.vontade.antes} → ${x.vontade.depois}, dano superficial, já aplicado) e rerrolou ${n} dado${n > 1 ? "s" : ""} ${n > 1 ? "normais" : "normal"} (${x.dados.map((t) => `${t.antes}→${t.depois}`).join(", ")}): antes ${x.grauAntes}, agora ${r.rotuloGrau}.${x.grauAntes === "Falha Bestial" && r.grau !== "falha_critica" ? " A compulsão sorteada na Falha Bestial saiu da ficha." : ""}${r.golpe ? (r.dano ? ` Dano sugerido agora: ${r.dano.texto}.` : " Agora o ataque não acerta: sem dano.") : ""} Narre o esforço de vontade; não role de novo.`;
 }

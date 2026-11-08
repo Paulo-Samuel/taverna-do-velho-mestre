@@ -321,10 +321,25 @@ function rerrolarD20Dnd(r: ResultadoTeste): ResultadoTeste {
   return { ...r, dados, natural, total, grau, sucesso, rotuloGrau: rotulos[grau] ?? grau, margem: alvo === null ? null : total - alvo };
 }
 
+/**
+ * Teste oposto (agarrar, empurrar, enganar um guarda): o servidor rola 1d20 + bônus do NPC; o total dele é a marca a superar.
+ * Empate mantém a situação como estava, então quem age precisa passar do NPC (alvo = total + 1). A prévia não rola nada.
+ */
+function comOposicao(pedido: PedidoTeste): { pedido: PedidoTeste; oposicao?: NonNullable<ResultadoTeste["oposicao"]> } {
+  const o = pedido.oposicao ?? (pedido.opcoes?.oposicao as PedidoTeste["oposicao"] | undefined);
+  if (!o || typeof o.bonus !== "number" || !Number.isFinite(o.bonus)) return { pedido };
+  if (pedido.previa) return { pedido: { ...pedido, alvo: null } };
+  const bonus = Math.round(o.bonus);
+  const natural = d(20);
+  const oposicao = { nome: o.nome || "a oposição", expressao: `1d20${sinal(bonus)}`, dados: [natural], total: natural + bonus };
+  return { pedido: { ...pedido, alvo: oposicao.total + 1 }, oposicao };
+}
+
 export const dnd5e: Sistema = {
   id: "dnd5e",
   nome: "D&D 5ª Edição (SRD 5.2)",
   nomeCurto: "D&D 5e",
+  extensoesMestre: ["oposicao"],
   descricao: "O clássico de fantasia: d20 + modificador contra CD, vantagem e desvantagem, espaços de magia. 12 classes, 10 espécies, 16 antecedentes.",
   licenca: "SRD 5.2 — Creative Commons BY 4.0 (Wizards of the Coast)",
   dadoPrincipal: "d20",
@@ -451,8 +466,20 @@ COMO MESTRAR 5E
     return ficha;
   },
 
-  resolverTeste(ficha: Ficha, pedido: PedidoTeste): ResultadoTeste {
+  resolverTeste(ficha: Ficha, pedidoOriginal: PedidoTeste): ResultadoTeste {
+    const { pedido, oposicao } = comOposicao(pedidoOriginal);
     const r = resolver(ficha, pedido);
+    if (oposicao) {
+      r.oposicao = oposicao;
+      const empate = r.total === oposicao.total;
+      r.detalhes = [r.detalhes, `${oposicao.nome}: ${oposicao.expressao} = ${oposicao.total}${empate ? " (empate: fica como estava)" : ""}`].filter(Boolean).join(" · ");
+      r.avisoMestre = [
+        r.avisoMestre,
+        r.sucesso ? `${ficha.nome} venceu ${oposicao.nome} (${r.total} contra ${oposicao.total}).` : `${oposicao.nome} resistiu (${oposicao.total} contra ${r.total}${empate ? ", empate mantém a situação" : ""}).`,
+      ]
+        .filter(Boolean)
+        .join(" ");
+    }
     // teste contra a morte: o servidor conta sucessos e falhas na ficha (aposTeste); o mestre só narra
     const morte = pedido.previa ? null : contraAMorteDepois(ficha, r);
     if (morte) r.avisoMestre = [r.avisoMestre, avisoContraAMorte(ficha.nome, morte)].filter(Boolean).join(" ");

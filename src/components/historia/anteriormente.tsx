@@ -1,10 +1,47 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { idUltimaMensagem, resumoParaLeitura, semAnteriormente, type BlocoResumo, type UltimaDoResumo } from "@/components/sessao/noite";
 import type { Mensagem } from "@/lib/db";
 import type { Cena, EntradaDiario } from "@/lib/sistemas/tipos";
 import { fonteGotica } from "./fonte-gotica";
+
+/** O que a rota do livro devolve com ?formato=resumo (recapitulacao/fechamento chegam com a W21; antes, só o resumo). */
+type Resumo = {
+  resumo?: string | null;
+  resumoAte?: number | null;
+  /** a W21 devolve a última mensagem inteira; versões antigas mandavam só o id */
+  ultimaMensagem?: UltimaDoResumo;
+  fechamento?: string | null;
+  recapitulacao?: string | null;
+};
+
+/** Quantas mensagens o resumo pode ficar para trás antes de avisar que o fim está só no livro. */
+const DEFASAGEM = 20;
+
+function Blocos({ blocos, classe }: { blocos: BlocoResumo[]; classe: string }) {
+  return (
+    <div className={`mt-3 space-y-2.5 leading-relaxed text-foreground/90 ${classe}`} data-anteriormente-resumo>
+      {blocos.map((b, i) =>
+        b.tipo === "paragrafo" ? (
+          <p key={i}>{b.texto}</p>
+        ) : (
+          <ul key={i} className="space-y-1 pl-1">
+            {b.itens.map((it, j) => (
+              <li key={j} className="flex gap-2">
+                <span className="text-ambar/80" aria-hidden>
+                  ◆
+                </span>
+                <span className="min-w-0">{it}</span>
+              </li>
+            ))}
+          </ul>
+        ),
+      )}
+    </div>
+  );
+}
 
 // "Anteriormente…": ao abrir uma mesa parada há mais de 3 horas, um cartão por cima do topo da conversa lembra onde a
 // história estava: o resumo da campanha (ou o último parágrafo do mestre), o lugar e o momento da cena e as missões em
@@ -59,28 +96,66 @@ export function Anteriormente({
   aoContinuar: () => void;
 }) {
   const [fase, setFase] = useState<"oculto" | "aberto" | "recolhido">("oculto");
-  const [resumo, setResumo] = useState<string | null>(null);
+  const [resumo, setResumo] = useState<Resumo | null>(null);
+  const [inteiro, setInteiro] = useState(false);
   const [pausa, setPausa] = useState(0);
-  // só as mensagens de quando a mesa abriu decidem (o que chega depois é a sessão de hoje)
-  const [iniciais] = useState(mensagens);
-
+  // as mensagens de quando o cartão decidiu abrir (o que chega depois é a sessão de hoje)
+  const [iniciais, setIniciais] = useState(mensagens);
+  const atuais = useRef(mensagens);
   useEffect(() => {
-    const ultima = iniciais.at(-1);
-    if (!ultima) return;
-    const parada = Date.now() - dataDoBanco(ultima.criadaEm).getTime();
-    if (!(parada > PAUSA_MS)) return;
-    const controle = new AbortController();
-    fetch(`/api/campanhas/${campanhaId}/livro?formato=resumo`, { signal: controle.signal })
-      .then((r) => (r.ok ? r.json() : null))
-      .catch(() => null)
-      .then((corpo: { resumo?: string } | null) => {
-        if (controle.signal.aborted) return;
-        setResumo(corpo?.resumo?.trim() || null);
-        setPausa(parada);
-        setFase("aberto");
-      });
-    return () => controle.abort();
-  }, [campanhaId, iniciais]);
+    atuais.current = mensagens;
+  }, [mensagens]);
+
+  // Decide se abre: a última mensagem é mais velha que a pausa e o cartão ainda não apareceu para ela nesta aba
+  // (sessionStorage). Roda ao abrir a mesa, ao voltar para a aba (visibilitychange) e quando a conexão reabre com o estado
+  // novo (estado_inicial): o aparelho que ficou a noite inteira com a mesa aberta também ganha o "Anteriormente".
+  useEffect(() => {
+    let controle: AbortController | null = null;
+    const chave = `taverna:anteriormente:${campanhaId}`;
+    const avaliar = (lista: Mensagem[]) => {
+      const ultima = lista.at(-1);
+      if (!ultima || controle) return;
+      const parada = Date.now() - dataDoBanco(ultima.criadaEm).getTime();
+      if (!(parada > PAUSA_MS)) return;
+      try {
+        if (sessionStorage.getItem(chave) === String(ultima.id)) return;
+      } catch {
+        /* sem storage: decide só pela pausa */
+      }
+      const c = new AbortController();
+      controle = c;
+      fetch(`/api/campanhas/${campanhaId}/livro?formato=resumo`, { signal: c.signal })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null)
+        .then((corpo: Resumo | null) => {
+          if (c.signal.aborted) return;
+          controle = null;
+          try {
+            sessionStorage.setItem(chave, String(ultima.id));
+          } catch {
+            /* idem */
+          }
+          setResumo(corpo);
+          setInteiro(false);
+          setIniciais(lista);
+          setPausa(parada);
+          setFase("aberto");
+        });
+    };
+    avaliar(atuais.current);
+    const aoVoltar = () => document.visibilityState === "visible" && avaliar(atuais.current);
+    const aoEvento = (e: Event) => {
+      const ev = (e as CustomEvent<{ e?: string; estado?: { mensagens?: Mensagem[] } }>).detail;
+      if (ev?.e === "estado_inicial" && ev.estado?.mensagens) avaliar(ev.estado.mensagens);
+    };
+    document.addEventListener("visibilitychange", aoVoltar);
+    window.addEventListener("taverna:evento", aoEvento);
+    return () => {
+      controle?.abort();
+      document.removeEventListener("visibilitychange", aoVoltar);
+      window.removeEventListener("taverna:evento", aoEvento);
+    };
+  }, [campanhaId]);
 
   // Esc recolhe
   useEffect(() => {
@@ -111,7 +186,21 @@ export function Anteriormente({
       </div>
     );
 
-  const texto = resumo ?? ultimoParagrafoDoMestre(iniciais);
+  // a recapitulação da última noite vem primeiro; depois o fechamento; depois o resumo da campanha; por fim, o último parágrafo
+  // (a recapitulação costuma abrir com "Anteriormente…", que o título já diz)
+  const escrito =
+    [resumo?.recapitulacao, resumo?.fechamento, resumo?.resumo]
+      .map((t) => (t ? semAnteriormente(t) : t))
+      .find(Boolean) ?? null;
+  const leitura = escrito ? resumoParaLeitura(escrito, inteiro ? 100_000 : 120) : null;
+  // sem resumo, o último parágrafo do mestre costuma ser o próprio "Anteriormente…" que entrou no chat: tira a palavra também
+  const ultimoParagrafo = leitura?.blocos.length ? null : ultimoParagrafoDoMestre(iniciais);
+  const texto = ultimoParagrafo ? semAnteriormente(ultimoParagrafo) || ultimoParagrafo : null;
+  const ultimoId = idUltimaMensagem(resumo?.ultimaMensagem);
+  const atrasado =
+    !resumo?.recapitulacao && !resumo?.fechamento && resumo?.resumo && resumo.resumoAte != null && ultimoId != null
+      ? ultimoId - resumo.resumoAte > DEFASAGEM
+      : false;
   const lugar = [cena.local, cena.momento].filter(Boolean).join(" · ");
   const missoes = diario.filter((e) => e.tipo === "missao" && !/conclu|falh|cancel/i.test(e.status));
 
@@ -152,7 +241,27 @@ export function Anteriormente({
             {lugar}
           </p>
         )}
-        {texto ? (
+        {leitura?.blocos.length ? (
+          <>
+            <Blocos blocos={leitura.blocos} classe={livro ? "text-[1.05rem]" : "text-[15px]"} />
+            {(leitura.cortado || inteiro) && (
+              <button
+                type="button"
+                onClick={() => setInteiro((v) => !v)}
+                className="mt-2 min-h-9 text-sm text-ambar underline-offset-4 hover:underline"
+                aria-expanded={inteiro}
+                data-resumo-inteiro
+              >
+                {inteiro ? "ler só o começo" : "ler o resumo inteiro"}
+              </button>
+            )}
+            {atrasado && (
+              <p className="mt-2 text-xs italic text-muted" data-resumo-atrasado>
+                O resumo ainda não chegou ao fim da última noite: o que falta está no livro da campanha.
+              </p>
+            )}
+          </>
+        ) : texto ? (
           <p className={`mt-3 whitespace-pre-line leading-relaxed text-foreground/90 ${livro ? "text-[1.05rem] italic" : "text-[15px]"}`}>{texto}</p>
         ) : (
           <p className="mt-3 text-sm italic text-muted">O mestre não lembra de nada. Normal, ele bebe.</p>

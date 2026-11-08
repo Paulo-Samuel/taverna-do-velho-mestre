@@ -17,6 +17,7 @@ import {
   listarMensagens,
   listarPersonagens,
   mensagensDepois,
+  noitesDaCampanha,
   obterCampanha,
   obterMensagem,
   obterPersonagem,
@@ -27,6 +28,7 @@ import {
   testesPendentes,
   type AcaoPendente,
   type ConfigCampanha,
+  type FimPendente,
   type Mensagem,
   type Personagem,
 } from "../db";
@@ -34,6 +36,9 @@ import {
   FIM_DE_SESSAO,
   INICIO,
   mesaSolo,
+  msDaData,
+  noiteEmAndamento,
+  PAUSA_NOITE_MS,
   pausaDecisao,
   podeDecidir,
   PRAZO_DECISAO_MS,
@@ -48,24 +53,32 @@ import { listarPresenca, publicar } from "../tempo-real";
 import { visivel } from "../visivel";
 import { arremateRedundante } from "./arremate";
 import { definirFerramentas, executarFerramenta, type ContextoFerramentas } from "./ferramentas";
+import { acharVarios, extensoesDe } from "./ferramentas/contexto";
+import { ENTRADAS } from "./ferramentas/esquemas";
 import { LIMITE_SEM_RESUMO, MANTER_LITERAIS } from "./memoria";
 import { encerrarTurno, enderecoInterno, registrarTurno } from "./ponte";
 import { ErroDoMestre, traduzirErro } from "./erros-api";
 import {
   diarioParaResumo,
   fimDeSessao,
+  foraDaTranscricao,
+  limparRecapitulacao,
+  linhasDaNoite,
   medirPrompt,
   nomeDoPersonagem,
   promptDeContinuacao,
+  promptDaRecapitulacao,
   promptDoResumo,
   promptDoTurno,
   promptEmBlocos,
   separarDivergencias,
+  SISTEMA_RECAPITULACAO,
   SISTEMA_RESUMO,
   transcricao,
   type AcaoDoTurno,
   type FimDeSessao,
   type MedidaPrompt,
+  type Recapitular,
 } from "./prompt";
 import { criarProvedorApi, ESFORCO_PADRAO, ehEsforco } from "./provedor-api";
 import { criarProvedorCli } from "./provedor-cli";
@@ -168,13 +181,14 @@ export function ultimaMedidaPrompt(campanhaId: number) {
 
 // ---------- estado de execução por mesa ----------
 
-type Execucao = { ocupado: boolean; controlador: AbortController | null; resumo: Promise<unknown> | null };
+/** `marcador`: o turno gravou o fim da noite (id do marcador); o resumo em segundo plano vira o fechamento da noite. */
+type Execucao = { ocupado: boolean; controlador: AbortController | null; resumo: Promise<unknown> | null; marcador?: number | null };
 const g = globalThis as unknown as { __tavernaExec?: Map<number, Execucao> };
 const execucoes = (g.__tavernaExec ??= new Map());
 
 function execucao(id: number): Execucao {
   let e = execucoes.get(id);
-  if (!e) execucoes.set(id, (e = { ocupado: false, controlador: null, resumo: null }));
+  if (!e) execucoes.set(id, (e = { ocupado: false, controlador: null, resumo: null, marcador: null }));
   return e;
 }
 
@@ -215,60 +229,267 @@ export function iniciarCampanha(campanhaId: number) {
 
 // ---------- sessões (encerrar a noite) ----------
 
-/** config.sessao é só um espelho para a interface; a verdade são os marcadores "fim_sessao" no chat (desfazer os apaga). */
-type ConfigComSessao = ConfigCampanha & { sessao?: number };
+/**
+ * Erro da mesa com status HTTP e dados para a rota devolver junto (`{ erro, ...dados }`): o Encerrar com Manchas sem Remorso
+ * (409 com a lista), a rota do Remorso (400 fora do Vampiro, 404 personagem de outra mesa).
+ */
+export class ErroDaMesa extends Error {
+  readonly status: number;
+  readonly dados: Record<string, unknown>;
+  constructor(mensagem: string, status = 409, dados: Record<string, unknown> = {}) {
+    super(mensagem);
+    this.status = status;
+    this.dados = dados;
+  }
+}
 
 const ehFimDeSessao = (m: Mensagem) => m.tipo === "dado" && (m.dados as { tipo?: string } | null)?.tipo === "fim_sessao";
+/** Recados de sistema (aviso, divergência) não são jogo: não contam para a noite nem para "a última mensagem". */
+const ehRecado = (m: Mensagem) => m.tipo === "sistema" && ["aviso", "divergencia"].includes(String((m.dados as { tipo?: string } | null)?.tipo ?? ""));
 
-/** Número da sessão em andamento: marcadores de fim já gravados + 1. */
+/**
+ * Número da noite (sessão) em andamento: noites fechadas (marcador "Encerrar a noite" ou intervalo de 5 h sem mensagem,
+ * noitesDaCampanha) + 1. config.sessao é só um espelho para a interface; desfazer o marcador volta o número junto.
+ */
 export function sessaoAtual(campanhaId: number): number {
-  return listarMensagens(campanhaId).filter(ehFimDeSessao).length + 1;
+  return noiteEmAndamento(noitesDaCampanha(campanhaId));
 }
 
 function sincronizarSessao(campanhaId: number) {
   const c = obterCampanha(campanhaId);
   if (!c) return;
   const sessao = sessaoAtual(campanhaId);
-  if (((c.config as ConfigComSessao).sessao ?? 1) === sessao) return;
-  const config: ConfigComSessao = { ...c.config, sessao };
+  if ((c.config.sessao ?? 1) === sessao) return;
+  const config: ConfigCampanha = { ...c.config, sessao };
   atualizarCampanha(campanhaId, { config });
 }
 
-/** Na primeira jogada depois de um fim de sessão o mestre abre com "Anteriormente…": o último marcador vem depois do último texto dele. */
-function depoisDoFimDeSessao(mensagens: Mensagem[]): boolean {
+/** Troca chaves da config lendo a versão atual do banco (o turno pode ter mudado outras no meio). */
+function mudarConfig(campanhaId: number, mudar: (c: ConfigCampanha) => void) {
+  const c = obterCampanha(campanhaId);
+  if (!c) return;
+  const config: ConfigCampanha = { ...c.config };
+  mudar(config);
+  atualizarCampanha(campanhaId, { config });
+}
+
+/** A última noite já foi encerrada pelo botão e ninguém jogou depois (um aparte (( )) também não conta como jogada). */
+function noiteJaEncerrada(mensagens: Mensagem[]): boolean {
   for (let i = mensagens.length - 1; i >= 0; i--) {
     if (ehFimDeSessao(mensagens[i])) return true;
-    if (mensagens[i].tipo === "mestre") return false;
+    if (mensagens[i].tipo === "jogador" && !mensagens[i].texto.trim().startsWith("((")) return false;
   }
   return false;
 }
 
 /**
- * Encerra a noite: enfileira a ação interna FIM_DE_SESSAO (fechamento, XP, Remorso, diário e o marcador no chat).
- * Recusa (erro com a mensagem para o jogador) se o mestre está narrando, se há teste esperando ou ações na fila.
+ * O sistema tem Remorso no fim da noite: a extensão de ferramentas dele traz `teste_de_remorso` (hoje, só o Vampiro). O
+ * mestre não conhece sistema pelo id: pergunta à extensão.
  */
-export function encerrarSessao(campanhaId: number): { sessao: number } {
-  if (execucao(campanhaId).ocupado) throw new Error("O mestre ainda está narrando. Espere ele terminar.");
-  if (testesPendentes(campanhaId).length) throw new Error("Há um teste esperando ser rolado (ou decidido). Resolva antes de encerrar a noite.");
-  const fila = listarFila(campanhaId);
-  if (fila.some((a) => a.acao === FIM_DE_SESSAO)) throw new Error("A noite já está sendo encerrada.");
-  if (fila.length) throw new Error("Há ações esperando o mestre. Deixe ele responder antes de encerrar a noite.");
-  const mensagens = listarMensagens(campanhaId);
-  if (!mensagens.some((m) => m.tipo === "mestre")) throw new Error("A aventura ainda não começou.");
-  if (depoisDoFimDeSessao(mensagens)) throw new Error("Esta noite já foi encerrada. Jogue a próxima sessão antes de encerrar de novo.");
-  const sessao = sessaoAtual(campanhaId);
-  enviarAcao(campanhaId, { personagemId: null, autor: "", acao: FIM_DE_SESSAO });
-  return { sessao };
+function temRemorso(sistema: ReturnType<typeof obterSistema>): boolean {
+  return extensoesDe(sistema).some((e) => Boolean(e.executores && Object.hasOwn(e.executores, "teste_de_remorso")));
 }
 
-/** Grava o marcador de capítulo (mensagem "dado" com dados.tipo "fim_sessao") e avança o contador da campanha. */
-function marcarFimDeSessao(campanhaId: number) {
-  const sessao = sessaoAtual(campanhaId);
-  const data = new Date().toISOString();
-  const rotulo = `Fim da sessão ${sessao}`;
-  const mensagem = adicionarMensagem(campanhaId, "dado", rotulo, { dados: { tipo: "fim_sessao", sessao, data, rotulo, resumo: rotulo } });
+/** Manchas na ficha: o recurso "mancha" (espelhado em extras.mancha nas fichas antigas), de 0 a 10. */
+function manchasDa(ficha: Personagem["ficha"]): number {
+  const r = ficha.recursos.mancha?.atual;
+  const e = typeof ficha.extras.mancha === "number" ? ficha.extras.mancha : 0;
+  return Math.max(0, Math.min(10, r ?? e));
+}
+
+/** Quem tem Manchas e ainda não rolou o Remorso (Vampiro); vazio nos outros sistemas. */
+export function pendentesDeRemorso(campanhaId: number): { id: number; nome: string; manchas: number }[] {
+  const c = obterCampanha(campanhaId);
+  if (!c || !temRemorso(obterSistema(c.sistema))) return [];
+  return listarPersonagens(campanhaId)
+    .map((p) => ({ id: p.id, nome: p.ficha.nome, manchas: manchasDa(p.ficha) }))
+    .filter((p) => p.manchas > 0);
+}
+
+/**
+ * Encerra a noite: enfileira a ação interna FIM_DE_SESSAO (fechamento, XP, Remorso, diário e o marcador no chat).
+ * Recusa (ErroDaMesa 409 com a mensagem para o jogador) se o mestre está narrando, se há teste esperando ou ações na fila,
+ * e, no Vampiro, se alguém tem Manchas sem o Remorso rolado na tela (dados.remorso: quem), salvo `semRemorso` ("o mestre
+ * decide": o mestre rola o teste_de_remorso no fechamento). `retroativa`: fechar em retrospectiva a noite que acabou sem o
+ * botão (padrão: automático quando a última mensagem tem 5 h ou mais). Encerrar de novo depois de interromper, sem
+ * jogada nova, reaproveita o encerramento em andamento (a mesma noite e o XP já dado).
+ */
+export function encerrarSessao(campanhaId: number, opcoes: { semRemorso?: boolean; retroativa?: boolean } = {}): { sessao: number; retroativa: boolean } {
+  if (execucao(campanhaId).ocupado) throw new ErroDaMesa("O mestre ainda está narrando. Espere ele terminar.");
+  if (testesPendentes(campanhaId).length) throw new ErroDaMesa("Há um teste esperando ser rolado (ou decidido). Resolva antes de encerrar a noite.");
+  const fila = listarFila(campanhaId);
+  if (fila.some((a) => a.acao === FIM_DE_SESSAO)) throw new ErroDaMesa("A noite já está sendo encerrada.");
+  if (fila.length) throw new ErroDaMesa("Há ações esperando o mestre. Deixe ele responder antes de encerrar a noite.");
+  const campanha = obterCampanha(campanhaId);
+  if (!campanha) throw new ErroDaMesa("Mesa não encontrada.", 404);
+  const mensagens = listarMensagens(campanhaId).filter((m) => !ehRecado(m));
+  if (!mensagens.some((m) => m.tipo === "mestre")) throw new ErroDaMesa("A aventura ainda não começou.");
+  if (noiteJaEncerrada(mensagens)) throw new ErroDaMesa("Esta noite já foi encerrada. Jogue a próxima sessão antes de encerrar de novo.");
+  if (!opcoes.semRemorso) {
+    const remorso = pendentesDeRemorso(campanhaId);
+    if (remorso.length) {
+      const nomes = remorso.map((p) => `${p.nome} (${p.manchas} Mancha${p.manchas === 1 ? "" : "s"})`).join(", ");
+      throw new ErroDaMesa(`Antes de encerrar, role o teste de Remorso: ${nomes}. Ou escolha "o mestre decide".`, 409, { remorso });
+    }
+  }
+  const ultima = mensagens[mensagens.length - 1];
+  const anterior = campanha.config.fimPendente;
+  // Encerrar interrompido (cancelado, erro): sem jogada nova depois dele, é o mesmo encerramento (mesma noite, XP já dado)
+  const mesmo = anterior && !mensagens.some((m) => m.id > (anterior.desde ?? 0) && m.tipo === "jogador" && !m.texto.trim().startsWith("(("));
+  let pendente: FimPendente;
+  if (mesmo) {
+    pendente = { ...anterior, ...(opcoes.semRemorso ? { semRemorso: true } : {}) };
+  } else {
+    const ms = Date.now() - msDaData(ultima.criadaEm);
+    const retroativa = opcoes.retroativa ?? (Number.isFinite(ms) && ms >= PAUSA_NOITE_MS);
+    pendente = {
+      sessao: sessaoAtual(campanhaId),
+      xpConcedido: false,
+      ...(opcoes.semRemorso ? { semRemorso: true } : {}),
+      ...(retroativa ? { retroativa: true, horas: Math.round((Math.max(0, ms) / 3_600_000) * 10) / 10 } : {}),
+      desde: ultima.id,
+    };
+  }
+  mudarConfig(campanhaId, (c) => {
+    c.fimPendente = pendente;
+  });
+  enviarAcao(campanhaId, { personagemId: null, autor: "", acao: FIM_DE_SESSAO });
+  return { sessao: pendente.sessao, retroativa: Boolean(pendente.retroativa) };
+}
+
+/**
+ * Remorso pedido pela ficha (Vampiro), antes do Encerrar: cria o cartão "pedido_teste" de Remorso que o jogador rola como
+ * qualquer teste (rolarTestePendente → aposTeste aplica Humanidade e zera as Manchas; o mestre narra o resultado).
+ * Já havendo um Remorso esperando para este personagem, devolve o mesmo cartão.
+ */
+export function pedirRemorso(campanhaId: number, personagemId: number): { mensagemId: number } {
+  if (execucao(campanhaId).ocupado) throw new ErroDaMesa("O mestre ainda está narrando. Espere ele terminar.");
+  const campanha = obterCampanha(campanhaId);
+  const p = obterPersonagem(personagemId);
+  if (!campanha || !p || p.campanhaId !== campanhaId) throw new ErroDaMesa("Personagem não encontrado nesta mesa.", 404);
+  const sistema = obterSistema(campanha.sistema);
+  if (!temRemorso(sistema)) throw new ErroDaMesa("Só o Vampiro tem Remorso.", 400);
+  const dele = testesPendentes(campanhaId).filter((m) => ((m.dados as { personagemId?: number } | null)?.personagemId ?? m.personagemId) === p.id);
+  const ja = dele.find((m) => {
+    const d = (m.dados ?? {}) as { teste?: string; testePedido?: string; status?: string };
+    return d.status === "pendente" && (d.testePedido ?? d.teste) === "Remorso";
+  });
+  if (ja) return { mensagemId: ja.id };
+  const manchas = manchasDa(p.ficha);
+  if (manchas <= 0) throw new ErroDaMesa(`${p.ficha.nome} não tem Manchas: não há Remorso a rolar.`);
+  if (dele.length) throw new ErroDaMesa(`${p.ficha.nome} tem outro teste esperando. Resolva antes do Remorso.`);
+  const motivo = "Fim da noite: o peso do que fez";
+  const previa = sistema.resolverTeste(p.ficha, { teste: "Remorso", alvo: null, motivo, previa: true });
+  const dados = {
+    tipo: "pedido_teste",
+    status: "pendente",
+    personagem: p.ficha.nome,
+    personagemId: p.id,
+    teste: previa.teste,
+    testePedido: "Remorso",
+    expressao: previa.expressao.replace(/\s+vs\s+.*$/, ""),
+    dadoPrincipal: sistema.dadoPrincipal,
+    alvo: null,
+    bonus: previa.bonus,
+    perigoso: false,
+    motivo,
+    sistema: sistema.id,
+    origem: "remorso",
+  };
+  const mensagem = adicionarMensagem(campanhaId, "dado", `${p.ficha.nome} precisa rolar o Remorso (${manchas} Mancha${manchas === 1 ? "" : "s"}) — ${motivo}`, {
+    dados,
+    personagemId: p.id,
+  });
   publicar(campanhaId, { e: "mensagem", mensagem });
+  return { mensagemId: mensagem.id };
+}
+
+/** Data ISO de uma mensagem do banco (para o marcador retroativo levar a data da noite, não a de hoje). */
+function isoDaMensagem(id: number | undefined): string | null {
+  const m = id ? obterMensagem(id) : null;
+  const ms = m ? msDaData(m.criadaEm) : NaN;
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+}
+
+/**
+ * Grava o marcador de capítulo (mensagem "dado" com dados.tipo "fim_sessao") com o fechamento narrado, avança o contador,
+ * liga a recapitulação da próxima jogada e acalma a mesa (sem sugestões, música calma). Devolve o id do marcador.
+ */
+function marcarFimDeSessao(campanhaId: number, fechamento: string): number {
+  const campanha = obterCampanha(campanhaId);
+  const pendente = campanha?.config.fimPendente;
+  const sessao = pendente?.sessao ?? sessaoAtual(campanhaId);
+  const retroativo = Boolean(pendente?.retroativa);
+  const data = (retroativo ? isoDaMensagem(pendente?.desde) : null) ?? new Date().toISOString();
+  const rotulo = `Fim da sessão ${sessao}`;
+  const texto = fechamento.trim();
+  const dados = {
+    tipo: "fim_sessao",
+    sessao,
+    data,
+    rotulo,
+    resumo: rotulo,
+    ...(texto ? { fechamento: texto.length > 6000 ? `${texto.slice(0, 6000)}…` : texto } : {}),
+    ...(retroativo ? { retroativo: true } : {}),
+    ...(campanha?.cena?.combate?.ativo ? { combate: { suspenso: true } } : {}),
+  };
+  const mensagem = adicionarMensagem(campanhaId, "dado", rotulo, { dados });
+  publicar(campanhaId, { e: "mensagem", mensagem });
+  mudarConfig(campanhaId, (c) => {
+    delete c.fimPendente;
+    c.recapPendente = { sessao: sessao + 1, motivo: "marcador" };
+  });
   sincronizarSessao(campanhaId);
+  // a noite acabou: as sugestões do último turno não valem mais e a trilha baixa
+  const cena = obterCampanha(campanhaId)?.cena;
+  if (cena) {
+    const calma = { ...cena, sugestoes: [], musica: { humor: "calmo" as const, energia: "baixa" as const }, musicaDesde: mensagem.id };
+    salvarCena(campanhaId, calma);
+    publicar(campanhaId, { e: "cena", cena: calma });
+  }
+  return mensagem.id;
+}
+
+/**
+ * Começo de uma noite nova na próxima jogada: o intervalo de 5 h sem ninguém encerrar liga config.recapPendente aqui
+ * (o marcador já liga ao ser gravado). Devolve a recapitulação a pedir neste turno (só numa jogada de verdade) e grava, antes
+ * das ações, o cartão "Noite N" e, se o marcador trouxe, o "Anteriormente…" pronto.
+ */
+function abrirNoite(campanhaId: number, jogada: boolean, local: { local?: string; momento?: string }): Recapitular | null {
+  const noites = noitesDaCampanha(campanhaId);
+  const ultima = noites[noites.length - 1];
+  const parado = ultima && !ultima.fechada ? Date.now() - msDaData(ultima.fim) : 0;
+  const config = obterCampanha(campanhaId)?.config;
+  if (!config) return null;
+  if (ultima && parado >= PAUSA_NOITE_MS && !config.recapPendente) {
+    const horas = Math.round((parado / 3_600_000) * 10) / 10;
+    mudarConfig(campanhaId, (c) => {
+      c.recapPendente = { sessao: noites.length + 1, motivo: "intervalo", horas };
+    });
+  }
+  const pendente = obterCampanha(campanhaId)?.config.recapPendente;
+  if (!pendente || !jogada) return null;
+  let jaMostrada = false;
+  if (!pendente.cartao) {
+    const titulo = `Noite ${pendente.sessao}`;
+    const cartao = adicionarMensagem(campanhaId, "dado", titulo, {
+      dados: { tipo: "cena_titulo", titulo, ...(local.local ? { local: local.local } : {}), ...(local.momento ? { momento: local.momento } : {}), sessao: pendente.sessao },
+    });
+    publicar(campanhaId, { e: "mensagem", mensagem: cartao });
+    // o fechamento da noite anterior já deixou o "Anteriormente…" pronto no marcador: entra antes da ação, sem gastar o mestre
+    const marcador = pendente.motivo === "marcador" ? [...listarMensagens(campanhaId, 60)].reverse().find(ehFimDeSessao) : undefined;
+    const recap = String((marcador?.dados as { recapitulacao?: unknown } | null)?.recapitulacao ?? "").trim();
+    if (recap) {
+      publicar(campanhaId, { e: "mensagem", mensagem: adicionarMensagem(campanhaId, "mestre", recap) });
+      jaMostrada = true;
+    }
+    mudarConfig(campanhaId, (c) => {
+      if (c.recapPendente) c.recapPendente = { ...c.recapPendente, cartao: cartao.id, ...(jaMostrada ? { mostrada: true } : {}) };
+    });
+  } else {
+    jaMostrada = Boolean(pendente.mostrada);
+  }
+  return { motivo: pendente.motivo, ...(pendente.horas !== undefined ? { horas: pendente.horas } : {}), ...(jaMostrada ? { jaMostrada: true } : {}) };
 }
 
 /** No modo "rodada": manda o mestre narrar com as ações que já chegaram. */
@@ -348,8 +569,14 @@ async function processar(campanhaId: number, forcar: boolean) {
   }
   // Resumo em segundo plano; o próximo turno espera por ele. Falha vira aviso na mesa (a memória do mestre cresce até resolver).
   // Com o mestre indisponível não há resumo a tentar: o aviso do porquê já foi dado acima, não se repete a cada passada.
-  if (mestreIndisponivel()) return;
-  ex.resumo = atualizarResumo(campanhaId)
+  if (mestreIndisponivel()) {
+    ex.marcador = null;
+    return;
+  }
+  // a noite acabou de ser encerrada: o resumo fecha nela (até o marcador) e o "Anteriormente…" fica gravado no marcador
+  const marcador = ex.marcador;
+  ex.marcador = null;
+  ex.resumo = (marcador ? fecharNoite(campanhaId, marcador) : atualizarResumo(campanhaId))
     .catch((e) => {
       console.error("[taverna] resumo falhou:", e);
       const t = traduzirErro(e);
@@ -367,7 +594,7 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
   if (!campanha) throw new Error("Campanha não encontrada.");
   const sistema = obterSistema(campanha.sistema);
   const personagens = listarPersonagens(campanhaId);
-  const recentes = mensagensDepois(campanhaId, campanha.resumoAte);
+  let recentes = mensagensDepois(campanhaId, campanha.resumoAte);
 
   // o jeito de voltar atrás: guarda a mesa como estava antes deste turno (e das ações que ele vai gravar)
   registrarInstantaneo(campanhaId, capturarEstado(campanhaId), acoes.map((a) => ({ personagemId: a.personagemId, autor: a.autor, acao: a.acao })));
@@ -385,6 +612,12 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
     salvarCena(campanhaId, campanha.cena);
     publicar(campanhaId, { e: "cena", cena: campanha.cena });
   }
+  // noite nova (marcador do Encerrar, ou 5 h sem ninguém): cartão "Noite N" e recapitulação na primeira jogada de verdade
+  // (aparte (( )) e rerrolagem não abrem a noite; o resultado de um teste que ficou esperando, sim)
+  const daMesa = acoes.filter((x) => x.acao !== INICIO && x.acao !== FIM_DE_SESSAO && !x.acao.startsWith(RERROLAGEM));
+  const jogada = !inicio && !fim && daMesa.length > 0 && !daMesa.every((x) => /^\s*\(\(.*\)\)\s*$/s.test(x.acao));
+  const recapitular = inicio || fim || !daMesa.length ? null : abrirNoite(campanhaId, jogada, { local: campanha.cena?.local, momento: campanha.cena?.momento });
+  if (recapitular) recentes = mensagensDepois(campanhaId, campanha.resumoAte);
   for (const a of acoes.filter((x) => x.acao !== INICIO && x.acao !== FIM_DE_SESSAO)) {
     // resultado de teste rolado pelo jogador: o cartão do dado já está no chat, vai só para o mestre
     if (a.acao.startsWith(RERROLAGEM)) {
@@ -413,8 +646,6 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
   const soForaDoJogo = doTurno.length > 0 && doTurno.every((a) => /^\s*\(\(.*\)\)\s*$/s.test(a.acao));
   const ensaioMudo = provedor.id === "falso" && doTurno.some((a) => /\[mudo/i.test(a.acao));
   const exigirNarracao = (provedor.id === "falso" && !ensaioMudo) || soForaDoJogo || fim ? 0 : inicio && !doTurno.length ? 400 : 150;
-  // primeira jogada depois de "Encerrar a noite": o mestre recapitula antes de responder
-  const recapitular = !inicio && !fim && !soForaDoJogo && doTurno.length > 0 && depoisDoFimDeSessao(recentes);
   // tudo o que o jogador leu neste turno (para a rede de segurança do fim) e onde estava o trecho na última ferramenta
   let lido = "";
   let marca = 0;
@@ -444,12 +675,34 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
   // fim da sessão: sem sugestões nem testes (o pedido do turno também diz isso; aqui é a garantia)
   const FORA_DO_FIM = ["sugerir_acoes", "pedir_teste", "teste"];
   const ferramentas = definirFerramentas(ctx).filter((f) => !fim || !FORA_DO_FIM.includes(f.name));
+  // encerramento em andamento (gravado pelo Encerrar): a noite que fecha e se o XP dela já saiu (Encerrar interrompido)
+  const fimPendente: FimPendente | null = fim ? (campanha.config.fimPendente ?? null) : null;
+  // XP do fechamento por personagem: quem recebeu num Encerrar interrompido (bloqueado neste turno) e quem recebe agora
+  // (várias chamadas no mesmo turno valem: uma por personagem ou uma por motivo, como as regras de XP pedem)
+  const xpAntes = xpJaDadoNoFim(fimPendente, personagens);
+  const xpAgora = new Set<number>();
   const executar = async (nome: string, entrada: unknown) => {
     ferramentasUsadas++;
     nomesUsados.push(nome);
     try {
-      if (fim && FORA_DO_FIM.includes(nome)) throw new Error("A noite está sendo encerrada: sem testes nem sugestões. Termine o fechamento.");
-      return await executarFerramenta(ctx, nome, entrada);
+      let alvosXp: Personagem[] = [];
+      let usada = entrada;
+      if (fim) {
+        if (FORA_DO_FIM.includes(nome)) throw new Error("A noite está sendo encerrada: sem testes nem sugestões. Termine o fechamento.");
+        guardaDoFim(nome, entrada, obterCampanha(campanhaId)?.cena?.titulo ?? campanha.cena?.titulo ?? "");
+        if (nome === "conceder_xp") {
+          const filtrado = xpSoParaQuemFalta(ctx, entrada, xpAntes);
+          usada = filtrado.entrada;
+          alvosXp = filtrado.alvos;
+        }
+      }
+      const r = await executarFerramenta(ctx, nome, usada);
+      if (fim && nome === "conceder_xp" && alvosXp.length) {
+        // o XP saiu para estes: um segundo Encerrar depois de interromper não concede de novo a eles
+        for (const p of alvosXp) xpAgora.add(p.id);
+        anotarXpDoFim(campanhaId, alvosXp.map((p) => p.id));
+      }
+      return r;
     } finally {
       marca = trecho.length;
       if (nome !== "sugerir_acoes" || !ultimaFerramenta) {
@@ -489,7 +742,7 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
   };
 
   // pedido do turno: abertura, fim de sessão (com as regras de XP do sistema e os passos próprios dele) ou as ações
-  const pedidoFim: FimDeSessao | null = fim ? fimDeSessao(sistema, sessaoAtual(campanhaId), personagens.map((p) => p.ficha)) : null;
+  const pedidoFim: FimDeSessao | null = fim ? pedidoDoFim(campanhaId, sistema, personagens, fimPendente) : null;
 
   const especial = (inicio && !doTurno.length) || Boolean(pedidoFim && !doTurno.length);
   const pedido = promptDoTurno(recentes, personagens, inicio && !doTurno.length ? "inicio" : pedidoFim && !doTurno.length ? pedidoFim : doTurno, { recapitular });
@@ -595,7 +848,134 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
       publicar(campanhaId, { e: "cena", cena });
     }
   }
-  if (fim && concluido) marcarFimDeSessao(campanhaId);
+  if (fim && concluido) {
+    // rede de segurança do fechamento: o mestre que pulou o roteiro não deixa Manchas sem Remorso nem a noite sem XP
+    await redeDoFim(campanhaId, ctx, new Set([...xpAntes, ...xpAgora]));
+    execucao(campanhaId).marcador = marcarFimDeSessao(campanhaId, lido);
+  }
+  // a recapitulação da noite nova foi feita: a próxima jogada segue normal
+  if (recapitular && concluido) {
+    mudarConfig(campanhaId, (c) => {
+      delete c.recapPendente;
+    });
+  }
+}
+
+/** Jogadas de verdade (fora apartes) numa lista de mensagens. */
+const jogadasEm = (mensagens: Mensagem[]) => mensagens.filter((m) => m.tipo === "jogador" && !m.texto.trim().startsWith("((")).length;
+
+/** As mensagens da noite que está sendo encerrada (a do fimPendente, ou a última). */
+function mensagensDaNoite(campanhaId: number, sessao: number | null): Mensagem[] {
+  const noites = noitesDaCampanha(campanhaId);
+  const noite = (sessao ? noites.find((n) => n.numero === sessao) : null) ?? noites[noites.length - 1];
+  if (!noite) return [];
+  return mensagensDepois(campanhaId, noite.inicioId - 1).filter((m) => !ehRecado(m));
+}
+
+/** O pedido do fechamento: XP e passos do sistema, mais a noite inteira, a luta aberta, o retroativo e o XP já dado. */
+function pedidoDoFim(campanhaId: number, sistema: ReturnType<typeof obterSistema>, personagens: Personagem[], pendente: FimPendente | null): FimDeSessao {
+  const sessao = pendente?.sessao ?? sessaoAtual(campanhaId);
+  const daNoite = mensagensDaNoite(campanhaId, pendente?.sessao ?? null);
+  return fimDeSessao(sistema, sessao, personagens.map((p) => p.ficha), {
+    nestaSessao: linhasDaNoite(daNoite, personagens),
+    combateAtivo: Boolean(obterCampanha(campanhaId)?.cena?.combate?.ativo),
+    retroativa: pendente?.retroativa ? { horas: pendente.horas ?? PAUSA_NOITE_MS / 3_600_000 } : null,
+    xpJaConcedido: quemJaTemXp(pendente, personagens),
+  });
+}
+
+/** Para o pedido do fechamento: true se toda a mesa já recebeu o XP; a lista de nomes se só parte; false se ninguém. */
+function quemJaTemXp(pendente: FimPendente | null, personagens: Personagem[]): boolean | string[] {
+  const ja = xpJaDadoNoFim(pendente, personagens);
+  const com = personagens.filter((p) => ja.has(p.id));
+  if (!com.length) return false;
+  return com.length === personagens.length ? true : com.map((p) => p.ficha.nome);
+}
+
+/**
+ * Guarda do turno de fechamento (erro amigável que volta ao mestre): sem combate novo, sem cena nova (título trocado) e sem
+ * XP repetido. Fechar a luta aberta, mudar música, local ou momento (o corte para o refúgio) continuam valendo.
+ */
+function guardaDoFim(nome: string, entrada: unknown, tituloAtual: string) {
+  if (nome === "atualizar_cena") {
+    const e = (entrada ?? {}) as { titulo?: unknown; combate?: { acao?: unknown } };
+    if (e.combate?.acao === "iniciar") {
+      throw new Error('A noite está sendo encerrada: não abra combate novo. Feche a luta aberta (combate.acao "encerrar") ou deixe o gancho no fechamento.');
+    }
+    const titulo = typeof e.titulo === "string" ? e.titulo.trim() : "";
+    if (titulo && titulo.toLowerCase() !== tituloAtual.trim().toLowerCase()) {
+      throw new Error("A noite está sendo encerrada: sem cena nova (título novo). Feche onde a história parou.");
+    }
+  }
+}
+
+/**
+ * Quem já recebeu o XP deste fechamento num Encerrar interrompido. Registro antigo, sem `xpPara`, com `xpConcedido`:
+ * a mesa inteira (era o que ele dizia).
+ */
+function xpJaDadoNoFim(pendente: FimPendente | null, personagens: Personagem[]): Set<number> {
+  if (!pendente) return new Set();
+  if (pendente.xpPara) return new Set(pendente.xpPara);
+  return new Set(pendente.xpConcedido ? personagens.map((p) => p.id) : []);
+}
+
+/**
+ * conceder_xp no fechamento: tira da lista quem já recebeu num Encerrar interrompido (`xpAntes`); se ninguém sobrar, recusa
+ * com erro amigável ao mestre. Chamadas repetidas no MESMO turno passam (uma por personagem, uma por motivo).
+ */
+function xpSoParaQuemFalta(ctx: ContextoFerramentas, entrada: unknown, xpAntes: Set<number>): { entrada: unknown; alvos: Personagem[] } {
+  const lida = ENTRADAS.conceder_xp.safeParse(entrada);
+  // entrada inválida: a própria ferramenta devolve o erro de validação
+  if (!lida.success) return { entrada, alvos: [] };
+  const alvos = acharVarios(ctx, lida.data.personagens);
+  const faltam = alvos.filter((p) => !xpAntes.has(p.id));
+  if (!faltam.length) {
+    throw new Error(`O XP desta noite já foi concedido a ${alvos.map((p) => p.ficha.nome).join(", ")} no encerramento interrompido: não conceda de novo a ${alvos.length === 1 ? "este personagem" : "eles"}. Termine o fechamento.`);
+  }
+  if (faltam.length === alvos.length) return { entrada, alvos };
+  return { entrada: { ...(entrada as object), personagens: faltam.map((p) => p.ficha.nome) }, alvos: faltam };
+}
+
+/** Grava no encerramento em andamento quem já recebeu XP (para um Encerrar repetido não dar de novo). */
+function anotarXpDoFim(campanhaId: number, ids: number[]) {
+  mudarConfig(campanhaId, (c) => {
+    if (!c.fimPendente) return;
+    const antes = c.fimPendente.xpPara ?? [];
+    c.fimPendente = { ...c.fimPendente, xpConcedido: true, xpPara: [...new Set([...antes, ...ids])] };
+  });
+}
+
+/**
+ * Depois do fechamento narrado: Remorso (Vampiro) para quem ainda tem Manchas e o XP mínimo do sistema para quem o mestre não
+ * deu (e a noite teve jogo: 3 jogadas ou mais). Cada passo falha sozinho, sem impedir o marcador.
+ */
+async function redeDoFim(campanhaId: number, ctx: ContextoFerramentas, xpDado: Set<number>) {
+  const sistema = ctx.sistema;
+  if (temRemorso(sistema)) {
+    for (const p of [...ctx.personagens]) {
+      if (manchasDa(p.ficha) <= 0) continue;
+      console.info(`[taverna] fim da noite sem Remorso de ${p.ficha.nome} (mesa ${campanhaId}): o servidor rola.`);
+      try {
+        await executarFerramenta(ctx, "teste_de_remorso", { personagem: p.ficha.nome });
+      } catch (e) {
+        console.warn(`[taverna] Remorso automático de ${p.ficha.nome} falhou:`, e);
+      }
+    }
+  }
+  const minimo = sistema.fimDeSessao?.xpMinimo ?? 0;
+  const semXp = ctx.personagens.filter((p) => !xpDado.has(p.id));
+  if (minimo <= 0 || !semXp.length) return;
+  const pendente = obterCampanha(campanhaId)?.config.fimPendente;
+  if (jogadasEm(mensagensDaNoite(campanhaId, pendente?.sessao ?? null)) < 3) return;
+  const nomes = semXp.map((p) => p.ficha.nome);
+  console.info(`[taverna] fim da noite sem XP para ${nomes.join(", ")} (mesa ${campanhaId}): o servidor concede o mínimo (${minimo}).`);
+  try {
+    const todos = semXp.length === ctx.personagens.length;
+    await executarFerramenta(ctx, "conceder_xp", { personagens: todos ? "todos" : nomes, quantidade: minimo, motivo: "pela noite jogada (fechamento automático)" });
+    anotarXpDoFim(campanhaId, semXp.map((p) => p.id));
+  } catch (e) {
+    console.warn("[taverna] XP mínimo do fechamento falhou:", e);
+  }
 }
 
 /**
@@ -939,12 +1319,58 @@ export function desfazerTurno(campanhaId: number, opcoes: { refazer?: boolean } 
   };
 }
 
-async function atualizarResumo(campanhaId: number) {
+/**
+ * Fechamento da noite em segundo plano (depois do marcador): o resumo passa a cobrir a noite inteira, até antes do marcador
+ * (o marcador e o que vier depois ficam literais), e a recapitulação curta ("Anteriormente…", até 120 palavras) é gravada
+ * em dados.recapitulacao do marcador, para o cartão da volta e para a primeira jogada da noite seguinte.
+ */
+async function fecharNoite(campanhaId: number, marcadorId: number) {
+  let falha: unknown = null;
+  try {
+    await atualizarResumo(campanhaId, { ate: marcadorId });
+  } catch (e) {
+    falha = e;
+  }
+  try {
+    const campanha = obterCampanha(campanhaId);
+    const marcador = obterMensagem(marcadorId);
+    if (campanha && marcador && ehFimDeSessao(marcador)) {
+      const noite = noitesDaCampanha(campanhaId).find((n) => n.fimId === marcadorId);
+      const daNoite = mensagensDepois(campanhaId, (noite?.inicioId ?? marcadorId) - 1).filter((m) => m.id < marcadorId);
+      if (daNoite.some((m) => !foraDaTranscricao(m))) {
+        const bruto = await provedorAtual().texto({
+          sistema: SISTEMA_RECAPITULACAO,
+          prompt: promptDaRecapitulacao(campanha.resumo, daNoite, listarPersonagens(campanhaId)),
+        });
+        const recapitulacao = limparRecapitulacao(bruto);
+        // desfazer o fechamento no meio apaga o marcador: só grava se ele ainda existe
+        const atual = obterMensagem(marcadorId);
+        if (recapitulacao && atual && ehFimDeSessao(atual)) {
+          const atualizada = atualizarMensagem(atual.id, atual.texto, { ...((atual.dados ?? {}) as Record<string, unknown>), recapitulacao });
+          if (atualizada) publicar(campanhaId, { e: "mensagem_atualizada", mensagem: atualizada });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[taverna] recapitulação da noite falhou:", e);
+    falha ??= e;
+  }
+  if (falha) throw falha;
+}
+
+async function atualizarResumo(campanhaId: number, opcoes: { ate?: number } = {}) {
   const campanha = obterCampanha(campanhaId);
   if (!campanha) return;
   const pendentes = mensagensDepois(campanhaId, campanha.resumoAte);
-  if (pendentes.length <= LIMITE_SEM_RESUMO) return;
-  const saindo = pendentes.slice(0, pendentes.length - MANTER_LITERAIS);
+  let saindo: Mensagem[];
+  if (opcoes.ate !== undefined) {
+    // fim da noite: tudo antes do marcador sai, mesmo abaixo do limite (a noite fecha inteira no resumo)
+    saindo = pendentes.filter((m) => m.id < opcoes.ate!);
+    if (!saindo.some((m) => !foraDaTranscricao(m))) return;
+  } else {
+    if (pendentes.length <= LIMITE_SEM_RESUMO) return;
+    saindo = pendentes.slice(0, pendentes.length - MANTER_LITERAIS);
+  }
   const personagens = listarPersonagens(campanhaId);
   // o resumidor recebe o diário compacto: NPCs, lugares e status já estão lá e não se repetem no resumo (P174)
   const novo = await provedorAtual().texto({ sistema: SISTEMA_RESUMO, prompt: promptDoResumo(campanha.resumo, saindo, personagens, diarioParaResumo(campanhaId)) });

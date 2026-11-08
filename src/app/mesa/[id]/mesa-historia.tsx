@@ -16,7 +16,6 @@ import { Codex, type AbaCodex } from "@/components/historia/codex";
 import { COR_GRAU, corDoNome, mapaDeNomes, NOME_GRAU } from "@/components/historia/cores";
 import { fonteGotica } from "@/components/historia/fonte-gotica";
 import { LinhaDado } from "@/components/historia/linha-dado";
-import { Musica } from "@/components/historia/musica";
 import { NarracaoLivro, montarDestaque, trecho } from "@/components/historia/narracao-livro";
 import { PainelAcao } from "@/components/historia/painel-acao";
 import { PedidoTeste, dadosDoPedido } from "@/components/historia/pedido-teste";
@@ -28,12 +27,12 @@ import { Mudancas } from "@/components/leitor/mudancas";
 import { FimDaNoite, MestreEscrevendo, ProsaCena } from "@/components/leitor/pecas";
 import { agruparTurnos } from "@/components/leitor/turnos";
 import { useTelaBaixa } from "@/components/leitor/altura";
-import { MenuLeitura } from "@/components/leitor/menu-leitura";
 import { useEscalaLeitor, usePreferenciasLeitor } from "@/components/leitor/preferencias";
 import { EstiloProsa, Ornamento } from "@/components/leitor/prosa";
-import { Presenca } from "@/components/presenca/presenca";
-import { Convite } from "@/components/presenca/convite";
-import { BotaoVoz, Ouvir, useLeituraAutomatica } from "@/components/voz/voz";
+import { CabecalhoMesa } from "@/components/mesa/cabecalho-mesa";
+import { CartaoNoiteEncerrada, EncerrarNoite, FaixaFechando } from "@/components/sessao/encerrar-noite";
+import { chipsDaNoite, ehFimDaNoite, noiteAtual, noiteEncerrada, sessaoDaMesa } from "@/components/sessao/noite";
+import { Ouvir, useLeituraAutomatica } from "@/components/voz/voz";
 import * as identidade from "@/lib/cliente/identidade";
 import { parar as pararVoz } from "@/lib/cliente/voz";
 import { useMesa } from "@/lib/cliente/use-mesa";
@@ -238,6 +237,49 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
 
   const fecharCodex = useCallback(() => setCodexAberto(false), []);
 
+  // novidades do códex: anotações do diário mais novas que a última visita (guardada por aparelho; sem storage, nada de ponto).
+  // Na primeira visita tudo conta como visto; ao fechar o códex, o que estava lá passa a ser visto.
+  const chaveVisto = `taverna:codex-visto:${mesa.campanha.id}`;
+  const ultimaAnotacao = useMemo(() => mesa.diario.reduce((m, e) => (e.atualizadoEm > m ? e.atualizadoEm : m), ""), [mesa.diario]);
+  const ultimaRef = useRef(ultimaAnotacao);
+  useEffect(() => {
+    ultimaRef.current = ultimaAnotacao;
+  }, [ultimaAnotacao]);
+  const [vistoCodex, setVistoCodex] = useState<string | null>(null);
+  useEffect(() => {
+    let v: string | null = null;
+    try {
+      v = localStorage.getItem(chaveVisto);
+      if (v === null) localStorage.setItem(chaveVisto, ultimaRef.current);
+    } catch {
+      return;
+    }
+    setVistoCodex(v ?? ultimaRef.current);
+  }, [chaveVisto]);
+  const codexEstavaAberto = useRef(false);
+  useEffect(() => {
+    if (codexEstavaAberto.current && !codexAberto && vistoCodex !== null) {
+      setVistoCodex(ultimaRef.current);
+      try {
+        localStorage.setItem(chaveVisto, ultimaRef.current);
+      } catch {
+        /* sem storage: o ponto some só nesta aba */
+      }
+    }
+    codexEstavaAberto.current = codexAberto;
+  }, [codexAberto, chaveVisto, vistoCodex]);
+  const novidadesAbas = useMemo(() => {
+    const n: Partial<Record<AbaCodex, number>> = {};
+    if (vistoCodex === null) return n;
+    for (const e of mesa.diario) {
+      if (e.atualizadoEm <= vistoCodex) continue;
+      const aba: AbaCodex = e.tipo === "missao" ? "missoes" : e.tipo === "npc" ? "pessoas" : "lugares";
+      n[aba] = (n[aba] ?? 0) + 1;
+    }
+    return n;
+  }, [mesa.diario, vistoCodex]);
+  const novidadesCodex = codexAberto ? 0 : Object.values(novidadesAbas).reduce((s, x) => s + (x ?? 0), 0);
+
   // narração em voz alta: lê as narrações novas (com a leitura automática ligada) e cala ao sair da mesa
   useLeituraAutomatica(mesa.mensagens);
 
@@ -283,36 +325,55 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   }
 
   // leva ao cartão do teste e deixa o botão "Rolar o dado" com o foco (Enter ou espaço já rolam)
-  function irParaDado() {
-    if (!meuPendente) return;
+  function irParaMensagem(id: number) {
     if (cenas) {
       // o leitor abre a cena e a página do cartão
-      const id = meuPendente.id;
       leitor.current?.irParaMensagem(id, () => document.querySelector<HTMLButtonElement>(`#pedido-${id} button[data-rolar]`)?.focus({ preventScroll: true }));
       return;
     }
-    const cartao = document.getElementById(`pedido-${meuPendente.id}`);
+    const cartao = document.getElementById(`pedido-${id}`);
     if (!cartao) return;
     const reduzido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     cartao.scrollIntoView({ behavior: reduzido ? "auto" : "smooth", block: "center" });
     cartao.querySelector<HTMLButtonElement>("button[data-rolar]")?.focus({ preventScroll: true });
   }
 
-  /** Pediu para encerrar a noite e o servidor aceitou: o mestre fecha a cena (chega pelos eventos). */
+  function irParaDado() {
+    if (meuPendente) irParaMensagem(meuPendente.id);
+  }
+
+  // fim da noite: o diálogo do ritual, o cartão "Noite N encerrada" e o "Continuar jogando" (guarda o id do marcador)
+  const [encerrarAberto, setEncerrarAberto] = useState(false);
+  const fecharEncerrar = useCallback(() => setEncerrarAberto(false), []);
+  const [continuouDe, setContinuouDe] = useState<number | null>(null);
+  const encerrada = noiteEncerrada(mesa.mensagens);
+  const sessaoCampanha = sessaoDaMesa(mesa);
+  const cartaoNoite = encerrada && continuouDe !== encerrada.id && !mesa.fechando && !mesa.ocupado && !meuPendente ? encerrada : null;
+  const noiteNova = encerrada && continuouDe === encerrada.id ? (encerrada.sessao ? encerrada.sessao + 1 : noiteAtual(mesa.mensagens, sessaoCampanha)) : null;
+  const chipsNoite = useMemo(() => (cartaoNoite ? chipsDaNoite(mesa.mensagens) : []), [cartaoNoite, mesa.mensagens]);
+
+  /** 🌙 Encerrar a noite (cabeçalho, menu ⋯ ou pé do códex): abre o diálogo do ritual. */
   function aoEncerrar() {
     setCodexAberto(false);
-    setAviso("🌙 O mestre apaga as velas: a noite vai acabando…");
+    setEncerrarAberto(true);
+  }
+
+  /** "Rolar Remorso" no códex: o pedido de teste vira um cartão de dado; fecha o códex e leva até ele quando chegar. */
+  function aoRemorso(mensagemId: number | null) {
+    setCodexAberto(false);
+    if (mensagemId !== null) setTimeout(() => irParaMensagem(mensagemId), 350);
   }
 
   /** Depois de desfazer: a ação do personagem ativo volta ao campo para ser reescrita (refazer não devolve nada). */
   function aoDesfazer(r: Desfeito, refazer: boolean) {
     pararVoz();
+    setContinuouDe(null);
     const texto = refazer ? null : acaoParaCampo(r, mesa.eu.personagemId);
     if (texto) {
       setPreencher((p) => ({ texto, n: (p?.n ?? 0) + 1 }));
       if (window.matchMedia("(pointer: fine)").matches) setTimeout(() => campo.current?.focus(), 50);
     }
-    setAviso(avisoDoDesfeito(r, refazer, Boolean(texto)));
+    setAviso(avisoDoDesfeito(r, refazer, Boolean(texto), !refazer && encerrada !== null));
   }
 
   /** Erro do provedor com instantâneo: "Tentar de novo" reenfileira as ações do turno; "Reescrever" devolve a ação ao campo. */
@@ -425,7 +486,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
           <NarracaoLivro texto={m.texto} destaque={destaque} />
           <div className="mt-1 flex min-h-8 flex-wrap items-center justify-end gap-1">
             {m.id === ultimoMestre && podeDesfazer && (
-              <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={setAviso} className="mr-auto -ml-2.5" />
+              <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={setAviso} className="mr-auto -ml-2.5" fechamento={Boolean(encerrada)} />
             )}
             <Ouvir id={`msg-${m.id}`} texto={m.texto} />
           </div>
@@ -639,67 +700,32 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
       <CeuEstrelado />
       <EstiloProsa />
 
-      {/* cabeçalho fino: campanha, presença, convite e ajustes (no celular os dois moram no códex), som e códex; tela baixa (baixo:): 44 px, só o nome */}
-      <header className="relative z-20 border-b border-border/40 bg-background/85">
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-1 px-2 sm:gap-2 sm:px-4 baixo:h-11" data-cabecalho-mesa>
-          <Link
-            href="/"
-            className="grid size-10 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2/60 hover:text-ambar"
-            aria-label="Voltar para as campanhas"
-            title="Voltar para as campanhas"
-          >
-            ←
-          </Link>
-          {/* a campanha é o destaque; a taverna vira a assinatura miúda embaixo */}
-          <div className="min-w-0 flex-1 leading-none">
-            <h1 className={`${fonteGotica.className} truncate text-lg text-ambar sm:text-2xl baixo:text-lg`} title={mesa.campanha.nome}>
-              {mesa.campanha.nome}
-            </h1>
-            <p className="mt-1 truncate text-[11px] text-muted baixo:hidden">
-              <span className="hidden sm:inline">Taverna do Velho Mestre · </span>
-              {mesa.sistema.nomeCurto}
-            </p>
-          </div>
-          <Presenca mesa={mesa} acoes={acoes} />
-          <div className="hidden sm:block">
-            <Convite campanhaId={mesa.campanha.id} temPin={mesa.campanha.temPin} />
-          </div>
-          <Link
-            href={`/mesa/${mesa.campanha.id}/ajustes`}
-            className="hidden size-10 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2/60 hover:text-ambar sm:grid"
-            aria-label="Ajustes da mesa"
-            title="Ajustes da mesa"
-          >
-            ⚙
-          </Link>
-          <Link
-            href={`/mesa/${mesa.campanha.id}/livro`}
-            className="hidden size-10 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2/60 hover:text-ambar md:grid"
-            aria-label="Livro da campanha"
-            title="Livro da campanha: a história inteira, para reler, imprimir ou baixar"
-          >
-            <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z" fill="currentColor" fillOpacity={0.15} />
-              <path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3M9 7h6M9 10h4" />
-            </svg>
-          </Link>
-          {/* no celular o modo de leitura mora no pé do códex */}
-          <MenuLeitura className="max-sm:hidden" campanhaId={mesa.campanha.id} aoEncerrar={aoEncerrar} telaBaixa={telaBaixa && modo === "cenas"} />
-          <BotaoVoz compacto />
-          <Musica musica={mesa.cena.musica} sistema={mesa.sistema.id} />
+      {/* o mesmo cabeçalho da mesa avançada (mesmos botões, mesma ordem); aqui o painel é o Códex; tela baixa (baixo:): 44 px */}
+      <CabecalhoMesa
+        mesa={mesa}
+        acoes={acoes}
+        aoEncerrar={aoEncerrar}
+        telaBaixa={telaBaixa && modo === "cenas"}
+        fimDaNoite={cartaoNoite !== null}
+        className="border-border/40 bg-background/85"
+        classeTitulo={`${fonteGotica.className} text-ambar`}
+        largura="max-w-5xl"
+        painel={
           <button
             type="button"
             onClick={() => (codexAberto ? fecharCodex() : abrirCodex())}
-            className="flex h-10 min-w-10 shrink-0 items-center justify-center gap-1.5 rounded-md text-lg text-muted hover:bg-surface-2/60 hover:text-ambar sm:border sm:border-border sm:px-2.5 sm:text-base"
-            aria-label="Códex: ficha, missões, pessoas e lugares"
+            className="relative flex h-10 min-w-10 shrink-0 items-center justify-center gap-1.5 rounded-md text-lg text-muted hover:bg-surface-2/60 hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar sm:border sm:border-border sm:px-2.5 sm:text-base"
+            aria-label={novidadesCodex > 0 ? `Códex: ficha, missões, pessoas e lugares (${novidadesCodex} novidade${novidadesCodex > 1 ? "s" : ""})` : "Códex: ficha, missões, pessoas e lugares"}
             aria-expanded={codexAberto}
             title="Códex: ficha, missões, pessoas e lugares (tecla C)"
+            data-ordem="codex"
           >
             <span aria-hidden>📖</span>
             <span className="hidden text-sm font-semibold sm:inline">Códex</span>
+            {novidadesCodex > 0 && <span className="absolute right-1 top-1 size-2 rounded-full bg-ambar" data-novidade-codex aria-hidden />}
           </button>
-        </div>
-      </header>
+        }
+      />
 
       {/* aba do códex na borda esquerda (desktop largo): marcador de livro com o nome escrito na vertical */}
       {!codexAberto && (
@@ -718,7 +744,8 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
         </button>
       )}
 
-      <Codex mesa={mesa} acoes={acoes} fatos={fatos} aberto={codexAberto} aoFechar={fecharCodex} aba={abaCodex} aoMudarAba={setAbaCodex} aoEncerrar={aoEncerrar} />
+      <Codex mesa={mesa} acoes={acoes} fatos={fatos} aberto={codexAberto} aoFechar={fecharCodex} aba={abaCodex} aoMudarAba={setAbaCodex} aoEncerrar={aoEncerrar} aoRemorso={aoRemorso} novidades={novidadesAbas} />
+      <EncerrarNoite mesa={mesa} acoes={acoes} aberto={encerrarAberto} aoFechar={fecharEncerrar} irParaMensagem={irParaMensagem} />
       <FixarSelecao controle={fatos} />
 
       <AjudaAtalhos aberta={ajuda} aoFechar={() => setAjuda(false)} extras={[["C", "abre e fecha o códex"], ...(cenas ? ATALHOS_LEITOR : [])]} />
@@ -765,7 +792,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
             transicao="virar"
             ferramentas={(t) =>
               podeDesfazer && ultimoMestre !== null && t.itens.some((m) => m.id === ultimoMestre) ? (
-                <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={setAviso} compacto />
+                <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={setAviso} compacto fechamento={t.itens.some(ehFimDaNoite)} />
               ) : null
             }
             aoMudarFim={setNoFimDaCena}
@@ -791,7 +818,13 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
                             <ProsaCena paragrafos={p.paragrafos} inline={prosa.inline} separador={prosa.separador} classe={prosa.classe} />
                             <div className="mt-1 flex min-h-8 flex-wrap items-center justify-end gap-1">
                               {comFerramentas && p === ultimaProsa && (
-                                <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={setAviso} className="mr-auto -ml-2.5" />
+                                <AcoesTurno
+                                  campanhaId={mesa.campanha.id}
+                                  aoConcluir={aoDesfazer}
+                                  aoErro={setAviso}
+                                  className="mr-auto -ml-2.5"
+                                  fechamento={turno.itens.some(ehFimDaNoite)}
+                                />
                               )}
                               {textoParaOuvir(p.paragrafos) && <Ouvir id={`msg-${p.ids[0]}`} texto={textoParaOuvir(p.paragrafos)} />}
                             </div>
@@ -846,6 +879,21 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
           </p>
         )}
         <div className="leitor-medida mx-auto box-content px-4 pb-[max(env(safe-area-inset-bottom),0.4rem)] pt-2 sm:px-6 sm:pt-2.5 baixo:pt-1">
+          {/* noite encerrada: o cartão fica no lugar do campo até alguém escolher continuar; fechando: a faixa */}
+          {cartaoNoite ? (
+            <CartaoNoiteEncerrada
+              mesa={mesa}
+              sessao={cartaoNoite.sessao}
+              data={cartaoNoite.data}
+              chips={chipsNoite}
+              aoContinuar={() => {
+                setContinuouDe(cartaoNoite.id);
+                if (window.matchMedia("(pointer: fine)").matches) setTimeout(() => campo.current?.focus(), 50);
+              }}
+            />
+          ) : mesa.fechando ? (
+            <FaixaFechando n={noiteAtual(mesa.mensagens, sessaoCampanha)} />
+          ) : (
           <PainelAcao
             sugestoes={sugestoes}
             mostrarSugestoes={!mesa.ocupado && pendentes.length === 0 && Boolean(ativo) && !minhaNaFila}
@@ -876,14 +924,16 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
               ) : pendentes.length > 0 ? (
                 "Esperando alguém rolar o dado."
               ) : (
-                "O mestre não sugeriu nada. Improvise, que ele adora."
+                "Sem sugestões desta vez: escreva o que o personagem faz."
               )
             }
             placeholder={
               ativo
                 ? minhaNaFila
                   ? `${ativo.ficha.nome} já agiu. Quer complementar?`
-                  : `O que ${ativo.ficha.nome} faz?`
+                  : noiteNova
+                    ? `Noite ${noiteNova} — o que ${ativo.ficha.nome} faz?`
+                    : `O que ${ativo.ficha.nome} faz?`
                 : "Fale com o mestre fora do jogo ((assim)), ou crie um personagem."
             }
             rotuloCampo={ativo ? `Ação de ${ativo.ficha.nome}` : "Mensagem ao mestre"}
@@ -941,6 +991,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
               )
             }
           />
+          )}
           <p className="mt-1.5 text-center text-[10.5px] leading-4 text-muted/60 baixo:hidden">
             Os personagens são IA. As respostas são ficção.
             <button type="button" onClick={() => setAjuda(true)} className="ml-2 hidden underline-offset-2 hover:text-ambar hover:underline [@media(pointer:fine)]:inline">

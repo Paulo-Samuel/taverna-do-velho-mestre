@@ -90,6 +90,21 @@ export function BotaoVoz({
 
   return (
     <div ref={caixa} className={`relative inline-flex shrink-0 items-center ${className}`} data-voz>
+      {compacto ? (
+        // cabeçalho das mesas: um botão só de 40x40; o liga/desliga, a voz e a velocidade moram no popover
+        <button
+          type="button"
+          onClick={() => setAberto((a) => !a)}
+          title={dica}
+          aria-label={`Leitura em voz alta: ${prefs.auto ? "ligada" : "desligada"}. Abrir as opções`}
+          aria-expanded={aberto}
+          aria-haspopup="dialog"
+          data-voz-auto
+          className={`botao-cabecalho ${prefs.auto || aberto ? "text-ambar" : ""}`}
+        >
+          <IconeVoz ligado={prefs.auto} />
+        </button>
+      ) : (
       <div className={`inline-flex items-center overflow-hidden rounded-md border ${prefs.auto ? "border-ambar/60" : "border-border"}`}>
         <button
           type="button"
@@ -118,6 +133,7 @@ export function BotaoVoz({
           <span aria-hidden>▾</span>
         </button>
       </div>
+      )}
 
       {aberto && (
         <div className={`cartao surgir bg-surface! absolute z-50 w-72 ${acima ? "bottom-full left-0 mb-2" : "right-0 top-full mt-2"} max-w-[calc(100vw-1rem)] p-3 text-foreground`} role="dialog" aria-label="Leitura em voz alta">
@@ -189,6 +205,36 @@ export function BotaoVoz({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Linha do menu "⋯" do cabeçalho (telas estreitas): liga/desliga a leitura automática num toque. Voz e velocidade continuam
+ * no botão do cabeçalho largo e no painel. Some sem voz em português.
+ */
+export function LinhaVoz({ aoUsar }: { aoUsar?: () => void }) {
+  const { disponivel, prefs } = useVoz();
+  if (!disponivel) return null;
+  return (
+    <button
+      type="button"
+      role="menuitemcheckbox"
+      aria-checked={prefs.auto}
+      onClick={() => {
+        const auto = !prefs.auto;
+        salvarPreferenciasVoz({ auto });
+        if (!auto) parar();
+        aoUsar?.();
+      }}
+      className="flex min-h-11 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground/90 hover:bg-surface-2/60 hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar"
+      data-menu-voz
+    >
+      <span className={prefs.auto ? "text-ambar" : "text-muted"}>
+        <IconeVoz ligado={prefs.auto} />
+      </span>
+      <span className="min-w-0 flex-1">Leitura em voz alta</span>
+      <span className="text-xs text-muted">{prefs.auto ? "ligada" : "desligada"}</span>
+    </button>
   );
 }
 
