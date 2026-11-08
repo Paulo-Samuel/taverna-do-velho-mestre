@@ -581,7 +581,7 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
     const m = medidas.get(campanhaId);
     if (m) medidas.set(campanhaId, { ...m, cacheLido: uso.cacheLido, entrada: uso.entrada, rodadas: uso.rodadas });
     console.info(
-      `[taverna] ${provedor.id}: turno em ${uso.rodadas} rodada${uso.rodadas === 1 ? "" : "s"} (mesa ${campanhaId}) · entrada ${uso.entrada} · cache lido ${uso.cacheLido} · cache escrito ${uso.cacheEscrito} · saída ${uso.saida}`,
+      `[taverna] ${provedor.id}: turno em ${uso.rodadas} rodada${uso.rodadas === 1 ? "" : "s"} (mesa ${campanhaId}) · entrada ${uso.entrada} · cache lido ${uso.cacheLido} · cache escrito ${uso.cacheEscrito} · saída ${uso.saida} · ferramentas: ${nomesUsados.join(", ") || "nenhuma"}`,
     );
   }
 

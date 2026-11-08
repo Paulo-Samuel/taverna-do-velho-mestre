@@ -220,7 +220,7 @@ function defTabela(tabelas: Tabela[]): DefFerramenta {
   return {
     name: "sortear_tabela",
     description:
-      "Tabelas aleatórias do sistema, sorteadas pelo servidor: em vez de inventar nome, lugar, complicação ou rumor, sorteie aqui e use o resultado. Secreta por padrão; publica: true mostra o resultado na mesa.",
+      "Tabelas aleatórias do sistema, sorteadas pelo servidor: em vez de inventar nome, lugar, complicação ou rumor, sorteie aqui e use o resultado (NPC ou lugar novo: sorteie ANTES de dar o nome). Secreta por padrão; publica: true mostra o resultado na mesa.",
     input_schema: {
       type: "object",
       properties: {
