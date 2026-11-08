@@ -776,6 +776,8 @@ async function jogarTurno(campanhaId: number, acoes: AcaoPendente[], sinal: Abor
       if (arremateRedundante(rabo, antes, conhecidos, { depoisDeTeste })) {
         console.info(`[taverna] fim de turno repetido descartado${depoisDeTeste ? " (depois de pedir_teste)" : ""} (mesa ${campanhaId}): ${JSON.stringify(rabo.trim().slice(0, 160))}`);
         trecho = trecho.slice(0, corte);
+        // o fechamento do marcador sai de `lido`: o rabo descartado (ex.: um "—" solto) não entra nele
+        lido = antes;
         narrado = Math.max(0, narrado - rabo.trim().length);
       } else if (rabo.trim()) {
         console.info(`[taverna] fim de turno mantido (mesa ${campanhaId}): ${JSON.stringify(rabo.trim().slice(0, 160))}`);
