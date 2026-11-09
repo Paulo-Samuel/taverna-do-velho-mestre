@@ -3,6 +3,72 @@ import type { Aventura } from "./tipos";
 // Modo história: fantasia sem números, pensada para um herói (ou poucos) e lida como um livro.
 
 export const HISTORIA: Aventura[] = [
+  // Tutorial (G11): a primeira da lista. Uma noite, ~10 minutos, e cada cena ensina uma coisa da mesa, nesta ordem:
+  // conversar com um NPC, rolar um teste de perícia, escolher entre ações sugeridas e fechar com uma decisão que pesa.
+  {
+    id: "lanterna-da-ponte-velha",
+    sistemas: ["historia"],
+    titulo: "A Lanterna da Ponte Velha",
+    chamada: "Primeira vez? Comece por aqui. Noite de chuva, uma estalagem quentinha e uma lanterna que apagou na pior hora.",
+    duracao: "one-shot",
+    recomendado: "Primeira vez? Comece por aqui: uma noite, uns 10 minutos, e você aprende a jogar jogando.",
+    tutorial: true,
+    tom: "aventura acolhedora numa noite de chuva",
+    cenario:
+      "A Estalagem da Ponte Velha fica na beira de um rio largo, ao pé de uma ponte de pedra que só se atravessa com segurança quando a lanterna da torrezinha está acesa: é ela que mostra aos viajantes onde a pedra acaba e a correnteza começa. Quem cuida da estalagem e da lanterna é Dona Brígida, há trinta anos. Esta noite chove forte, o rio está cheio e uma carroça de feirantes deve cruzar a ponte antes da meia-noite.",
+    abertura:
+      "Chuva grossa no telhado. O herói acaba de entrar na Estalagem da Ponte Velha, sacudindo a capa, e o calor da lareira bate no rosto como um abraço. Cheiro de sopa e lenha. Atrás do balcão, uma senhora de avental e mangas arregaçadas, Dona Brígida, olha pela janela para a torrezinha da ponte, que devia estar brilhando e está escura. Ela vira para o herói com um sorriso cansado: \"Boa noite, viajante. Seja bem-vindo. Desculpe a cara de preocupação, mas a minha lanterna apagou sozinha, e tem gente para cruzar aquela ponte antes da meia-noite. Você teria um minutinho?\" Ao lado dela, um menino de bochechas sujas de farinha espia por trás de uma panela.",
+    roteiro: {
+      verdade:
+        "Aventura-tutorial para quem nunca jogou: seja caloroso, cenas curtas, e ensine dentro da ficção, nesta ordem. (1) Conversa: Dona Brígida conta o problema e responde a perguntas; deixe claro que o herói pode perguntar o que quiser só escrevendo. (2) Teste: a porta da torrezinha está emperrada pela umidade; peça um teste (Atletismo CD 8 para forçar, ou Mãos Leves CD 8 para soltar a tranca) e diga numa frase que é só tocar no dado da tela. Falha não trava: a porta cede com barulho e o herói chega molhado e com um arranhão. (3) Escolha: lá em cima, quem apagou a lanterna foi Faísca, um fogo-fátuo filhote perdido do brejo, que se encolheu dentro dela de frio e comeu a chama; mostre três ações sugeridas (conversar com ele, oferecer uma brasa da lareira, tentar pegá-lo com o pano) e diga que também vale escrever outra coisa. (4) Decisão: Faísca pode virar a nova chama da lanterna (fica preso, mas aquecido, e a ponte nunca mais apaga) ou ser levado de volta ao brejo (e a lanterna é acesa com uma brasa, mais fraca: a carroça cruza devagar e precisa de ajuda). Não há resposta errada; mostre a consequência e feche a noite.",
+      npcs: [
+        { nome: "Dona Brígida", quem: "estalajadeira que cuida da lanterna da ponte há trinta anos", voz: "maternal, fala enxugando as mãos no avental, chama todo mundo de \"meu bem\"", quer: "a lanterna acesa antes da carroça chegar", segredo: "já viu luzinhas do brejo rondando a ponte em noites frias e nunca contou para não parecer caduca" },
+        { nome: "Tico", quem: "ajudante de cozinha de 10 anos, curioso e medroso na mesma medida", voz: "pergunta tudo, fala rápido e se esconde atrás do herói", quer: "subir na torre pela primeira vez", segredo: "deixou a janelinha da torre aberta à tarde: foi por ali que Faísca entrou" },
+      ],
+      locais: [
+        { nome: "A Estalagem da Ponte Velha", texto: "lareira acesa, sopa no fogo, porta para a ponte e a escadinha da torre ao lado" },
+      ],
+      pistas: [
+        "Dona Brígida diz que a lanterna tinha óleo de sobra: alguma coisa apagou a chama.",
+        "A janelinha da torre está aberta e há uma trilha de gotas que brilham fraquinho no degrau.",
+        "Tico confessa a janelinha e conta que viu \"uma estrelinha\" voando baixo sobre o brejo.",
+        "Dentro da lanterna, em vez de chama, uma bolinha de luz tremendo de frio.",
+      ],
+      reviravoltas: ["Quem apagou a lanterna não é ladrão nem fantasma: é um filhote de luz com frio e com saudade de casa."],
+      relogio: ["a chuva engrossa e o rio sobe", "ouve-se ao longe o sino da carroça", "a carroça para do outro lado, esperando a luz"],
+      finais: [
+        "Faísca vira a chama da lanterna: a ponte nunca mais apaga, e nas noites frias a luz dela pisca para o herói",
+        "Faísca volta ao brejo e a lanterna arde com uma brasa: a carroça cruza devagar, com o herói ajudando a guiar os cavalos, e Faísca deixa um presente",
+      ],
+      recompensas: "Uma cama quente e sopa de graça para sempre na Ponte Velha, a amizade de Tico e, se Faísca voltou para casa, uma faísca dourada que acende sozinha quando o herói precisa de luz.",
+      sessoes: ["Conversa com Brígida; teste na porta da torre; três ações com Faísca; a escolha: lanterna ou brejo."],
+      encontros: [
+        {
+          nome: "A porta emperrada",
+          onde: "pé da torrezinha",
+          inimigos: "madeira inchada de chuva (Atletismo ou Mãos Leves CD 8)",
+          tatica: "range, não abre de primeira",
+          saida: "na falha, cede com um tranco: o herói rala o braço (1 de Vida) e sobe",
+        },
+        {
+          nome: "Faísca assustado",
+          onde: "dentro da lanterna",
+          inimigos: "fogo-fátuo filhote (Persuasão CD 8 para acalmar; pegar à força: Acrobacia CD 12, falha: 1d4 de Vida de queimadura leve)",
+          tatica: "foge, pisca e se esconde, nunca ataca de verdade",
+          saida: "uma brasa ou uma palavra gentil o acalma",
+        },
+      ],
+      complicacoes: [
+        "Tico sobe atrás do herói",
+        "um trovão apaga as velas da estalagem",
+        "o sino da carroça soa mais perto",
+        "Faísca escapa pela janelinha",
+        "Dona Brígida grita lá de baixo",
+        "o vento arranca a porta da torre",
+      ],
+    },
+    solo: { aliado: "Tico, o ajudante de cozinha curioso" },
+  },
   {
     id: "sino-afogado",
     sistemas: ["historia"],

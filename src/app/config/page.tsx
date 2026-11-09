@@ -7,6 +7,7 @@ import { finalDaChave, listarModelosApi } from "@/lib/mestre/provedor-api";
 import { montarDiagnostico } from "@/lib/diagnostico";
 import { portaAtual } from "@/lib/rede/enderecos";
 import { ehDestaMaquina } from "@/lib/rede/local";
+import { PainelPreferencias } from "@/components/config/painel-preferencias";
 import { FormularioConfig, SecaoDiagnostico, type PadroesEnv } from "./formulario";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,7 @@ export default async function PaginaConfig() {
     return (
       <main className="mx-auto max-w-xl px-4 py-12">
         <p className="cartao p-6 text-muted">As configurações do mestre só abrem no computador da taverna. Daqui, só as mesas.</p>
+        <PainelPreferencias />
       </main>
     );
   }
@@ -66,6 +68,7 @@ export default async function PaginaConfig() {
         Mestrando agora: <span className="text-ambar">{mestrando}</span>
       </p>
       {problema && <p className="mt-2 text-sm text-sangue">{problema}</p>}
+      <PainelPreferencias />
       <FormularioConfig ajustes={ajustes} padroes={padroes} />
       <SecaoDiagnostico inicial={diagnostico} />
     </main>

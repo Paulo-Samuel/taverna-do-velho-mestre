@@ -10,6 +10,7 @@ import type { SistemaPublico } from "@/lib/sistemas/tipos";
 import { Musica } from "../musica";
 import { gerarRetrato, type DadosRetrato } from "../retrato/dados";
 import { RetratoSVG } from "../retrato/desenho";
+import { ARQUETIPOS, aplicarArquetipo, retratoDoArquetipo } from "../retrato/arquetipos-retrato";
 import { COMECOS, comecoDe, TONS, tomDe } from "./comecos";
 import { CSS_CRIACAO } from "./estilos";
 import { gotica } from "./fonte";
@@ -34,6 +35,8 @@ type Rascunho = {
   rodadaRostos: number;
   /** semente do rosto escolhido na grade */
   rosto: string;
+  /** id do retrato pronto aplicado por cima do rosto (vazio = nenhum); some ao trocar sexo, origem ou rosto */
+  arquetipo: string;
   aparencia: string;
   classe: string;
   historia: string;
@@ -56,6 +59,7 @@ const INICIAL: Rascunho = {
   origem: "",
   rodadaRostos: 0,
   rosto: "",
+  arquetipo: "",
   aparencia: "",
   classe: "",
   historia: "",
@@ -158,7 +162,9 @@ function Rotulo({ children }: { children: ReactNode }) {
 const temProgresso = (r: Rascunho) => r.nome.trim().length > 0 || r.passo > 0;
 
 function retratoDo(r: Rascunho): DadosRetrato | null {
-  return r.rosto && r.sexo && r.origem ? gerarRetrato(r.rosto, { sexo: r.sexo, origem: r.origem, classe: r.classe || undefined }) : null;
+  if (!r.rosto || !r.sexo || !r.origem) return null;
+  const base = gerarRetrato(r.rosto, { sexo: r.sexo, origem: r.origem, classe: r.classe || undefined });
+  return r.arquetipo ? aplicarArquetipo(base, r.arquetipo, r.classe) : base;
 }
 
 /** Mini cartão do herói: o resumo antes de começar e o "continuar de onde parou". */
@@ -286,8 +292,8 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
     [sementesRostos, r.sexo, r.origem],
   );
   const retrato: DadosRetrato | null = useMemo(
-    () => retratoDo({ ...INICIAL, rosto: r.rosto, sexo: r.sexo, origem: r.origem, classe: r.classe }),
-    [r.rosto, r.sexo, r.origem, r.classe],
+    () => retratoDo({ ...INICIAL, rosto: r.rosto, sexo: r.sexo, origem: r.origem, classe: r.classe, arquetipo: r.arquetipo }),
+    [r.rosto, r.sexo, r.origem, r.classe, r.arquetipo],
   );
   const ganchos = useMemo(
     () => (r.classe ? sortearGanchos(r.classe, r.sexo, `${semente}|${r.rodadaGanchos}`) : []),
@@ -529,10 +535,34 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
             {r.passo === 1 && (
               <div className="mt-7 space-y-6">
                 <div>
+                  <Rotulo>Ou comece de um retrato pronto</Rotulo>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Retratos prontos">
+                    {ARQUETIPOS.map((a) => {
+                      const ativo = r.arquetipo === a.id;
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => mudar({ arquetipo: a.id, sexo: a.sexo, origem: a.origem, rosto: a.rosto, classe: a.classe || r.classe })}
+                          aria-pressed={ativo}
+                          title={a.resumo}
+                          className={`flex min-h-11 min-w-0 flex-col items-center gap-1.5 rounded-xl border p-2 text-center transition ${
+                            ativo ? "border-ambar bg-ambar/15 shadow-[0_0_18px_-8px_var(--ambar)]" : "border-border bg-surface-2/60 hover:border-ambar/60"
+                          }`}
+                        >
+                          <RetratoSVG dados={retratoDoArquetipo(a)} className="block h-auto w-full max-w-[96px]" />
+                          <span className={`text-sm font-semibold leading-tight ${ativo ? "text-ambar" : "text-pergaminho"}`}>{a.nome}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-xs italic text-muted">Serve de ponto de partida: depois você troca sexo, origem, rosto e ofício como quiser.</p>
+                </div>
+                <div>
                   <Rotulo>Você é</Rotulo>
                   <div className="grid grid-cols-3 gap-2">
                     {SEXOS.map((s) => (
-                      <Opcao key={s.id} ativo={r.sexo === s.id} onClick={() => mudar({ sexo: s.id })}>
+                      <Opcao key={s.id} ativo={r.sexo === s.id} onClick={() => mudar({ sexo: s.id, arquetipo: "" })}>
                         {s.nome}
                       </Opcao>
                     ))}
@@ -542,7 +572,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                   <Rotulo>Origem</Rotulo>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {sistema.ancestralidades.map((a) => (
-                      <Opcao key={a.id} ativo={r.origem === a.id} onClick={() => mudar({ origem: a.id })}>
+                      <Opcao key={a.id} ativo={r.origem === a.id} onClick={() => mudar({ origem: a.id, arquetipo: "" })}>
                         {a.nome}
                       </Opcao>
                     ))}
@@ -553,7 +583,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                   <div className="mb-2 flex items-baseline justify-between gap-2">
                     <Rotulo>Rosto</Rotulo>
                     {rostosGrade.length > 0 && (
-                      <button type="button" onClick={() => mudar({ rodadaRostos: r.rodadaRostos + 1, rosto: "" })} className="text-sm text-ambar hover:underline">
+                      <button type="button" onClick={() => mudar({ rodadaRostos: r.rodadaRostos + 1, rosto: "", arquetipo: "" })} className="text-sm text-ambar hover:underline">
                         ↻ Outros rostos
                       </button>
                     )}
@@ -564,10 +594,10 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                         <button
                           key={f.semente}
                           type="button"
-                          onClick={() => mudar({ rosto: f.semente })}
-                          aria-pressed={r.rosto === f.semente}
+                          onClick={() => mudar({ rosto: f.semente, arquetipo: "" })}
+                          aria-pressed={r.rosto === f.semente && !r.arquetipo}
                           aria-label="Escolher este rosto"
-                          className={`relative rounded-[14px] p-[3px] transition ${r.rosto === f.semente ? "scale-105 bg-ambar shadow-[0_0_22px_-2px_var(--ambar)]" : "bg-transparent opacity-75 hover:opacity-100"}`}
+                          className={`relative rounded-[14px] p-[3px] transition ${r.rosto === f.semente && !r.arquetipo ? "scale-105 bg-ambar shadow-[0_0_22px_-2px_var(--ambar)]" : "bg-transparent opacity-75 hover:opacity-100"}`}
                         >
                           <RetratoSVG dados={f.dados} className="block h-auto w-full" />
                         </button>

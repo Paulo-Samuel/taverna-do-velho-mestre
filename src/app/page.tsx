@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { aventurasPublicas } from "@/lib/aventuras";
+import { aventuraTutorial, aventurasPublicas } from "@/lib/aventuras";
 import { listarCampanhas, listarDiario, listarMensagens, listarPersonagens, type Campanha, type Personagem } from "@/lib/db";
 import { contarMissoes } from "@/lib/progresso-missoes";
 import { resumoDasNoites, type ResumoNoites } from "@/lib/mesa";
@@ -282,6 +282,8 @@ export default function Inicio() {
   const recente = campanhas[0];
   // a campanha em destaque não se repete na grade: o palco de cima já é ela
   const outras = recente ? campanhas.slice(1) : campanhas;
+  // primeira visita (nenhuma campanha): a aventura-tutorial ganha um cartão de destaque
+  const tutorial = campanhas.length === 0 ? aventuraTutorial() : null;
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
@@ -341,6 +343,23 @@ export default function Inicio() {
       </div>
 
       {campanhas.length === 0 ? (
+        <>
+        {tutorial && (
+          <Link
+            href={linkDaAventura(tutorial)}
+            data-tema={temaDoSistema("historia")}
+            className="cartao cartao-tema group relative mb-4 flex flex-col gap-2 overflow-hidden border-2 border-ambar/70 p-5 shadow-[0_0_50px_-24px_var(--ambar)] transition hover:border-ambar focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ambar sm:flex-row sm:items-center sm:gap-5 sm:p-6"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs uppercase tracking-[0.18em] text-ambar-forte">Primeira vez? Aventura de 10 minutos</span>
+              <span className="titulo mt-1 block text-2xl leading-tight text-pergaminho group-hover:text-ambar">{tutorial.titulo}</span>
+              <span className="mt-1 block text-sm text-muted">
+                Uma noite curta que ensina a jogar: conversar com alguém, rolar o dado e escolher o que fazer. É só montar o herói e entrar.
+              </span>
+            </span>
+            <span className="btn-ambar min-h-11 shrink-0 whitespace-nowrap sm:px-6">Jogar o tutorial</span>
+          </Link>
+        )}
         <div className="cartao relative overflow-hidden px-6 py-10 text-center">
           <div aria-hidden className="pointer-events-none absolute inset-x-0 -bottom-24 mx-auto size-64 rounded-full bg-ambar/10 blur-3xl" />
           <p className="text-5xl" aria-hidden><Icone nome="candle" /> 
@@ -362,6 +381,7 @@ export default function Inicio() {
             Vampiro…) e preencher a ficha inteira.
           </p>
         </div>
+        </>
       ) : outras.length === 0 ? (
         <p className="cartao px-5 py-6 text-center text-sm text-muted">
           Só essa campanha por enquanto. Continue nela ou{" "}

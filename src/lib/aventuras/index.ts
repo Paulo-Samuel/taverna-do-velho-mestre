@@ -28,13 +28,30 @@ export const aventurasDoSistema = (sistemaId: string) => AVENTURAS.filter((a) =>
 export function aventuraPublica(a: Aventura): AventuraPublica {
   const { id, sistemas, titulo, chamada, duracao, recomendado, tom, cenario } = a;
   // do solo só sai o "pode": o aliado é coisa do roteiro
-  return { id, sistemas, titulo, chamada, duracao, ...(recomendado ? { recomendado } : {}), tom, cenario, ...(a.solo ? { soloOk: true as const } : {}) };
+  return {
+    id,
+    sistemas,
+    titulo,
+    chamada,
+    duracao,
+    ...(recomendado ? { recomendado } : {}),
+    tom,
+    cenario,
+    ...(a.solo ? { soloOk: true as const } : {}),
+    ...(a.tutorial ? { tutorial: true as const } : {}),
+  };
 }
 
-/** Lista pública (para as páginas mandarem ao navegador), de um sistema ou de todos. */
+/** Lista pública (para as páginas mandarem ao navegador), de um sistema ou de todos. A tutorial vem primeiro (sort estável). */
 export function aventurasPublicas(sistemaId?: string): AventuraPublica[] {
-  return (sistemaId ? aventurasDoSistema(sistemaId) : AVENTURAS).map(aventuraPublica);
+  return (sistemaId ? aventurasDoSistema(sistemaId) : AVENTURAS).map(aventuraPublica).sort((a, b) => Number(Boolean(b.tutorial)) - Number(Boolean(a.tutorial)));
 }
+
+/** A aventura-tutorial (primeira vez na taverna), se houver. */
+export const aventuraTutorial = (): AventuraPublica | null => {
+  const a = AVENTURAS.find((x) => x.tutorial);
+  return a ? aventuraPublica(a) : null;
+};
 
 /**
  * A recompensa que vale para um sistema: o texto único, ou a entrada do sistema; sem entrada própria, a "padrao" (ou a

@@ -83,9 +83,11 @@ export type Aventura = {
   solo?: { aliado: string };
   /** Vampiro: como uma Pedra de Toque do personagem entra na trama (o horror pessoal precisa de um mortal para perder) */
   pedraEmJogo?: string;
+  /** Aventura-tutorial para quem abre a taverna pela primeira vez: aparece primeiro nas listas. */
+  tutorial?: true;
 };
 
 /** O que o navegador pode ver: sem abertura e sem roteiro (spoiler é crime na taverna). `soloOk` diz que roda com um só. */
-export type AventuraPublica = Pick<Aventura, "id" | "sistemas" | "titulo" | "chamada" | "duracao" | "recomendado" | "tom" | "cenario"> & {
+export type AventuraPublica = Pick<Aventura, "id" | "sistemas" | "titulo" | "chamada" | "duracao" | "recomendado" | "tom" | "cenario" | "tutorial"> & {
   soloOk?: true;
 };
