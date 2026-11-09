@@ -13,6 +13,8 @@ import { FixarSelecao } from "@/components/fatos/fixar-selecao";
 import { useFatos } from "@/components/fatos/use-fatos";
 import { emUsoPorOutroAparelho, ondeEsta, outroAparelhoCom } from "@/components/grupo/avatar";
 import { Codex, type AbaCodex } from "@/components/historia/codex";
+import { PessoasAqui } from "@/components/historia/pessoas-aqui";
+import { pessoasPresentes, textoDaCenaAtual } from "@/components/historia/pessoas-presentes";
 import { COR_GRAU, corDoNome, mapaDeNomes, NOME_GRAU } from "@/components/historia/cores";
 import { fonteGotica } from "@/components/historia/fonte-gotica";
 import { LinhaDado } from "@/components/historia/linha-dado";
@@ -93,6 +95,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   const fatos = useFatos(mesa.campanha.id);
   const [codexAberto, setCodexAberto] = useState(false);
   const [abaCodex, setAbaCodex] = useState<AbaCodex>("personagem");
+  const [pessoaFoco, setPessoaFoco] = useState<number | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [longeDoFim, setLongeDoFim] = useState(false);
   const [vistas, setVistas] = useState(estadoInicial.mensagens.length);
@@ -284,7 +287,11 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   // narração em voz alta: lê as narrações novas (com a leitura automática ligada) e cala ao sair da mesa
   useLeituraAutomatica(mesa.mensagens);
 
-  function abrirCodex(aba?: AbaCodex) {
+  // "Pessoas por aqui": NPCs do diário citados na narração da cena atual
+  const pessoasAqui = useMemo(() => pessoasPresentes(mesa.diario, textoDaCenaAtual(mesa.mensagens, mesa.aoVivo)), [mesa.diario, mesa.mensagens, mesa.aoVivo]);
+
+  function abrirCodex(aba?: AbaCodex, pessoa: number | null = null) {
+    setPessoaFoco(pessoa);
     if (aba) setAbaCodex(aba);
     setCodexAberto(true);
   }
@@ -728,6 +735,8 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
         }
       />
 
+      <PessoasAqui pessoas={pessoasAqui} aoAbrir={(id) => abrirCodex("pessoas", id)} />
+
       {/* aba do códex na borda esquerda (desktop largo): marcador de livro com o nome escrito na vertical */}
       {!codexAberto && (
         <button
@@ -745,7 +754,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
         </button>
       )}
 
-      <Codex mesa={mesa} acoes={acoes} fatos={fatos} aberto={codexAberto} aoFechar={fecharCodex} aba={abaCodex} aoMudarAba={setAbaCodex} aoEncerrar={aoEncerrar} aoRemorso={aoRemorso} novidades={novidadesAbas} />
+      <Codex mesa={mesa} acoes={acoes} fatos={fatos} aberto={codexAberto} aoFechar={fecharCodex} aba={abaCodex} aoMudarAba={setAbaCodex} aoEncerrar={aoEncerrar} aoRemorso={aoRemorso} novidades={novidadesAbas} pessoaFoco={pessoaFoco} />
       <EncerrarNoite mesa={mesa} acoes={acoes} aberto={encerrarAberto} aoFechar={fecharEncerrar} irParaMensagem={irParaMensagem} />
       <FixarSelecao controle={fatos} />
 

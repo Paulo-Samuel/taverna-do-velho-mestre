@@ -3,6 +3,7 @@ import { normalizarSexo, retratoDoNpc } from "../../../components/historia/retra
 // subtipo do aviso de diário: decide o ícone do chip em "o que mudou" (leitor/cena.ts)
 import type { SubtipoDiario } from "../../../components/leitor/cena";
 import { listarDiario, salvarEntradaDiario } from "../../db";
+import { ATITUDES, normalizarAtitude } from "../../atitude-npc";
 import { normalizar } from "../../sistemas/comum";
 import type { EntradaDiario, TipoDiario } from "../../sistemas/tipos";
 import { publicar } from "../../tempo-real";
@@ -32,6 +33,11 @@ export const DEF_ANOTAR_DIARIO: DefFerramenta = {
       desejo: { type: "string", description: "npc: o que ele quer de verdade." },
       temperamento: { type: "string", description: "npc: calmo, explosivo, desconfiado, bajulador..." },
       relacao: { type: "string", description: "npc: o que pensa do grupo agora." },
+      atitude: {
+        type: "string",
+        enum: [...ATITUDES],
+        description: "npc: humor diante do grupo AGORA (uma palavra da lista). Mande ao anotar alguém novo e atualize quando o humor mudar.",
+      },
       sexo: { type: "string", enum: ["homem", "mulher", "outro"], description: "npc: mande sempre ao anotar alguém novo (o retrato do códex sai daqui)." },
       oficio: { type: "string", description: "npc: ofício ou papel em poucas palavras (taverneira, guarda, padre, mercenário...); mande sempre ao anotar alguém novo." },
       objetivo: { type: "string", description: "missao: o que precisa ser feito." },
@@ -96,8 +102,13 @@ export const executoresDiario: Record<string, Executor> = {
     const e = ENTRADAS.anotar_diario.parse(entrada);
     const antes = listarDiario(ctx.campanha.id).find((x) => x.tipo === e.tipo && x.titulo.toLowerCase() === e.titulo.toLowerCase());
     // detalhes estruturados (personalidade do NPC, objetivo e pistas da missão) vão em `dados`
-    const campos = ["aparencia", "voz", "jeito", "desejo", "temperamento", "relacao", "sexo", "oficio", "objetivo", "recompensa", "pistas"] as const;
+    const campos = ["aparencia", "voz", "jeito", "desejo", "temperamento", "relacao", "atitude", "sexo", "oficio", "objetivo", "recompensa", "pistas"] as const;
     const dados: Record<string, unknown> = Object.fromEntries(campos.filter((c) => e[c] !== undefined && e[c] !== "").map((c) => [c, e[c]]));
+    if (dados.atitude !== undefined) {
+      const a = normalizarAtitude(dados.atitude);
+      if (!a) throw new Error(`atitude "${String(dados.atitude)}" não existe. Use uma destas: ${ATITUDES.join(", ")}.`);
+      dados.atitude = a;
+    }
     if (typeof dados.sexo === "string") dados.sexo = normalizarSexo(dados.sexo) ?? undefined;
     if (e.tipo === "npc") {
       // rosto do NPC: gerado uma vez (a semente é o nome); refeito só se o mestre mandar sexo ou ofício diferentes dos de antes

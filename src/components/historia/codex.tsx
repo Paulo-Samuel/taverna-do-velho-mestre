@@ -9,6 +9,7 @@ import { Convite } from "@/components/presenca/convite";
 import { MenuLeitura } from "@/components/leitor/menu-leitura";
 import type { AcoesMesa, Mesa } from "@/lib/cliente/use-mesa";
 import type { PersonagemVisivel } from "@/lib/mesa";
+import { rotuloDaAtitude } from "@/lib/atitude-npc";
 import type { BlocoFicha, EntradaDiario } from "@/lib/sistemas/tipos";
 import { AvisoAjuste, BotaoRemorso, BotoesMarcador, NotasJogador, useAjusteFicha, type AjusteFicha } from "@/components/ficha/ajuste-ficha";
 import { corDoNome } from "./cores";
@@ -289,13 +290,21 @@ function AbaMissoes({ entradas, fatos }: { entradas: EntradaDiario[]; fatos: Con
   );
 }
 
-function AbaPessoas({ entradas, fatos }: { entradas: EntradaDiario[]; fatos: ControleFatos }) {
+function AbaPessoas({ entradas, fatos, foco }: { entradas: EntradaDiario[]; fatos: ControleFatos; foco?: number | null }) {
+  // vindo da faixa "Pessoas por aqui": leva a pessoa à vista (a lista remonta ao trocar de aba)
+  useEffect(() => {
+    if (foco != null) document.getElementById(`codex-pessoa-${foco}`)?.scrollIntoView({ block: "center" });
+  }, [foco]);
   const npcs = entradas.filter((e) => e.tipo === "npc").sort((a, b) => Number(a.status === "morto") - Number(b.status === "morto"));
   if (!npcs.length) return <Vazio>Ninguém conhecido por enquanto.</Vazio>;
   return (
     <ul className="space-y-3">
       {npcs.map((n) => (
-        <li key={n.id} className={`flex gap-3 rounded-lg border border-border/80 bg-surface-2/60 p-3 ${n.status === "morto" ? "opacity-60" : ""}`}>
+        <li
+          key={n.id}
+          id={`codex-pessoa-${n.id}`}
+          className={`flex gap-3 rounded-lg border bg-surface-2/60 p-3 ${foco === n.id ? "border-ambar ring-1 ring-ambar" : "border-border/80"} ${n.status === "morto" ? "opacity-60" : ""}`}
+        >
           {/* rosto do NPC (salvo ao anotar; NPC antigo ganha o mesmo, gerado aqui pelo nome); morto fica em tons de cinza */}
           <RetratoSVG
             dados={retratoDaEntrada(n)}
@@ -323,6 +332,7 @@ function AbaPessoas({ entradas, fatos }: { entradas: EntradaDiario[]; fatos: Con
               <Campo rotulo="Jeito" valor={n.dados?.jeito} />
               <Campo rotulo="Desejo" valor={n.dados?.desejo} />
               <Campo rotulo="Temperamento" valor={n.dados?.temperamento} />
+              <Campo rotulo="Humor" valor={rotuloDaAtitude(n.dados?.atitude) ?? undefined} />
               <Campo rotulo="Relação" valor={n.dados?.relacao} />
             </div>
           </div>
@@ -453,6 +463,7 @@ export function Codex({
   aoEncerrar,
   aoRemorso,
   novidades,
+  pessoaFoco,
 }: {
   /** 🌙 Encerrar a noite: abre o diálogo do ritual (no celular o botão mora no pé do códex) */
   aoEncerrar?: () => void;
@@ -460,6 +471,8 @@ export function Codex({
   aoRemorso?: (mensagemId: number | null) => void;
   /** abas com anotações novas do mestre desde a última vez que o códex foi aberto */
   novidades?: Partial<Record<AbaCodex, number>>;
+  /** pessoa (id da entrada do diário) a destacar na aba Pessoas: o clique na faixa "Pessoas por aqui" */
+  pessoaFoco?: number | null;
   mesa: Mesa;
   acoes: AcoesMesa;
   /** fatos fixados (aba 📌 e o 📌 de cada entrada) */
@@ -579,7 +592,7 @@ export function Codex({
         >
           {aba === "personagem" && <AbaPersonagem mesa={mesa} p={ativo} aoRemorso={aoRemorso} />}
           {aba === "missoes" && <AbaMissoes entradas={mesa.diario} fatos={fatos} />}
-          {aba === "pessoas" && <AbaPessoas entradas={mesa.diario} fatos={fatos} />}
+          {aba === "pessoas" && <AbaPessoas entradas={mesa.diario} fatos={fatos} foco={pessoaFoco} />}
           {aba === "lugares" && <AbaLugares mesa={mesa} fatos={fatos} />}
           {aba === "grupo" && <AbaGrupo mesa={mesa} acoes={acoes} />}
           {aba === "fatos" && <PainelFatos controle={fatos} />}

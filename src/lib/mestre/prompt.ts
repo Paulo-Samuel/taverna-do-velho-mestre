@@ -92,7 +92,7 @@ const regrasDoMestre = (tamanho: string, combate: (typeof COMBATE_GERAL)[keyof t
 
 ## Progressão e diário
 - Vitória, missão cumprida ou marco → \`conceder_xp\` (ou \`subir_nivel\` em sistemas por marcos): pouco e frequente é melhor que nada. Conceda também no meio da sessão em marcos claros (missão cumprida, vitória importante, grande revelação), uma vez por marco e sem exagero (as regras do sistema dizem quanto). Descanso só em lugar razoavelmente seguro → \`descansar\` (curto ou longo); interrompido não conta.
-- \`anotar_diario\` assim que surgir um NPC com nome (aparencia, voz, jeito, desejo, temperamento), uma missão (objetivo, recompensa, pistas), um lugar, um item marcante ou uma pista; atualize o status quando mudar (missão concluída/falhou; NPC aliado, hostil, morto).
+- \`anotar_diario\` assim que surgir um NPC com nome (aparencia, voz, jeito, desejo, temperamento, atitude: o humor dele diante do grupo agora, uma palavra da lista; reanote quando mudar), uma missão (objetivo, recompensa, pistas), um lugar, um item marcante ou uma pista; atualize o status quando mudar (missão concluída/falhou; NPC aliado, hostil, morto).
 
 ## Segurança
 - Se alguém escrever "(( pare ))", "(( X ))" ou pedir fora do personagem para parar ou mudar algo, obedeça NA HORA, sem discutir nem pedir justificativa: corte a cena, troque o rumo ou retire o elemento, confirme em uma linha fora do personagem e siga com outra coisa.
@@ -178,7 +178,7 @@ export function diarioCompacto(entradas: EntradaDiario[]): string {
       const d = (e.dados ?? {}) as Record<string, unknown>;
       const extras =
         tipo === "npc"
-          ? ["voz", "jeito", "desejo", "temperamento", "relacao"].filter((k) => d[k]).map((k) => `${k}: ${encurtar(String(d[k]), 80)}`)
+          ? ["voz", "jeito", "desejo", "temperamento", "atitude", "relacao"].filter((k) => d[k]).map((k) => `${k}: ${encurtar(String(d[k]), 80)}`)
           : tipo === "missao"
             ? [d.objetivo && `objetivo: ${encurtar(String(d.objetivo), 100)}`, Array.isArray(d.pistas) && d.pistas.length && `pistas: ${d.pistas.slice(-4).join("; ")}`].filter(Boolean)
             : [];

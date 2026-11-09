@@ -147,6 +147,7 @@ export const ENTRADAS = {
     desejo: z.string().max(300).optional(),
     temperamento: z.string().max(100).optional(),
     relacao: z.string().max(200).optional(),
+    atitude: z.string().max(30).optional(),
     sexo: z.string().max(20).optional(),
     oficio: z.string().max(80).optional(),
     objetivo: z.string().max(300).optional(),
