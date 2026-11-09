@@ -18,6 +18,7 @@ import {
   WebGLRenderer,
 } from "three";
 import { DIRECAO_CAMERA, facesD20, rotacaoParaFace } from "./geometria";
+import { aparenciaPorId, type Aparencia } from "./aparencias";
 import { desenharAtlas, uvDaCelula } from "./textura";
 
 // Cena WebGL do d20: renderer com fundo transparente, luz quente de vela e a física de mentira do dado
@@ -32,6 +33,8 @@ export type CenaDado = {
   /** mostra a face sem animação (null = pose neutra, de quina, sem face de frente) */
   mostrar(valor: number | null): void;
   destacar(destaque: "critico" | "falha" | null): void;
+  /** troca o acabamento: cria o atlas do novo sob demanda e libera o anterior */
+  aparencia(id: string): void;
   redimensionar(tamanho: number): void;
   destruir(): void;
 };
@@ -79,7 +82,7 @@ function texturaSombra(): CanvasTexture {
 }
 
 /** cria a cena dentro de `container` (o canvas é criado aqui e removido no destruir). Lança erro sem WebGL. */
-export function criarCena(container: HTMLElement, aoPerderContexto: () => void): CenaDado {
+export function criarCena(container: HTMLElement, aoPerderContexto: () => void, aparenciaInicial?: string): CenaDado {
   const renderer = new WebGLRenderer({ alpha: true, antialias: true, powerPreference: "low-power" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setClearColor(0x000000, 0);
@@ -131,17 +134,21 @@ export function criarCena(container: HTMLElement, aoPerderContexto: () => void):
   geometria.setAttribute("normal", new Float32BufferAttribute(normais, 3));
   geometria.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
 
-  const atlas = new CanvasTexture(desenharAtlas(faces.map((f) => f.numero)));
-  atlas.colorSpace = SRGBColorSpace;
-  atlas.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  const numerosDasFaces = faces.map((f) => f.numero);
+  const anisotropia = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  let ap: Aparencia = aparenciaPorId(aparenciaInicial);
+  function criarAtlas(a: Aparencia): CanvasTexture {
+    const t = new CanvasTexture(desenharAtlas(numerosDasFaces, a));
+    t.colorSpace = SRGBColorSpace;
+    t.anisotropy = anisotropia;
+    return t;
+  }
+  let atlas = criarAtlas(ap);
 
   // resina âmbar polida: verniz (clearcoat) por cima dá o brilho de dado de verdade
   const material = new MeshPhysicalMaterial({
     map: atlas,
-    roughness: 0.42,
-    metalness: 0.08,
-    clearcoat: 0.8,
-    clearcoatRoughness: 0.22,
+    ...ap.material,
     emissive: new Color(0x000000),
   });
   const dado = new Mesh(geometria, material);
@@ -329,6 +336,20 @@ export function criarCena(container: HTMLElement, aoPerderContexto: () => void):
     return null;
   }
 
+  let destaqueAtual: "critico" | "falha" | null = null;
+  function aplicarDestaque() {
+    if (destaqueAtual === "critico") {
+      material.emissive.setHex(ap.brilhoCritico);
+      material.emissiveIntensity = 0.55;
+    } else if (destaqueAtual === "falha") {
+      material.emissive.setHex(ap.brilhoFalha);
+      material.emissiveIntensity = 0.6;
+    } else {
+      material.emissive.setHex(0x000000);
+      material.emissiveIntensity = 1;
+    }
+  }
+
   return {
     rolar() {
       pedido = null;
@@ -384,16 +405,21 @@ export function criarCena(container: HTMLElement, aoPerderContexto: () => void):
     },
 
     destacar(destaque) {
-      if (destaque === "critico") {
-        material.emissive.setHex(0x7a4c08);
-        material.emissiveIntensity = 0.55;
-      } else if (destaque === "falha") {
-        material.emissive.setHex(0x6a0e06);
-        material.emissiveIntensity = 0.6;
-      } else {
-        material.emissive.setHex(0x000000);
-        material.emissiveIntensity = 1;
-      }
+      destaqueAtual = destaque;
+      aplicarDestaque();
+      if (!quadroId) desenhar();
+    },
+
+    aparencia(id) {
+      const nova = aparenciaPorId(id);
+      if (destruido || nova.id === ap.id) return;
+      const anterior = atlas;
+      ap = nova;
+      atlas = criarAtlas(nova);
+      material.map = atlas;
+      Object.assign(material, nova.material);
+      aplicarDestaque();
+      anterior.dispose();
       if (!quadroId) desenhar();
     },
 

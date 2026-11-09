@@ -1024,7 +1024,7 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
                   data-ir-para-dado
                 >
                   <span className="min-w-0 text-ambar">
-                    <Icone nome="dice" />
+                    <Icone nome="dice" className="mr-1.5" />
                     Role o dado primeiro: o mestre não aceita fiado.
                   </span>
                   <span className="shrink-0 rounded-md bg-ambar px-3 py-1.5 text-xs font-semibold text-[#1a120c] transition group-hover:bg-[#f0b762]">Ir para o dado ↑</span>

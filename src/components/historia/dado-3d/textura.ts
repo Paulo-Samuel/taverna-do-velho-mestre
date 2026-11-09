@@ -1,3 +1,5 @@
+import { type Aparencia, aparenciaPorId } from "./aparencias";
+
 // Atlas de texturas do d20: uma célula por face (5 colunas × 4 linhas), cada uma com o triângulo da face,
 // borda dourada e o número em osso. A geometria usa `uvDaCelula` para mapear cada face na sua célula.
 
@@ -38,7 +40,8 @@ export function uvDaCelula(indice: number): [number, number][] {
 }
 
 /** desenha o atlas; `numeros[i]` é o número da face que usa a célula i */
-export function desenharAtlas(numeros: number[]): HTMLCanvasElement {
+export function desenharAtlas(numeros: number[], aparencia: Aparencia = aparenciaPorId(null)): HTMLCanvasElement {
+  const A = aparencia;
   const canvas = document.createElement("canvas");
   canvas.width = CELULA * COLUNAS;
   canvas.height = CELULA * LINHAS;
@@ -46,7 +49,7 @@ export function desenharAtlas(numeros: number[]): HTMLCanvasElement {
   if (!ctx) return canvas;
 
   // fundo dourado: o que vazar das bordas no mipmap continua parecendo aresta de ouro
-  ctx.fillStyle = CORES.ouroEscuro;
+  ctx.fillStyle = A.fundo;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   numeros.forEach((numero, i) => {
@@ -64,9 +67,9 @@ export function desenharAtlas(numeros: number[]): HTMLCanvasElement {
 
     // resina âmbar escura com luz por dentro (mais clara no centro, escura nos cantos)
     const brilho = ctx.createRadialGradient(centroX, centroY - 10, 6, centroX, centroY, ALTURA * 0.75);
-    brilho.addColorStop(0, CORES.resinaClara);
-    brilho.addColorStop(0.55, CORES.resina);
-    brilho.addColorStop(1, CORES.resinaEscura);
+    brilho.addColorStop(0, A.corpo.clara);
+    brilho.addColorStop(0.55, A.corpo.media);
+    brilho.addColorStop(1, A.corpo.escura);
     triangulo();
     ctx.fillStyle = brilho;
     ctx.fill();
@@ -85,7 +88,7 @@ export function desenharAtlas(numeros: number[]): HTMLCanvasElement {
       const y = centroY + (aleatorio() - 0.5) * ALTURA * 0.8;
       const r = 14 + aleatorio() * 34;
       const mancha = ctx.createRadialGradient(x, y, 0, x, y, r);
-      mancha.addColorStop(0, aleatorio() > 0.5 ? "rgba(255, 210, 140, 0.10)" : "rgba(20, 8, 0, 0.18)");
+      mancha.addColorStop(0, aleatorio() > 0.5 ? A.veioClaro : A.veioEscuro);
       mancha.addColorStop(1, "rgba(0, 0, 0, 0)");
       ctx.fillStyle = mancha;
       ctx.fillRect(x - r, y - r, r * 2, r * 2);
@@ -95,10 +98,10 @@ export function desenharAtlas(numeros: number[]): HTMLCanvasElement {
     // borda dourada: traço grosso centrado na aresta (metade fica dentro da face) + filete claro
     triangulo();
     ctx.lineJoin = "round";
-    ctx.strokeStyle = CORES.ouro;
+    ctx.strokeStyle = A.borda;
     ctx.lineWidth = 14;
     ctx.stroke();
-    ctx.strokeStyle = "rgba(255, 236, 190, 0.55)";
+    ctx.strokeStyle = A.filete;
     ctx.lineWidth = 3;
     ctx.save();
     triangulo();
@@ -118,17 +121,17 @@ export function desenharAtlas(numeros: number[]): HTMLCanvasElement {
     ctx.textBaseline = "middle";
     const y = centroY + 4;
     ctx.lineWidth = 8;
-    ctx.strokeStyle = CORES.contorno;
+    ctx.strokeStyle = A.contorno;
     ctx.strokeText(texto, centroX, y);
-    ctx.fillStyle = numero === 20 ? CORES.ouro : numero === 1 ? "#d9583f" : CORES.osso;
+    ctx.fillStyle = numero === 20 ? A.critico : numero === 1 ? A.falha : A.numero;
     ctx.fillText(texto, centroX, y);
 
     // ponto sob o 6 e o 9 para não confundir os dois
     if (numero === 6 || numero === 9) {
       ctx.beginPath();
       ctx.arc(centroX, y + fonte * 0.52, 6, 0, Math.PI * 2);
-      ctx.fillStyle = CORES.osso;
-      ctx.strokeStyle = CORES.contorno;
+      ctx.fillStyle = A.numero;
+      ctx.strokeStyle = A.contorno;
       ctx.lineWidth = 4;
       ctx.stroke();
       ctx.fill();

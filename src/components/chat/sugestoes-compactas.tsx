@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { SugestaoAcao } from "@/lib/sistemas/tipos";
+import { descricaoDoTeste, tipoDoTeste } from "@/components/historia/tipo-teste";
 
 // Ações sugeridas pelo mestre no rodapé das duas mesas, sem engolir o palco.
 // Desktop (tela larga E alta, variante `largo:` de globals.css): uma linha baixa por sugestão, com o número do atalho (1, 2, 3), o
@@ -114,11 +115,32 @@ export function SugestoesCompactas({
                 ➶
               </span>
               <span className="min-w-0 flex-1 leading-snug text-foreground/85 group-hover:text-foreground largo:truncate">{s.texto}</span>
-              {s.pericia && <span className="shrink-0 text-xs italic text-muted group-hover:text-ambar/90">{s.pericia}</span>}
+              <Teste pericia={s.pericia} />
             </button>
           </li>
         ))}
       </ul>
     </div>
+  );
+}
+
+// Tipo de teste da sugestão: o texto da perícia mais um selo com o tipo (em texto, a cor nunca é a única pista).
+// Sem perícia, nada; perícia que não se reconhece fica como era (itálico discreto), sem tipo inventado.
+function Teste({ pericia }: { pericia?: string }) {
+  if (!pericia) return null;
+  const info = tipoDoTeste(pericia);
+  if (!info) return <span className="shrink-0 text-xs italic text-muted group-hover:text-ambar/90">{pericia}</span>;
+  return (
+    <span className="flex max-w-[45%] shrink-0 items-center gap-1.5 text-xs">
+      <span className="sr-only">{descricaoDoTeste(pericia, info)}</span>
+      {info.tipo !== "semrolagem" && (
+        <span className="truncate italic text-muted group-hover:text-ambar/90" aria-hidden>
+          {pericia}
+        </span>
+      )}
+      <span className={`shrink-0 whitespace-nowrap rounded border px-1.5 py-px text-[11px] font-medium leading-4 ${info.classe}`} aria-hidden>
+        {info.rotulo}
+      </span>
+    </span>
   );
 }

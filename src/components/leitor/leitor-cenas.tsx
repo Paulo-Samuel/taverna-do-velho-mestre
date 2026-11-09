@@ -652,7 +652,14 @@ export function LeitorCenas({
                   }
                   data-continuar={aoDado ? "dado" : "pagina"}
                 >
-                  <span>{aoDado ? "continuar para o dado" : "continuar"}</span>
+                  {aoDado ? (
+                    <>
+                      <span className="max-sm:hidden">continuar para o dado</span>
+                      <span className="sm:hidden">ir ao dado</span>
+                    </>
+                  ) : (
+                    <span>continuar</span>
+                  )}
                   <span aria-hidden className="leitor-chamar inline-block text-base leading-none">
                     ▸
                   </span>

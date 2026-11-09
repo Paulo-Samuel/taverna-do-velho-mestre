@@ -2,6 +2,15 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { CenaDado } from "./dado-3d/cena";
+import {
+  APARENCIAS,
+  APARENCIA_PADRAO,
+  aparenciaAtual,
+  aparenciaPorId,
+  assinarAparencia,
+  escolherAparencia,
+  type Aparencia,
+} from "./dado-3d/aparencias";
 
 // Dado d20 em 3D rolado pelo jogador. O three.js é carregado sob demanda (import() no efeito); sem WebGL,
 // ou enquanto carrega, aparece um d20 desenhado em SVG. Com "reduzir movimento" o dado não gira: só mostra a face.
@@ -37,6 +46,11 @@ function usePrefereMenosMovimento(): boolean {
   );
 }
 
+function useAparencia(): string {
+  // servidor e primeira pintura: o padrão; o navegador lê a escolha guardada sem quebrar a hidratação
+  return useSyncExternalStore(assinarAparencia, aparenciaAtual, () => APARENCIA_PADRAO);
+}
+
 export function Dado3D({ valor, rolando, tamanho = 140, destaque = null, aoParar }: PropsDado3D) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cenaRef = useRef<CenaDado | null>(null);
@@ -48,6 +62,9 @@ export function Dado3D({ valor, rolando, tamanho = 140, destaque = null, aoParar
 
   const [modo, setModo] = useState<Modo>("carregando");
   const reduzido = usePrefereMenosMovimento();
+  const idAparencia = useAparencia();
+  const idAparenciaRef = useRef(idAparencia);
+  const [seletorAberto, setSeletorAberto] = useState(false);
   const girando = rolando || valor === null;
 
   // valor em que a animação terminou; zera a cada rodada nova (estado derivado das props, padrão do React)
@@ -72,10 +89,14 @@ export function Dado3D({ valor, rolando, tamanho = 140, destaque = null, aoParar
       .then(({ criarCena }) => {
         if (cancelado || !containerRef.current) return;
         try {
-          cena = criarCena(containerRef.current, () => {
-            cenaRef.current = null;
-            setModo("plano");
-          });
+          cena = criarCena(
+            containerRef.current,
+            () => {
+              cenaRef.current = null;
+              setModo("plano");
+            },
+            idAparenciaRef.current,
+          );
         } catch {
           setModo("plano");
           return;
@@ -92,6 +113,12 @@ export function Dado3D({ valor, rolando, tamanho = 140, destaque = null, aoParar
       cenaRef.current = null;
     };
   }, []);
+
+  // troca de acabamento sem recarregar: a cena cria o atlas novo e libera o antigo
+  useEffect(() => {
+    idAparenciaRef.current = idAparencia;
+    if (modo === "3d") cenaRef.current?.aparencia(idAparencia);
+  }, [modo, idAparencia]);
 
   useEffect(() => {
     if (modo === "3d") cenaRef.current?.redimensionar(tamanho);
@@ -167,11 +194,22 @@ export function Dado3D({ valor, rolando, tamanho = 140, destaque = null, aoParar
       />
       <div ref={containerRef} aria-hidden="true" className="absolute inset-0" />
       {modo !== "3d" && (
-        <DadoPlano numero={numeroPlano} girar={girarPlano} destaque={brilho} />
+        <DadoPlano numero={numeroPlano} girar={girarPlano} destaque={brilho} aparencia={aparenciaPorId(idAparencia)} />
       )}
       <span className="sr-only" aria-live="polite" aria-atomic="true">
         {anuncio}
       </span>
+      {tamanho >= 96 && (
+        <SeletorAparencia
+          atual={idAparencia}
+          aberto={seletorAberto}
+          aoAlternar={() => setSeletorAberto((v) => !v)}
+          aoEscolher={(id) => {
+            escolherAparencia(id);
+            setSeletorAberto(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -181,12 +219,27 @@ function DadoPlano({
   numero,
   girar,
   destaque,
+  aparencia,
 }: {
   numero: number | null;
   girar: boolean;
   destaque: "critico" | "falha" | null;
+  aparencia: Aparencia;
 }) {
-  const corNumero = destaque === "critico" ? "var(--ambar)" : destaque === "falha" ? "var(--sangue)" : "var(--pergaminho)";
+  const padrao = aparencia.id === APARENCIA_PADRAO;
+  const corNumero = padrao
+    ? destaque === "critico"
+      ? "var(--ambar)"
+      : destaque === "falha"
+        ? "var(--sangue)"
+        : "var(--pergaminho)"
+    : destaque === "critico"
+      ? aparencia.critico
+      : destaque === "falha"
+        ? aparencia.falha
+        : aparencia.numero;
+  const contorno = padrao ? "var(--ambar)" : aparencia.borda;
+  const traco = padrao ? "var(--ambar-forte)" : aparencia.borda;
   return (
     <svg
       viewBox="0 0 100 100"
@@ -195,13 +248,13 @@ function DadoPlano({
     >
       <polygon
         points="50,4 90,27 90,73 50,96 10,73 10,27"
-        fill="#3a2210"
-        stroke="var(--ambar)"
+        fill={padrao ? "#3a2210" : aparencia.corpo.escura}
+        stroke={contorno}
         strokeWidth="2.5"
         strokeLinejoin="round"
       />
-      <polygon points="50,22 76,66 24,66" fill="#5a3517" stroke="var(--ambar)" strokeWidth="1.6" strokeLinejoin="round" />
-      <g stroke="var(--ambar-forte)" strokeWidth="1.2" opacity="0.8">
+      <polygon points="50,22 76,66 24,66" fill={padrao ? "#5a3517" : aparencia.corpo.media} stroke={contorno} strokeWidth="1.6" strokeLinejoin="round" />
+      <g stroke={traco} strokeWidth="1.2" opacity="0.8">
         <line x1="50" y1="4" x2="50" y2="22" />
         <line x1="90" y1="27" x2="76" y2="66" />
         <line x1="10" y1="27" x2="24" y2="66" />
@@ -222,7 +275,7 @@ function DadoPlano({
           fontWeight="700"
           fontFamily='"Palatino Linotype", "Book Antiqua", Palatino, "Times New Roman", serif'
           fill={corNumero}
-          stroke="#1d1007"
+          stroke={aparencia.contorno}
           strokeWidth="0.8"
           paintOrder="stroke"
         >
@@ -230,8 +283,60 @@ function DadoPlano({
         </text>
       )}
       {(numero === 6 || numero === 9) && (
-        <circle cx="50" cy="62.5" r="1.7" fill="var(--pergaminho)" stroke="#1d1007" strokeWidth="0.6" />
+        <circle cx="50" cy="62.5" r="1.7" fill={padrao ? "var(--pergaminho)" : aparencia.numero} stroke={aparencia.contorno} strokeWidth="0.6" />
       )}
     </svg>
+  );
+}
+
+/** botão pequeno no canto do dado; abre uma grade de amostras dentro do próprio quadro (sem estourar a largura no celular) */
+function SeletorAparencia({
+  atual,
+  aberto,
+  aoAlternar,
+  aoEscolher,
+}: {
+  atual: string;
+  aberto: boolean;
+  aoAlternar: () => void;
+  aoEscolher: (id: string) => void;
+}) {
+  const ap = aparenciaPorId(atual);
+  const amostra = (a: Aparencia) => ({
+    background: `radial-gradient(circle at 35% 30%, ${a.corpo.clara}, ${a.corpo.media} 55%, ${a.corpo.escura})`,
+    borderColor: a.borda,
+  });
+  return (
+    <>
+      {aberto && (
+        <div
+          role="group"
+          aria-label="Acabamento do d20"
+          className="absolute inset-x-0 bottom-9 z-10 mx-auto grid w-max max-w-full grid-cols-3 gap-1.5 rounded-lg border border-white/15 bg-black/80 p-1.5 backdrop-blur-sm"
+        >
+          {APARENCIAS.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              title={a.nome}
+              aria-label={a.nome}
+              aria-pressed={a.id === atual}
+              onClick={() => aoEscolher(a.id)}
+              className={`h-8 w-8 rounded-full border-2 ${a.id === atual ? "ring-2 ring-white" : ""}`}
+              style={amostra(a)}
+            />
+          ))}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={aoAlternar}
+        aria-label={`Acabamento do dado: ${ap.nome}. Trocar`}
+        aria-expanded={aberto}
+        title="Acabamento do dado"
+        className="absolute bottom-0 right-0 z-10 h-7 w-7 rounded-full border-2 opacity-70 hover:opacity-100 focus-visible:opacity-100"
+        style={amostra(ap)}
+      />
+    </>
   );
 }

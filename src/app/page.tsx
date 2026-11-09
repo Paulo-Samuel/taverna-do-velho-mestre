@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { aventurasPublicas, type AventuraPublica } from "@/lib/aventuras";
-import { listarCampanhas, listarMensagens, listarPersonagens, type Campanha, type Personagem } from "@/lib/db";
+import { listarCampanhas, listarDiario, listarMensagens, listarPersonagens, type Campanha, type Personagem } from "@/lib/db";
+import { contarMissoes } from "@/lib/progresso-missoes";
 import { resumoDasNoites, type ResumoNoites } from "@/lib/mesa";
 import { lerAjustesMestre, provedorAtual } from "@/lib/mestre";
 import { obterSistema } from "@/lib/sistemas";
@@ -126,6 +127,10 @@ const nomeDaClasse = (c: CampanhaListada, p: Personagem) => c.sistema.classes.fi
 function Continuar({ c }: { c: CampanhaListada }) {
   const trecho = ondeParou(c.id);
   const herois = c.personagens.map((p) => p.ficha.nome).filter(Boolean);
+  const missoes = contarMissoes(listarDiario(c.id));
+  const noite = c.noites.ultima?.numero;
+  const feitas = missoes.total > 0 ? Math.round((missoes.concluidas / missoes.total) * 100) : 0;
+  const textoMissoes = `${missoes.abertas} ${missoes.abertas === 1 ? "missão em aberto" : "missões em aberto"}`;
   return (
     <section
       aria-labelledby="continuar-titulo"
@@ -142,6 +147,29 @@ function Continuar({ c }: { c: CampanhaListada }) {
         <Etiquetas c={c} />
       </div>
       {herois.length > 0 && <p className="mt-3 truncate text-sm text-muted">Com {herois.join(", ")}</p>}
+      {(noite != null || missoes.total > 0) && (
+        <div className="mt-3 text-xs text-muted">
+          <p>
+            {noite != null && <span className="text-foreground/90">Noite {noite}</span>}
+            {noite != null && missoes.total > 0 && " · "}
+            {missoes.total > 0 && textoMissoes}
+          </p>
+          {missoes.total > 0 && (
+            <div
+              role="progressbar"
+              aria-label="Missões concluídas"
+              aria-valuemin={0}
+              aria-valuemax={missoes.total}
+              aria-valuenow={missoes.concluidas}
+              aria-valuetext={`${missoes.concluidas} de ${missoes.total} missões concluídas`}
+              title={`${missoes.concluidas} de ${missoes.total} missões concluídas`}
+              className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-2"
+            >
+              <div className="h-full bg-ambar" style={{ width: `${feitas}%` }} />
+            </div>
+          )}
+        </div>
+      )}
       {trecho ? (
         <blockquote className="mt-3 line-clamp-4 border-l-2 border-ambar-forte/60 pl-3 text-[15px] italic leading-relaxed text-foreground/90">
           {trecho}
@@ -150,7 +178,7 @@ function Continuar({ c }: { c: CampanhaListada }) {
         c.cenario && <p className="mt-3 line-clamp-3 text-sm text-muted">{c.cenario}</p>
       )}
       <div className="mt-5 flex flex-wrap gap-2">
-        <Link href={`/mesa/${c.id}`} className="btn-ambar min-h-11 flex-1 sm:flex-none sm:px-8">
+        <Link href={`/mesa/${c.id}`} className="btn-ambar min-h-11 basis-full whitespace-nowrap sm:basis-auto sm:px-8">
           Continuar a história
         </Link>
         <Link href={`/mesa/${c.id}/ajustes`} className="btn-borda min-h-11 px-4">
