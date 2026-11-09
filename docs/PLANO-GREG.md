@@ -71,8 +71,8 @@ crédito). Se o Paulo mostrar essas telas, entram como pacotes G07+.
 
 ### Ideias novas (REA, 08/11) — só nomes e rotas vistos no bundle, nada de como funcionam por dentro
 
-- **G07. Desfazer / refazer rodada** (Opus): botão para voltar o último turno ou pedir outra resposta do mestre. Conferir antes o que já existe.
-- **G08. Exportar a campanha** em PDF ou texto (noites, NPCs, missões do diário). Sonnet.
+- **G07. Desfazer / refazer rodada:** JÁ EXISTE (rota `desfazer`, botões Desfazer / Outra resposta / Reabrir a noite em `acoes-turno.tsx`). Descartado.
+- **G08. Exportar a campanha:** JÁ EXISTE (livro em `/mesa/[id]/livro` com Imprimir/salvar PDF, Markdown em `/api/campanhas/[id]/livro`, JSON em `/exportar`). Descartado.
 - **G09. Galeria de retratos prontos** (arquétipos em SVG) na criação do herói. Depois do G06. Sonnet.
 - **G10. Cenários iniciais por mundo**: entra dentro do G06, sem pacote próprio.
 - **G11. Campanha demo/tutorial** de ~10 min para primeiro uso. Opus (texto) + 1 jogada real.
@@ -81,7 +81,7 @@ crédito). Se o Paulo mostrar essas telas, entram como pacotes G07+.
 - **Fork de campanha:** grande, mexe no banco; avaliar depois do G07.
 - **Fora:** créditos, indicação, push, consentimento de IA/denúncia, pixels, música em streaming, selo de app.
 
-Ordem sugerida: onda B (G01→G02), onda D (G07, G08), onda C (G06 + G10), depois G09, G11, G13.
+Ordem sugerida: onda B (G01→G02), onda C (G06 + G10), depois G09, G11, G13.
 
 ## Ordem e paralelismo
 
