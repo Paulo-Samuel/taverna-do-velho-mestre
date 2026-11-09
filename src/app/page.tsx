@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { aventurasPublicas, type AventuraPublica } from "@/lib/aventuras";
+import { aventurasPublicas } from "@/lib/aventuras";
 import { listarCampanhas, listarDiario, listarMensagens, listarPersonagens, type Campanha, type Personagem } from "@/lib/db";
 import { contarMissoes } from "@/lib/progresso-missoes";
 import { resumoDasNoites, type ResumoNoites } from "@/lib/mesa";
@@ -9,6 +9,8 @@ import { dadosDoTema, temaDoSistema } from "@/lib/temas";
 import { excluirCampanhaAcao } from "./acoes-campanha";
 import { BotaoExcluir } from "./botao-excluir";
 import { Icone } from "@/components/icones";
+import { CapaAventura } from "@/components/aventuras/capa-aventura";
+import { linkDaAventura } from "@/lib/aventuras/link";
 
 export const dynamic = "force-dynamic";
 
@@ -209,12 +211,6 @@ function MestreCompacto({ nome, aviso }: { nome: string; aviso: string }) {
   );
 }
 
-/** Link que abre a criação já com a aventura marcada: modo história ou avançado no sistema dela. */
-function linkDaAventura(a: AventuraPublica): string {
-  const sistema = a.sistemas[0];
-  return sistema === "historia" ? `/nova?aventura=${a.id}` : `/nova/avancada?sistema=${sistema}&aventura=${a.id}`;
-}
-
 /** Faixa discreta de aventuras prontas: cartões pequenos com o tema de cada sistema, rolando de lado. */
 function AventurasProntas() {
   // o modo história (o padrão) vem primeiro; o resto na ordem do catálogo de aventuras
@@ -225,7 +221,10 @@ function AventurasProntas() {
         <h2 id="aventuras-titulo" className="titulo text-2xl text-pergaminho">
           Aventuras prontas
         </h2>
-        <p className="text-sm text-muted">Sem ideia? Escolha uma: o mestre já chega com o roteiro decorado (e com os segredos que você não vai ler).</p>
+        <Link href="/aventuras" className="inline-flex min-h-11 items-center text-sm text-ambar hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ambar">
+          Ver todas →
+        </Link>
+        <p className="basis-full text-sm text-muted">Sem ideia? Escolha uma: o mestre já chega com o roteiro decorado (e com os segredos que você não vai ler).</p>
       </div>
       <ul className="-mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-3" aria-label="Aventuras prontas">
         {lista.map((a) => {
@@ -236,8 +235,10 @@ function AventurasProntas() {
               <Link
                 href={linkDaAventura(a)}
                 data-tema={temaDoSistema(sistema)}
-                className="cartao cartao-tema group flex h-full flex-col p-4 transition hover:border-ambar"
+                className="cartao cartao-tema group flex h-full flex-col overflow-hidden transition hover:border-ambar focus-visible:outline-2 focus-visible:outline-ambar"
               >
+                <CapaAventura id={a.id} sistema={sistema} className="max-h-24" />
+                <span className="flex flex-1 flex-col p-4">
                 <span className="etiqueta w-fit text-ambar-forte">
                   <span aria-hidden>{sistema === "historia" ? <Icone nome="scroll" /> : tema.ornamento}</span> {sistema === "historia" ? "Modo história" : obterSistema(sistema).nomeCurto}
                 </span>
@@ -252,6 +253,7 @@ function AventurasProntas() {
                   )}
                 </span>
                 {a.recomendado && <span className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted/70">{a.recomendado}</span>}
+                </span>
               </Link>
             </li>
           );
