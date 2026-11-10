@@ -7,6 +7,7 @@ import { finalDaChave, listarModelosApi } from "@/lib/mestre/provedor-api";
 import { montarDiagnostico } from "@/lib/diagnostico";
 import { portaAtual } from "@/lib/rede/enderecos";
 import { ehDestaMaquina } from "@/lib/rede/local";
+import { CabecalhoPagina } from "@/components/cabecalho-pagina";
 import { PainelPreferencias } from "@/components/config/painel-preferencias";
 import { FormularioConfig, SecaoDiagnostico, type PadroesEnv } from "./formulario";
 
@@ -59,12 +60,16 @@ export default async function PaginaConfig() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 sm:py-10">
-      <h1 className="titulo text-3xl text-pergaminho sm:text-4xl">Configurações</h1>
-      <p className="mt-2 max-w-2xl text-muted">
-        Quem senta na cadeira do mestre e quanto isso custa. Nada aqui sai desta máquina: fica gravado no banco local, e campo vazio
-        volta a valer o <code className="text-ambar">.env.local</code>.
-      </p>
-      <p className="mt-4 text-sm text-muted">
+      <CabecalhoPagina
+        titulo="Configurações"
+        subtitulo={
+          <>
+            Quem senta na cadeira do mestre e quanto isso custa. Nada aqui sai desta máquina: fica gravado no banco local, e campo
+            vazio volta a valer o <code className="text-ambar">.env.local</code>.
+          </>
+        }
+      />
+      <p className="text-sm text-muted">
         Mestrando agora: <span className="text-ambar">{mestrando}</span>
       </p>
       {problema && <p className="mt-2 text-sm text-sangue">{problema}</p>}

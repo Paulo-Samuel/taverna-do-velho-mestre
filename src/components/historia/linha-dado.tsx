@@ -55,14 +55,14 @@ function LinhaFicha({ r, m }: { r: Dados; m: Mensagem }) {
   if (delta < 0)
     partes.push(
       <span key="pv">
-        <Nome nome={r.personagem} /> perdeu <span className="not-italic font-semibold text-[#f28b82]">{-delta}</span> de Vida
+        <Nome nome={r.personagem} /> perdeu <span className="not-italic font-semibold text-[color:var(--grau-falha,#f28b82)]">{-delta}</span> de Vida
         {pvMax !== null && ` (${pv}/${pvMax})`}
       </span>,
     );
   else if (delta > 0)
     partes.push(
       <span key="pv">
-        <Nome nome={r.personagem} /> recuperou <span className="not-italic font-semibold text-[#9ad4a0]">{delta}</span> de Vida
+        <Nome nome={r.personagem} /> recuperou <span className="not-italic font-semibold text-[color:var(--grau-sucesso,#9ad4a0)]">{delta}</span> de Vida
         {pvMax !== null && ` (${pv}/${pvMax})`}
       </span>,
     );
@@ -146,7 +146,7 @@ function LinhaDescanso({ r }: { r: Dados }) {
 function LinhaDiario({ r, m }: { r: Dados; m: Mensagem }) {
   const titulo = r.entrada?.titulo;
   const rot = String(r.rotulo ?? "");
-  const tom = /conclu/i.test(rot) ? "text-[#9ad4a0]" : /fracass|falhou/i.test(rot) ? "text-[#f28b82]" : "text-ambar";
+  const tom = /conclu/i.test(rot) ? "text-[color:var(--grau-sucesso,#9ad4a0)]" : /fracass|falhou/i.test(rot) ? "text-[color:var(--grau-falha,#f28b82)]" : "text-ambar";
   return (
     <Linha icone="❡" tom={tom}>
       {titulo ? (
@@ -168,7 +168,7 @@ function LinhaReputacao({ r }: { r: Dados }) {
   return (
     <Linha icone={v >= 0 ? "▲" : "▼"} titulo={r.motivo}>
       <Nome nome={r.personagem} />: {eixo.charAt(0).toUpperCase() + eixo.slice(1)}{" "}
-      <span className={`not-italic font-semibold ${v >= 0 ? "text-[#9ad4a0]" : "text-[#f28b82]"}`}>{v >= 0 ? `+${v}` : `−${Math.abs(v)}`}</span>
+      <span className={`not-italic font-semibold ${v >= 0 ? "text-[color:var(--grau-sucesso,#9ad4a0)]" : "text-[color:var(--grau-falha,#f28b82)]"}`}>{v >= 0 ? `+${v}` : `−${Math.abs(v)}`}</span>
       {r.motivo && <span className="text-muted/80"> — {r.motivo}</span>}
     </Linha>
   );
@@ -292,7 +292,7 @@ export function LinhaDado({ mensagem, novo }: { mensagem: Mensagem; novo: boolea
       return <LinhaTeste r={r} />;
     case "combate":
       return (
-        <Linha icone="⚔" tom="text-[#f28b82]">
+        <Linha icone="⚔" tom="text-[color:var(--grau-falha,#f28b82)]">
           {String(r.resumo ?? mensagem.texto)}
         </Linha>
       );

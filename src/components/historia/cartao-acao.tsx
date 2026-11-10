@@ -3,13 +3,16 @@
 import { foraDoJogo } from "@/components/leitor/cena";
 import { Aparte } from "@/components/leitor/pecas";
 import type { PersonagemVisivel } from "@/lib/mesa";
-import { COR_GRAU, NOME_GRAU, corDoNome } from "./cores";
+import { corDoNome } from "./cores";
 import { Retrato } from "./retrato";
+import type { EntradaSelo } from "./selo-desfecho";
+import { SelosDaAcao } from "./selos-da-acao";
 
-// Ação do jogador no meio do livro, leve como uma nota de margem: retrato pequeno, nome em versalete na cor do personagem,
-// o texto em itálico e, quando a ação virou teste, "Perícia · Sucesso" no canto. Na fila (esperando o mestre), o fio fica tracejado.
+// Ação do jogador no meio do livro, como a fala dele numa conversa: retrato pequeno e um bloco com fio e leve preenchimento
+// na cor do personagem, nome em versalete, o texto em itálico e, quando a ação virou teste, uma linha de selos embaixo
+// (perícia, grau e dado natural). Na fila (esperando o mestre), o fio fica tracejado.
 
-export type DesfechoAcao = { teste: string; grau: string | null };
+export type DesfechoAcao = EntradaSelo;
 
 export function CartaoAcao({
   personagem,
@@ -44,7 +47,10 @@ export function CartaoAcao({
       ) : (
         <span className="mt-0.5 grid size-[30px] shrink-0 place-items-center rounded-full border border-border text-xs text-muted">?</span>
       )}
-      <div className={`min-w-0 flex-1 border-l pl-3 ${naFila ? "border-dashed border-ambar/40" : "border-border/70"}`}>
+      <div
+        className={`min-w-0 flex-1 rounded-r-md border-l-2 py-1.5 pl-3 pr-2 ${naFila ? "border-dashed" : ""}`}
+        style={{ borderLeftColor: cor, background: `color-mix(in srgb, ${cor} 7%, var(--surface))` }}
+      >
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
           <p className="min-w-0 truncate text-sm">
             <span className="font-semibold tracking-[0.06em] [font-variant-caps:all-small-caps]" style={{ color: cor }}>
@@ -52,23 +58,14 @@ export function CartaoAcao({
             </span>
             {autor && autor !== nome && <span className="text-xs text-muted"> · {autor}</span>}
           </p>
-          {desfecho ? (
-            <p className="shrink-0 text-xs">
-              <span className="text-muted">{desfecho.teste}</span>
-              <span className="text-muted"> · </span>
-              {desfecho.grau ? (
-                <span className="font-semibold" style={{ color: COR_GRAU[desfecho.grau] }}>
-                  {NOME_GRAU[desfecho.grau] ?? desfecho.grau}
-                </span>
-              ) : (
-                <span className="italic text-ambar">rolando…</span>
-              )}
-            </p>
-          ) : naFila ? (
-            <p className="shrink-0 text-xs italic text-muted">esperando o mestre</p>
-          ) : null}
+          {naFila && !desfecho && <p className="shrink-0 text-xs italic text-muted">esperando o mestre</p>}
         </div>
-        <p className="mt-0.5 whitespace-pre-wrap break-words italic leading-relaxed text-foreground/70">{texto}</p>
+        <p className="mt-0.5 whitespace-pre-wrap break-words italic leading-relaxed text-foreground/85">{texto}</p>
+        {desfecho && (
+          <div className="mt-1.5">
+            <SelosDaAcao desfecho={desfecho} />
+          </div>
+        )}
       </div>
     </div>
   );

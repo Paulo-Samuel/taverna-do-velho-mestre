@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { aventurasDoSistema } from "@/lib/aventuras";
 import { sistemasPublicos } from "@/lib/sistemas";
+import { CabecalhoPagina } from "@/components/cabecalho-pagina";
 import { AvisoDarkPack, DECLARACAO_DARK_PACK } from "@/components/aviso-dark-pack";
 import { Catalogo, type ItemCatalogo } from "./catalogo";
 
@@ -64,11 +65,15 @@ export default function PaginaSistemas() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
-      <h1 className="titulo text-3xl text-pergaminho sm:text-4xl">Sistemas da casa</h1>
-      <p className="mt-2 max-w-2xl text-muted">
-        {itens.length} jeitos de rolar dados e se arrepender, {prontos} já servidos na mesa. Quase todos de licença aberta (Vampiro entra como fã-conteúdo do Dark Pack): a
-        taverna escreveu as descrições com as próprias palavras (e o próprio veneno).
-      </p>
+      <CabecalhoPagina
+        titulo="Sistemas da casa"
+        subtitulo={
+          <>
+            {itens.length} jeitos de rolar dados e se arrepender, {prontos} já servidos na mesa. Quase todos de licença aberta (Vampiro entra como fã-conteúdo do Dark
+            Pack): a taverna escreveu as descrições com as próprias palavras (e o próprio veneno).
+          </>
+        }
+      />
       <Catalogo itens={itens} />
       <div className="mt-10 border-t border-border pt-6">
         <AvisoDarkPack />

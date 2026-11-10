@@ -13,10 +13,10 @@ export default async function NaoEncontrado() {
 
   return (
     <main className="mx-auto flex min-h-[calc(100dvh-3.5rem)] max-w-xl flex-col items-center justify-center px-4 py-12 text-center">
-      <p className="titulo text-7xl text-ambar/80 sm:text-8xl" aria-hidden>
+      <p className="titulo titulo-brilho text-7xl text-ambar/80 sm:text-8xl" aria-hidden>
         404
       </p>
-      <h1 className="titulo mt-2 text-3xl text-pergaminho sm:text-4xl">Essa porta dá na parede</h1>
+      <h1 className="titulo titulo-brilho mt-2 text-3xl text-pergaminho sm:text-4xl">Essa porta dá na parede</h1>
       <p className="mt-3 text-muted">
         O taverneiro jura que aqui já teve um quarto. Ou a página nunca existiu, ou a campanha foi apagada, ou alguém pintou uma porta
         na parede de novo.

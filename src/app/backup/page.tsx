@@ -4,6 +4,7 @@ import { COPIAS_GUARDADAS, LIXEIRA_GUARDADAS, listarCopias, listarLixeira, pasta
 import { obterCampanha, versaoDoEsquema } from "@/lib/db";
 import { daMaquinaNaPagina } from "@/lib/rede/acesso";
 import { SISTEMAS } from "@/lib/sistemas";
+import { CabecalhoPagina } from "@/components/cabecalho-pagina";
 import { apagarDaLixeiraAcao, fazerCopiaAcao, restaurarAcao } from "./acoes";
 import { BotaoEnviar, ImportarCampanha } from "./formularios";
 
@@ -71,10 +72,15 @@ export default async function PaginaBackup(props: PageProps<"/backup">) {
         <Link href="/" className="-my-2 inline-block py-2 text-xs text-muted hover:text-ambar">
           ← voltar para as campanhas
         </Link>
-        <h1 className="titulo mt-1 text-3xl text-pergaminho">Cópias e lixeira</h1>
-        <p className="mt-1 text-sm text-muted">
-          Tudo fica nesta máquina, na pasta <code className="text-ambar">data</code> da taverna. Banco no formato v{versaoDoEsquema()}.
-        </p>
+        <CabecalhoPagina
+          className="mt-1 mb-0!"
+          titulo="Cópias e lixeira"
+          subtitulo={
+            <>
+              Tudo fica nesta máquina, na pasta <code className="text-ambar">data</code> da taverna. Banco no formato v{versaoDoEsquema()}.
+            </>
+          }
+        />
       </div>
 
       {recemExcluida && (

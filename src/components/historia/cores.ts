@@ -61,13 +61,18 @@ export function mapaDeNomes(personagens: PersonagemVisivel[], diario: EntradaDia
   return mapa;
 }
 
-/** Cor do texto conforme o grau do teste. */
+/**
+ * Cor conforme o grau do teste, vinda dos tokens do tema (--critico e --grau-* em temas.css; --sangue já existe em todos).
+ * O hex depois da vírgula é só a reserva caso o token falte. Serve em `style` (color, borderColor), não em classe do Tailwind.
+ * A falha crítica parte do --sangue do tema, clareado com um vermelho vivo: o --sangue puro do tema "historia" (#b23a2c)
+ * dá só 3,2:1 como texto sobre o fundo; a mistura fica acima de 4,5:1 em todos os temas e segue distinta do coral da falha.
+ */
 export const COR_GRAU: Record<string, string> = {
-  sucesso_critico: "#f5c542",
-  sucesso: "#9ad4a0",
-  parcial: "#8fc1e3",
-  falha: "#f28b82",
-  falha_critica: "#e0473a",
+  sucesso_critico: "var(--critico, #f5c542)",
+  sucesso: "var(--grau-sucesso, #9ad4a0)",
+  parcial: "var(--grau-parcial, #8fc1e3)",
+  falha: "var(--grau-falha, #f28b82)",
+  falha_critica: "color-mix(in srgb, var(--sangue) 40%, #ff7060)",
 };
 
 /** Rótulo curto e uniforme do grau (o rótulo do sistema às vezes vem com exclamação ou jargão). */

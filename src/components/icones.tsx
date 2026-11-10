@@ -190,6 +190,15 @@ const CAMINHOS = {
   plus: <path d="M12 5v14M5 12h14" />,
   check: <path d="M4.6 12.6 9.6 17.6 20 6.6" />,
   close: <path d="M6 6l12 12M18 6 6 18" />,
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  chevronDown: <path d="M6 9.5l6 6 6-6" />,
+  arrowUp: <path d="M12 20V4.6M6.4 10l5.6-5.6 5.6 5.6" />,
+  send: (
+    <>
+      <path d="M4 12 20 4l-5 16-3.2-6.3z" />
+      <path d="M11.8 13.7 20 4" />
+    </>
+  ),
   pencil: (
     <>
       <path d="M4 20l1-4L16.4 4.6a2.1 2.1 0 0 1 3 3L8 19z" />

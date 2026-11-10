@@ -100,3 +100,46 @@ campanhas 30, 33 e 43.
 - G01 muda o formato do diário: precisa ler diários antigos sem `atitude`.
 - G04 pode pesar no celular se as texturas forem grandes: medir antes de aceitar.
 - Pendente de confirmar com telas que não vimos: Enigmas, abas do painel do personagem e criação de campanha do Greg.
+
+## Onda D (09/11/2026): cara de Greg na home e na mesa
+
+Origem: nova olhada só nas páginas públicas do Greg (topo, faixa de retratos, mural, "como funciona", FAQ, preços). Nada de dentro do jogo logado. Não foi preciso usar o REA nesta onda. As telas que pedem login (Enigmas, abas do painel da campanha, criação de campanha) continuam não vistas: para avançar nelas, o Paulo precisa abrir o site do Greg logado e avisar.
+
+Cinco pacotes em paralelo, sem arquivo repetido entre eles. O G14 define classes, tokens e ícones; os outros usam pelo nome. O G15 e o G16 trocam componentes por caminho e props fixos.
+
+### G14. Base visual
+- **Ideia do Greg:** fundo quase preto com estrelas, título com brilho, botão grande e luminoso, cartões com borda fina e preenchimento de matizes diferentes, rodapé da casa.
+- **Aqui:** 8 matizes (`--matiz-1..8`, classes `.matiz-N`), `cartao-matiz`, `etiqueta-matiz`, `fita-destaque`, `texto-matiz`, `cartao-clicavel`, `titulo-brilho`, `btn-palco`, `.ceu-topo`, estrelas no fundo do site (`--estrelas`; fora em pf2e, osr e d100), tokens `--grau-*`, botões com hover e clique. Na casca: link Aventuras e marcador do item ativo, rodapé novo, cabeçalho único em Sistemas, Configurações e Cópias, ícones `menu`, `send`, `chevronDown`, `arrowUp`. Teste de contraste WCAG por tema.
+- **Arquivos:** `app/globals.css`, `app/temas.css`, `components/icones.tsx`, `app/layout.tsx`, `app/config/navegacao.tsx`, `app/sistemas/page.tsx`, `app/config/page.tsx`, `app/backup/page.tsx`, `app/not-found.tsx`, novos `components/cabecalho-pagina.tsx`, `components/rodape-casa.tsx`, `tests/matizes.test.ts`.
+
+### G15. Home e "Jogar agora"
+- **Ideia do Greg:** um único botão que começa em segundos, sem formulário; faixa de 8 retratos com borda de cores diferentes.
+- **Aqui:** `jogarAgoraAcao` cria campanha solo do modo história com herói de arquétipo (nome e gancho sorteados) e aventura curta (a tutorial na primeira vez) e já abre a mesa. Home com céu no topo, um botão principal, faixa de heróis clicáveis, campanhas com matiz e encaixe das seções do G16. Falha volta para a home com aviso.
+- **Arquivos:** `app/page.tsx`, novos `lib/inicio/heroi-pronto.ts`, `lib/inicio/matiz-campanha.ts`, `app/nova/jogar-agora-acoes.ts`, `components/inicio/botao-jogar-agora.tsx`, `components/inicio/faixa-herois.tsx`, `tests/heroi-pronto.test.ts`, `tests/matiz-campanha.test.ts`.
+
+### G16. Vitrine
+- **Ideia do Greg:** "como funciona" em formato de conversa com chip da perícia e selo do resultado; três cartões coloridos com um em destaque; FAQ em sanfona.
+- **Aqui:** jogada de exemplo original (o ladino, o telhado e o barril de picles) com os mesmos selos da mesa; três portas de entrada (Jogar agora, Montar meu herói, Ficha completa), todas grátis; sete perguntas de balcão em `<details>`; em `/aventuras`, matizes, fita "Comece por aqui" e o atalho "Jogar já com herói pronto" nas aventuras do modo história.
+- **Arquivos:** `app/aventuras/page.tsx`, novos `components/inicio/jogada-exemplo.tsx`, `lib/inicio/jogada-exemplo-dados.ts`, `components/inicio/portas-de-entrada.tsx`, `components/inicio/perguntas-frequentes.tsx`, `lib/inicio/perguntas.ts`, `tests/inicio-vitrine.test.ts`.
+
+### G17. Mesa: a jogada como conversa
+- **Ideia do Greg:** chip da perícia + selo do resultado logo abaixo da ação; blocos do mestre e do personagem bem distintos.
+- **Aqui:** a ação vira bloco na cor do personagem com chip da perícia (cor do tipo de teste, G03), selo do grau e selo "1 natural" / "20 natural" (só em teste de d20); rótulo "Mestre" na primeira narração de cada turno do modo rolagem; frases de espera da taverna; cores de grau por token do tema.
+- **Arquivos:** `app/mesa/[id]/mesa-historia.tsx`, `components/historia/cartao-acao.tsx`, `components/historia/cores.ts`, `components/historia/linha-dado.tsx`, novos `components/historia/selo-desfecho.ts`, `selos-da-acao.tsx`, `frases-espera.ts`, `espera-mestre.tsx`, `tests/selo-desfecho.test.ts`, `tests/frases-espera.test.ts`.
+
+### G18. Mesa: campo "o que você faz?"
+- **Ideia do Greg:** a conversa termina num campo com botão de enviar.
+- **Aqui:** botões do rodapé nas cores do tema (sem hex fixo), ícones no lugar dos glifos, realce de convite quando chega a vez da pessoa, contador perto do limite de 2000 caracteres. A altura do painel não muda.
+- **Arquivos:** `components/historia/painel-acao.tsx`, `components/chat/sugestoes-compactas.tsx`, novos `components/historia/campo-convite.ts`, `tests/campo-convite.test.ts`.
+
+### Integração
+- Os cinco rodam em paralelo; depois o integrador roda `tsc`, `eslint`, `npm test` e o build, e faz um commit.
+- Conferir no `tsc`: nomes dos ícones novos (G14) usados por G16 e G18; imports cruzados entre G15 e G16.
+- Olhar com a taverna ligada: home vazia e com campanhas em 375px, estrelas em cada tema, rodapé em `/mesa/[id]/livro` e na impressão, selos da ação nos dois modos de leitura.
+- "Jogar agora" cria campanha de verdade (sem "(teste)" no nome): quem testar apaga a que criar. Nunca tocar nas campanhas 30, 33 e 43.
+- Jogada real sugerida: uma, para ver o selo carimbar e o "1 natural" / "20 natural" na mesa.
+
+### Fora desta onda
+- Polegar na resposta do mestre (G12): só vale com uso real no prompt; fica para depois.
+- Mural de depoimentos (seriam inventados) e preços/créditos (a taverna é local e grátis).
+- Telas do Greg que pedem login: Enigmas, abas do painel, criação de campanha.

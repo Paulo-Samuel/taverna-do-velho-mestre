@@ -7,6 +7,7 @@ import { Navegacao } from "./config/navegacao";
 import { classesFontesTemas } from "./fontes-temas";
 import "./globals.css";
 import { Icone } from "@/components/icones";
+import { RodapeCasa } from "@/components/rodape-casa";
 
 const corpo = Alegreya({ subsets: ["latin"], variable: "--font-corpo" });
 // a fonte de título da casa vira --fonte-fell; o --font-titulo de verdade é escolhido pelo tema no globals.css
@@ -28,16 +29,16 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
 
   return (
     <html lang="pt-BR" className={`${corpo.variable} ${titulo.variable} ${classesFontesTemas}`}>
-      <body className="min-h-dvh font-sans text-[17px] antialiased">
+      <body className="flex min-h-dvh flex-col font-sans text-[17px] antialiased">
         <header className="relative z-20 border-t-2 border-t-ambar border-b border-b-border bg-background/80 backdrop-blur">
           <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4">
             {daMaquina ? (
-              <Link href="/" className="titulo flex min-w-0 items-center gap-2 text-xl text-ambar">
+              <Link href="/" className="titulo titulo-brilho flex min-w-0 items-center gap-2 text-xl text-ambar">
                 <Icone nome="mug" />
                 <span className="truncate">Taverna do Velho Mestre</span>
               </Link>
             ) : (
-              <span className="titulo flex min-w-0 items-center gap-2 text-xl text-ambar">
+              <span className="titulo titulo-brilho flex min-w-0 items-center gap-2 text-xl text-ambar">
                 <Icone nome="mug" />
                 <span className="truncate">Taverna do Velho Mestre</span>
               </span>
@@ -45,7 +46,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             {daMaquina && <Navegacao />}
           </div>
         </header>
-        {children}
+        <div className="flex-1">{children}</div>
+        {/* mesmo critério da navegação: quem vem pela rede só vê mesas (que são fixed e cobrem cabeçalho e rodapé) */}
+        {daMaquina && <RodapeCasa />}
       </body>
     </html>
   );

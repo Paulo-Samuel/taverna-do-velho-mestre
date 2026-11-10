@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { Icone } from "@/components/icones";
 
 // Navegação do cabeçalho (usada por src/app/layout.tsx). Mora aqui junto das configurações por ser
 // "coisa da casa", não de uma mesa. No celular vira um menu que fecha sozinho ao trocar de página.
@@ -10,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 const LINKS = [
   { href: "/", rotulo: "Campanhas", ativo: (p: string) => p === "/" },
   { href: "/nova", rotulo: "Nova campanha", ativo: (p: string) => p.startsWith("/nova") },
+  { href: "/aventuras", rotulo: "Aventuras", ativo: (p: string) => p.startsWith("/aventuras") },
   { href: "/sistemas", rotulo: "Sistemas", ativo: (p: string) => p.startsWith("/sistemas") },
   { href: "/config", rotulo: "Configurações", ativo: (p: string) => p.startsWith("/config") },
 ];
@@ -55,7 +57,7 @@ export function Navegacao() {
   return (
     <>
       <nav aria-label="Principal" className="hidden items-center gap-1 md:flex">
-        {itens((ativo) => `rounded-md px-3 py-1.5 text-sm ${ativo ? "bg-surface-2 text-ambar" : "text-muted hover:text-ambar"}`)}
+        {itens((ativo) => `rounded-md px-2 py-1.5 text-sm whitespace-nowrap lg:px-3 ${ativo ? "bg-surface-2 text-ambar shadow-[inset_0_-2px_0_var(--ambar)]" : "text-muted hover:text-ambar"}`)}
       </nav>
 
       <button
@@ -66,7 +68,7 @@ export function Navegacao() {
         aria-controls="menu-celular"
         onClick={() => setAberto((a) => !a)}
       >
-        <span aria-hidden>{aberto ? "✕" : "☰"}</span>
+        <Icone nome={aberto ? "close" : "menu"} />
         <span className="sr-only">{aberto ? "Fechar menu" : "Abrir menu"}</span>
       </button>
 
@@ -80,7 +82,7 @@ export function Navegacao() {
             aria-label="Principal"
             className="cartao surgir absolute inset-x-4 top-full z-40 mt-2 flex flex-col bg-surface! p-2 md:hidden"
           >
-            {itens((ativo) => `rounded-md px-3 py-3 ${ativo ? "bg-surface-2 text-ambar" : "text-foreground hover:text-ambar"}`)}
+            {itens((ativo) => `rounded-md px-3 py-3 ${ativo ? "bg-surface-2 text-ambar shadow-[inset_2px_0_0_var(--ambar)]" : "text-foreground hover:text-ambar"}`)}
           </nav>
         </>
       )}

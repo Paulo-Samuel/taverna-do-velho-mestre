@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { SugestaoAcao } from "@/lib/sistemas/tipos";
+import { Icone } from "@/components/icones";
 import { descricaoDoTeste, tipoDoTeste } from "@/components/historia/tipo-teste";
 
 // Ações sugeridas pelo mestre no rodapé das duas mesas, sem engolir o palco.
 // Desktop (tela larga E alta, variante `largo:` de globals.css): uma linha baixa por sugestão, com o número do atalho (1, 2, 3), o
 // texto e a perícia; o texto inteiro fica no title.
-// Celular ou tela baixa: uma linha só, "3 sugestões · Intimidação · Persuasão ▾", que abre a lista por cima do palco (o palco não encolhe).
+// Celular ou tela baixa: uma linha só, "3 sugestões · Intimidação · Persuasão" com uma setinha para baixo, que abre a lista por cima do palco (o palco não encolhe).
 // No leitor cena a cena elas ficam apagadinhas até a pessoa chegar ao fim da cena; aí entram uma a uma, com destaque.
 // Clicar numa sugestão envia a ação na hora.
 
@@ -78,14 +79,14 @@ export function SugestoesCompactas({
         className="sugestao-entrar flex min-h-10 w-full items-center gap-2 rounded-lg border border-border/70 bg-surface/60 px-3 text-left text-sm focus-visible:border-ambar focus-visible:outline-none largo:hidden"
       >
         <span className="shrink-0 text-ambar" aria-hidden>
-          ➶
+          <Icone nome="arrowRight" />
         </span>
         <span className="shrink-0 text-foreground/90">
           {sugestoes.length} {sugestoes.length === 1 ? "sugestão" : "sugestões"}
         </span>
         <span className="min-w-0 flex-1 truncate text-xs text-muted">{pericias.length > 0 && `· ${pericias.join(" · ")}`}</span>
         <span className={`shrink-0 text-xs text-muted transition-transform motion-reduce:transition-none ${aberta ? "rotate-180" : ""}`} aria-hidden>
-          ▾
+          <Icone nome="chevronDown" />
         </span>
       </button>
       <ul
@@ -112,7 +113,7 @@ export function SugestoesCompactas({
                 {i + 1}
               </kbd>
               <span className="shrink-0 text-ambar/80 [@media(pointer:fine)]:hidden" aria-hidden>
-                ➶
+                <Icone nome="arrowRight" />
               </span>
               <span className="min-w-0 flex-1 leading-snug text-foreground/85 group-hover:text-foreground largo:truncate">{s.texto}</span>
               <Teste pericia={s.pericia} />

@@ -6,10 +6,15 @@ import { SISTEMAS } from "@/lib/sistemas";
 import { dadosDoTema, temaDoSistema } from "@/lib/temas";
 import { CapaAventura } from "@/components/aventuras/capa-aventura";
 import { Icone } from "@/components/icones";
+import { BotaoJogarAgora } from "@/components/inicio/botao-jogar-agora";
+import { jogarAgoraAcao } from "@/app/nova/jogar-agora-acoes";
 
 export const metadata: Metadata = { title: "Aventuras prontas · Taverna do Velho Mestre" };
 
 const foco = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ambar";
+
+// strings literais (o Tailwind e o globals.css precisam enxergar cada nome inteiro)
+const MATIZES = ["matiz-1", "matiz-2", "matiz-3", "matiz-4", "matiz-5", "matiz-6", "matiz-7", "matiz-8"] as const;
 
 export default async function Aventuras({ searchParams }: { searchParams: Promise<{ sistema?: string | string[] }> }) {
   const { sistema: bruto } = await searchParams;
@@ -32,9 +37,9 @@ export default async function Aventuras({ searchParams }: { searchParams: Promis
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-10">
       <header className="mb-6">
-        <h1 className="titulo text-3xl text-pergaminho">Aventuras prontas</h1>
+        <h1 className="titulo titulo-brilho text-3xl text-pergaminho sm:text-4xl">Aventuras prontas</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">
-          Escolha uma: o mestre já chega com o roteiro decorado (e com os segredos que você não vai ler). Nada é criado aqui; o botão só leva à criação da campanha.
+          Escolha uma: o mestre já chega com o roteiro decorado (e com os segredos que você não vai ler). O botão principal leva à criação do herói; o atalho senta um herói pronto e já abre a mesa.
         </p>
       </header>
 
@@ -60,31 +65,43 @@ export default async function Aventuras({ searchParams }: { searchParams: Promis
       </nav>
 
       <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Aventuras">
-        {lista.map((a) => {
+        {lista.map((a, i) => {
           const sistema = a.sistemas[0];
           const tema = dadosDoTema(sistema);
+          const matiz = sistema === "historia" ? MATIZES[i % MATIZES.length] : "";
           return (
             <li key={a.id} className="min-w-0">
-              <article data-tema={temaDoSistema(sistema)} className="cartao cartao-tema flex h-full flex-col overflow-hidden">
+              <article data-tema={temaDoSistema(sistema)} className={`cartao cartao-tema cartao-matiz relative flex h-full flex-col overflow-hidden ${matiz}`}>
                 <CapaAventura id={a.id} sistema={sistema} />
+                {a.tutorial && <span className="fita-destaque">Comece por aqui</span>}
                 <div className="flex flex-1 flex-col p-4">
                   <span className="etiqueta w-fit text-ambar-forte">
                     <span aria-hidden>{sistema === "historia" ? <Icone nome="scroll" /> : tema.ornamento}</span> {nomeDe(sistema)}
                   </span>
                   <h2 className="titulo mt-2 text-xl leading-tight text-pergaminho">{a.titulo}</h2>
                   <p className="mt-1 text-sm leading-snug text-muted">{a.chamada}</p>
-                  <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted/80">
+                  <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
                     <span>{a.duracao}</span>
                     {a.soloOk && (
-                      <span className="rounded-full border border-ambar/50 px-1.5 leading-4 text-ambar-forte" title="Roda com um personagem só: um aliado do mestre divide as cenas">
+                      <span className="etiqueta-matiz matiz-2" title="Roda com um personagem só: um aliado do mestre divide as cenas">
                         solo ok
                       </span>
                     )}
-                    {a.recomendado && <span className="basis-full text-muted/70">{a.recomendado}</span>}
+                    {a.recomendado && <span className="basis-full text-muted">{a.recomendado}</span>}
                   </p>
-                  <Link href={linkDaAventura(a)} className={`btn btn-ambar mt-auto min-h-11 ${foco}`}>
-                    Começar esta aventura<span className="sr-only">: {a.titulo}</span>
-                  </Link>
+                  <div className="mt-auto pt-3">
+                    <Link href={linkDaAventura(a)} className={`btn-ambar min-h-11 w-full ${foco}`}>
+                      Começar esta aventura<span className="sr-only">: {a.titulo}</span>
+                    </Link>
+                    {sistema === "historia" && (
+                      <form action={jogarAgoraAcao} className="mt-2">
+                        <input type="hidden" name="aventura" value={a.id} />
+                        <BotaoJogarAgora className={`btn-borda min-h-11 w-full ${foco}`} rotulo={`Jogar já com herói pronto: ${a.titulo}`}>
+                          Jogar já com herói pronto
+                        </BotaoJogarAgora>
+                      </form>
+                    )}
+                  </div>
                 </div>
               </article>
             </li>

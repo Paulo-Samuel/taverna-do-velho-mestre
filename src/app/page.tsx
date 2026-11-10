@@ -11,6 +11,13 @@ import { BotaoExcluir } from "./botao-excluir";
 import { Icone } from "@/components/icones";
 import { CapaAventura } from "@/components/aventuras/capa-aventura";
 import { linkDaAventura } from "@/lib/aventuras/link";
+import { matizDaCampanha, matizDaPosicao } from "@/lib/inicio/matiz-campanha";
+import { BotaoJogarAgora } from "@/components/inicio/botao-jogar-agora";
+import { FaixaHerois } from "@/components/inicio/faixa-herois";
+import { JogadaExemplo } from "@/components/inicio/jogada-exemplo";
+import { PerguntasFrequentes } from "@/components/inicio/perguntas-frequentes";
+import { PortasDeEntrada } from "@/components/inicio/portas-de-entrada";
+import { jogarAgoraAcao } from "./nova/jogar-agora-acoes";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +71,7 @@ function Etiquetas({ c }: { c: CampanhaListada }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {c.sistema.id !== "historia" && (
-        <span className="etiqueta text-ambar-forte" title={dadosDoTema(c.sistema.id).nome}>
+        <span className="etiqueta-matiz" title={dadosDoTema(c.sistema.id).nome}>
           <span aria-hidden>{dadosDoTema(c.sistema.id).ornamento}</span> {c.sistema.nomeCurto}
         </span>
       )}
@@ -142,7 +149,7 @@ function Continuar({ c }: { c: CampanhaListada }) {
       {/* brilho de vela atrás do cartão */}
       <div aria-hidden className="pointer-events-none absolute -top-16 -right-16 size-48 rounded-full bg-ambar/10 blur-3xl" />
       <p className="text-xs uppercase tracking-[0.18em] text-ambar-forte">Onde vocês pararam · {haQuanto(c.atualizadaEm)}</p>
-      <h2 id="continuar-titulo" className="titulo mt-1 text-2xl leading-tight text-pergaminho sm:text-3xl">
+      <h2 id="continuar-titulo" className="titulo titulo-brilho mt-1 text-2xl leading-tight text-pergaminho sm:text-3xl">
         {c.nome}
       </h2>
       <div className="mt-2">
@@ -180,7 +187,7 @@ function Continuar({ c }: { c: CampanhaListada }) {
         c.cenario && <p className="mt-3 line-clamp-3 text-sm text-muted">{c.cenario}</p>
       )}
       <div className="mt-5 flex flex-wrap gap-2">
-        <Link href={`/mesa/${c.id}`} className="btn-ambar min-h-11 basis-full whitespace-nowrap sm:basis-auto sm:px-8">
+        <Link href={`/mesa/${c.id}`} className="btn-palco min-h-11 basis-full whitespace-nowrap sm:basis-auto sm:px-8">
           Continuar a história
         </Link>
         <Link href={`/mesa/${c.id}/ajustes`} className="btn-borda min-h-11 px-4">
@@ -227,7 +234,7 @@ function AventurasProntas() {
         <p className="basis-full text-sm text-muted">Sem ideia? Escolha uma: o mestre já chega com o roteiro decorado (e com os segredos que você não vai ler).</p>
       </div>
       <ul className="-mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-3" aria-label="Aventuras prontas">
-        {lista.map((a) => {
+        {lista.map((a, i) => {
           const sistema = a.sistemas[0];
           const tema = dadosDoTema(sistema);
           return (
@@ -235,9 +242,10 @@ function AventurasProntas() {
               <Link
                 href={linkDaAventura(a)}
                 data-tema={temaDoSistema(sistema)}
-                className="cartao cartao-tema group flex h-full flex-col overflow-hidden transition hover:border-ambar focus-visible:outline-2 focus-visible:outline-ambar"
+                className={`cartao cartao-tema group relative flex h-full flex-col overflow-hidden cartao-matiz cartao-clicavel ${sistema === "historia" ? matizDaPosicao(i) : ""}`}
               >
                 <CapaAventura id={a.id} sistema={sistema} className="max-h-24" />
+                {a.tutorial && <span className="fita-destaque">Comece por aqui</span>}
                 <span className="flex flex-1 flex-col p-4">
                 <span className="etiqueta w-fit text-ambar-forte">
                   <span aria-hidden>{sistema === "historia" ? <Icone nome="scroll" /> : tema.ornamento}</span> {sistema === "historia" ? "Modo história" : obterSistema(sistema).nomeCurto}
@@ -247,7 +255,7 @@ function AventurasProntas() {
                 <span className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-2 text-xs text-muted/80">
                   <span>{a.duracao}</span>
                   {a.soloOk && (
-                    <span className="rounded-full border border-ambar/50 px-1.5 leading-4 text-ambar-forte" title="Roda com um personagem só: um aliado do mestre divide as cenas">
+                    <span className="etiqueta-matiz matiz-2" title="Roda com um personagem só: um aliado do mestre divide as cenas">
                       solo ok
                     </span>
                   )}
@@ -263,7 +271,8 @@ function AventurasProntas() {
   );
 }
 
-export default function Inicio() {
+export default async function Inicio(props: PageProps<"/">) {
+  const { falhou } = await props.searchParams;
   // listarCampanhas já vem da jogada mais recente para a mais antiga
   const campanhas: CampanhaListada[] = listarCampanhas().map((c) => ({
     ...c,
@@ -284,32 +293,66 @@ export default function Inicio() {
   const outras = recente ? campanhas.slice(1) : campanhas;
   // primeira visita (nenhuma campanha): a aventura-tutorial ganha um cartão de destaque
   const tutorial = campanhas.length === 0 ? aventuraTutorial() : null;
+  const modoAvancado = (
+    <Link
+      href="/nova/avancada"
+      className="inline-flex min-h-11 items-center gap-1 px-1 text-sm text-ambar underline-offset-4 hover:underline"
+      title="Escolha o sistema de regras (D&D, Pathfinder, Vampiro...) e monte a ficha completa"
+    >
+      Modo avançado <Icone nome="arrowRight" />
+    </Link>
+  );
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
-      <section className={`grid gap-6 md:grid-cols-[1.25fr_1fr] md:items-center ${recente ? "mb-10" : "mb-12"}`}>
+      {falhou === "jogar-agora" && (
+        <p role="alert" className="mb-6 rounded-xl border border-sangue bg-surface px-4 py-3 text-sm text-foreground">
+          A taverna tropeçou ao abrir sua mesa (o banco não colaborou). Tente de novo ou{" "}
+          <Link href="/nova" className="text-ambar underline underline-offset-4">
+            monte o herói à mão
+          </Link>
+          .
+        </p>
+      )}
+      <section className={`ceu-topo grid gap-6 md:grid-cols-[1.25fr_1fr] md:items-center ${recente ? "mb-10" : "mb-12"}`}>
         <div>
           <h1 className="titulo leading-none">
             <span className="block text-3xl text-pergaminho sm:text-4xl">Puxe um banco.</span>
-            <span className="mt-1.5 block text-4xl tracking-tight text-ambar sm:mt-2 sm:text-6xl">O mestre já está bêbado.</span>
+            <span className="titulo-brilho mt-1.5 block text-4xl tracking-tight text-ambar sm:mt-2 sm:text-6xl">O mestre já está bêbado.</span>
           </h1>
+          <p className="mt-3 text-lg font-semibold text-foreground">Um RPG de mesa inteiro, com mestre de IA, rodando aí na sua máquina.</p>
           {/* quem já tem campanha não precisa do discurso de boas-vindas no celular */}
-          <p className={`mt-4 max-w-xl text-lg text-muted ${recente ? "hidden sm:block" : ""}`}>
+          <p className={`mt-4 max-w-xl text-base text-muted ${recente ? "hidden sm:block" : ""}`}>
             Arrombe a cripta errada, pechinche com um goblin ofendido, caia de um telhado por pura vaidade. Um mestre de IA narra, o
             código rola os dados, e a campanha fica guardada aqui na sua máquina. Sozinho ou com a turma.
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Link href="/nova" className={recente ? "btn-borda min-h-11" : "btn-ambar min-h-11"}>
-              Nova história
-            </Link>
-            <Link
-              href="/nova/avancada"
-              className="btn-borda min-h-11"
-              title="Escolha o sistema de regras (D&D, Pathfinder, Vampiro...) e monte a ficha completa"
-            >
-              Modo avançado
-            </Link>
-          </div>
+          {recente ? (
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <Link href="/nova" className="btn-borda min-h-11">
+                Nova história
+              </Link>
+              <form action={jogarAgoraAcao}>
+                <BotaoJogarAgora className="btn-borda min-h-11">Jogar agora com herói pronto</BotaoJogarAgora>
+              </form>
+              {modoAvancado}
+            </div>
+          ) : (
+            <div className="mt-6">
+              {/* um só botão principal: herói e aventura saem prontos */}
+              <form action={jogarAgoraAcao}>
+                <BotaoJogarAgora>Jogar agora</BotaoJogarAgora>
+              </form>
+              <p className="mt-2 max-w-xl text-xs text-muted">
+                Começa em segundos. Sem cadastro, sem ficha, sem boleto: o mestre te entrega um herói e uma encrenca.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <Link href="/nova" className="btn-borda min-h-11">
+                  Montar meu herói
+                </Link>
+                {modoAvancado}
+              </div>
+            </div>
+          )}
           {recente && <MestreCompacto nome={provedor.nome} aviso={`${aviso}${!configurado ? " (escolha vinda do .env)" : ""}`} />}
         </div>
 
@@ -330,6 +373,8 @@ export default function Inicio() {
         )}
       </section>
 
+      {!recente && <FaixaHerois />}
+
       <div className="mb-4 flex items-end justify-between gap-3">
         <h2 className="titulo text-2xl text-pergaminho">
           {recente && outras.length > 0 ? "Outras campanhas" : "Campanhas"}{" "}
@@ -344,22 +389,6 @@ export default function Inicio() {
 
       {campanhas.length === 0 ? (
         <>
-        {tutorial && (
-          <Link
-            href={linkDaAventura(tutorial)}
-            data-tema={temaDoSistema("historia")}
-            className="cartao cartao-tema group relative mb-4 flex flex-col gap-2 overflow-hidden border-2 border-ambar/70 p-5 shadow-[0_0_50px_-24px_var(--ambar)] transition hover:border-ambar focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ambar sm:flex-row sm:items-center sm:gap-5 sm:p-6"
-          >
-            <span className="min-w-0 flex-1">
-              <span className="block text-xs uppercase tracking-[0.18em] text-ambar-forte">Primeira vez? Aventura de 10 minutos</span>
-              <span className="titulo mt-1 block text-2xl leading-tight text-pergaminho group-hover:text-ambar">{tutorial.titulo}</span>
-              <span className="mt-1 block text-sm text-muted">
-                Uma noite curta que ensina a jogar: conversar com alguém, rolar o dado e escolher o que fazer. É só montar o herói e entrar.
-              </span>
-            </span>
-            <span className="btn-ambar min-h-11 shrink-0 whitespace-nowrap sm:px-6">Jogar o tutorial</span>
-          </Link>
-        )}
         <div className="cartao relative overflow-hidden px-6 py-10 text-center">
           <div aria-hidden className="pointer-events-none absolute inset-x-0 -bottom-24 mx-auto size-64 rounded-full bg-ambar/10 blur-3xl" />
           <p className="text-5xl" aria-hidden><Icone nome="candle" /> 
@@ -368,19 +397,16 @@ export default function Inicio() {
           <p className="mx-auto mt-2 max-w-md text-muted">
             Nenhuma campanha ainda. As cadeiras estão em cima das mesas e o mestre já tá conversando com a caneca.
           </p>
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <Link href="/nova" className="btn-ambar min-h-11">
-              Começar a primeira história
-            </Link>
-            <Link href="/nova/avancada" className="btn-borda min-h-11">
-              Modo avançado
-            </Link>
-          </div>
-          <p className="mx-auto mt-4 max-w-md text-xs text-muted">
-            A história monta o herói em um minuto e o mestre sugere as ações. O avançado deixa escolher o sistema (D&amp;D, Pathfinder,
-            Vampiro…) e preencher a ficha inteira.
-          </p>
         </div>
+        <PortasDeEntrada
+          tutorial={tutorial ? { titulo: tutorial.titulo, href: linkDaAventura(tutorial) } : null}
+          jogarAgora={
+            <form action={jogarAgoraAcao}>
+              {tutorial && <input type="hidden" name="aventura" value={tutorial.id} />}
+              <BotaoJogarAgora className="btn-ambar min-h-11 w-full">Jogar agora</BotaoJogarAgora>
+            </form>
+          }
+        />
         </>
       ) : outras.length === 0 ? (
         <p className="cartao px-5 py-6 text-center text-sm text-muted">
@@ -393,7 +419,7 @@ export default function Inicio() {
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {outras.map((c) => (
-            <li key={c.id} data-tema={temaDoSistema(c.sistema.id)} className="cartao cartao-tema flex flex-col p-5">
+            <li key={c.id} data-tema={temaDoSistema(c.sistema.id)} className={`cartao cartao-tema cartao-matiz flex flex-col p-5 ${matizDaCampanha(c.id, c.sistema.id)}`}>
               <Etiquetas c={c} />
               <Link href={`/mesa/${c.id}`} className="group mt-2 rounded-sm">
                 <h3 className="titulo text-xl text-pergaminho group-hover:text-ambar">{c.nome}</h3>
@@ -445,20 +471,32 @@ export default function Inicio() {
         </ul>
       )}
 
+      {recente ? (
+        <FaixaHerois compacta />
+      ) : (
+        <JogadaExemplo>
+          <form action={jogarAgoraAcao}>
+            <BotaoJogarAgora className="btn-ambar size-11 shrink-0 p-0" espera={null} rotulo="Começar a jogar">
+              <Icone nome="arrowRight" />
+            </BotaoJogarAgora>
+          </form>
+        </JogadaExemplo>
+      )}
+
       <AventurasProntas />
 
-      <section className="mt-14">
-        <h2 className="titulo mb-4 text-2xl text-pergaminho">Como jogar com amigos</h2>
+      <section id="amigos" className="mt-14 scroll-mt-20" aria-labelledby="amigos-titulo">
+        <h2 id="amigos-titulo" className="titulo mb-4 text-2xl text-pergaminho">Como jogar com amigos</h2>
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="cartao p-5">
-            <h3 className="titulo text-lg text-ambar">Mesa local: um computador, vários heróis</h3>
+          <div className="cartao cartao-matiz matiz-1 p-5">
+            <h3 className="titulo text-lg texto-matiz">Mesa local: um computador, vários heróis</h3>
             <p className="mt-2 text-sm text-muted">
               Crie um personagem para cada um na mesma campanha e passe o teclado. Na mesa, o seletor de personagem diz quem está agindo;
               no modo <em>por rodada</em> o mestre espera todo mundo declarar antes de narrar. Ideal para o sofá e a pizza.
             </p>
           </div>
-          <div className="cartao p-5">
-            <h3 className="titulo text-lg text-ambar">Rede local: cada um no seu celular</h3>
+          <div className="cartao cartao-matiz matiz-6 p-5">
+            <h3 className="titulo text-lg texto-matiz">Rede local: cada um no seu celular</h3>
             <p className="mt-2 text-sm text-muted">
               Rode <code className="text-foreground">npm run rede</code>, abra a mesa e toque em <strong className="text-foreground">Convidar</strong>:
               aparece o link e o QR code para a turma no mesmo Wi-Fi. Cada um reivindica o próprio personagem. Ponha um PIN nos ajustes da
@@ -468,6 +506,8 @@ export default function Inicio() {
           </div>
         </div>
       </section>
+
+      <PerguntasFrequentes provedor={provedor.id} />
     </main>
   );
 }

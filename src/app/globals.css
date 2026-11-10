@@ -45,8 +45,9 @@ html {
 }
 
 body {
-  /* textura do tema (na taverna: grão de madeira + brilho de lareira no canto); o <body> ganha data-tema nas páginas de um sistema */
-  background-image: var(--textura);
+  /* céu de estrelas esparsas (os temas de papel desligam com --estrelas: none) por cima da textura do tema (na taverna: grão
+     de madeira + brilho de lareira no canto); o <body> ganha data-tema nas páginas de um sistema */
+  background-image: var(--estrelas, none), var(--textura);
   background-color: var(--background);
   background-attachment: fixed;
   color: var(--foreground);
@@ -57,16 +58,62 @@ body {
   letter-spacing: var(--titulo-espaco, 0.02em);
 }
 
-@utility btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-50;
+/* brilho no título: halo da própria cor do texto (funciona em qualquer tema) */
+@utility titulo-brilho {
+  text-shadow:
+    0 0 22px color-mix(in srgb, currentColor 45%, transparent),
+    0 0 2px color-mix(in srgb, currentColor 30%, transparent);
 }
 
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold tracking-wide disabled:cursor-not-allowed disabled:opacity-50;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+/* o anel é sombra interna, não `border`: o botão não pode mudar de tamanho (a mesa pagina por altura) */
 @utility btn-ambar {
-  @apply btn bg-botao text-botao-texto shadow-[0_0_24px_-6px_var(--botao)] hover:bg-botao-hover;
+  @apply btn bg-botao text-botao-texto hover:bg-botao-hover;
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--botao-hover) 85%, transparent), transparent 70%);
+  box-shadow:
+    0 0 24px -6px var(--botao),
+    inset 0 0 0 1px color-mix(in srgb, var(--botao-hover) 60%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--pergaminho) 30%, transparent);
+  &:hover:not(:disabled) {
+    box-shadow:
+      0 0 36px -4px var(--botao),
+      inset 0 0 0 1px color-mix(in srgb, var(--botao-hover) 60%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--pergaminho) 30%, transparent);
+    transform: translateY(-1px);
+  }
+  &:active:not(:disabled) {
+    box-shadow:
+      0 0 14px -6px var(--botao),
+      inset 0 0 0 1px color-mix(in srgb, var(--botao-hover) 60%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--pergaminho) 30%, transparent);
+    transform: none;
+  }
+}
+
+/* o botão de palco: UM por tela, a ação que a página existe para oferecer */
+@utility btn-palco {
+  @apply btn-ambar min-h-12 px-8 text-base;
+  font-family: var(--font-titulo);
+  letter-spacing: var(--titulo-espaco, 0.02em);
 }
 
 @utility btn-borda {
   @apply btn border border-border text-foreground hover:border-ambar hover:text-ambar;
+  &:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--ambar) 8%, transparent);
+  }
+  &:active:not(:disabled) {
+    background-color: color-mix(in srgb, var(--ambar) 14%, transparent);
+  }
 }
 
 @utility campo {
@@ -77,6 +124,40 @@ body {
   @apply rounded-xl border border-border bg-surface/90 shadow-[0_10px_40px_-20px_black];
 }
 
+/* Matizes (temas.css): ponha .matiz-N no elemento (ou num pai) e os utilitários abaixo pegam a cor; sem matiz, vale o âmbar
+   do tema do próprio elemento. */
+@utility texto-matiz {
+  color: var(--matiz, var(--ambar));
+}
+
+/* cartão tingido: usado JUNTO com `cartao`. Fica declarado depois dele e ganha por ter menos declarações (o Tailwind 4 emite
+   depois os utilitários com menos propriedades). */
+@utility cartao-matiz {
+  border-color: color-mix(in srgb, var(--matiz, var(--ambar)) 45%, var(--border));
+  background-color: color-mix(in srgb, var(--matiz, var(--ambar)) 7%, var(--surface));
+}
+
+/* cartão que é link ou botão: acende a borda e sobe 1px no hover e no foco */
+@utility cartao-clicavel {
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+  &:hover,
+  &:focus-visible {
+    border-color: var(--matiz, var(--ambar));
+    box-shadow: 0 0 32px -16px var(--matiz, var(--ambar));
+    transform: translateY(-1px);
+  }
+}
+
+/* fita no canto do cartão ("a mais pedida"): o pai precisa de `relative overflow-hidden` */
+@utility fita-destaque {
+  @apply absolute top-0 right-0 z-10 rounded-bl-lg px-2.5 py-1 text-[11px] font-semibold uppercase leading-4 tracking-[0.12em];
+  background-color: var(--matiz, var(--ambar));
+  color: var(--background);
+}
+
 /* botão do cabeçalho das mesas (cabecalho-mesa.tsx): 40x40, ícone SVG de 18 px, igual em todos */
 @utility botao-cabecalho {
   @apply relative grid size-10 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-surface-2/60 hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar;
@@ -85,6 +166,53 @@ body {
 /* plaquinha pequena: sistema, papel da classe, status "pronto"... */
 @utility etiqueta {
   @apply inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-2 py-0.5 text-xs leading-5 text-muted;
+}
+
+/* a mesma plaquinha, na cor do matiz */
+@utility etiqueta-matiz {
+  @apply inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs leading-5;
+  border-color: color-mix(in srgb, var(--matiz, var(--ambar)) 55%, transparent);
+  background-color: color-mix(in srgb, var(--matiz, var(--ambar)) 12%, var(--surface-2));
+  color: var(--matiz, var(--ambar));
+}
+
+/* Céu do topo de uma página: pontinhos que piscam devagar atrás do conteúdo e somem para baixo. Sem margem lateral negativa
+   (375px não pode ganhar rolagem horizontal). */
+@keyframes piscar {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.ceu-topo {
+  position: relative;
+  isolation: isolate;
+}
+.ceu-topo::before {
+  --ceu-ponto: color-mix(in srgb, var(--pergaminho) 55%, transparent);
+  content: "";
+  position: absolute;
+  inset: -1.5rem 0 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 22px 34px, var(--ceu-ponto) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 96px 12px, var(--ceu-ponto) 0 1.4px, transparent 2px),
+    radial-gradient(circle at 158px 78px, var(--ceu-ponto) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 231px 41px, var(--ceu-ponto) 0 1.2px, transparent 1.8px),
+    radial-gradient(circle at 312px 96px, var(--ceu-ponto) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 64px 148px, var(--ceu-ponto) 0 1.4px, transparent 2px),
+    radial-gradient(circle at 187px 172px, var(--ceu-ponto) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 276px 214px, var(--ceu-ponto) 0 1.2px, transparent 1.8px),
+    radial-gradient(circle at 338px 263px, var(--ceu-ponto) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 41px 251px, var(--ceu-ponto) 0 1.2px, transparent 1.8px),
+    radial-gradient(circle at 129px 306px, var(--ceu-ponto) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 224px 331px, var(--ceu-ponto) 0 1.4px, transparent 2px);
+  background-size: 360px 360px;
+  mask-image: linear-gradient(to bottom, black 55%, transparent);
+  animation: piscar 6s ease-in-out infinite alternate;
 }
 
 /* texto do mestre aparecendo */
@@ -135,7 +263,22 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .surgir,
   .dado-rolando,
-  .cursor::after {
+  .cursor::after,
+  .ceu-topo::before {
     animation: none;
+  }
+  /* sem subir nem deslizar: botões e cartões só trocam de cor */
+  .btn-ambar,
+  .btn-ambar:hover,
+  .btn-ambar:active,
+  .btn-palco,
+  .btn-palco:hover,
+  .btn-palco:active,
+  .cartao-clicavel,
+  .cartao-clicavel:hover,
+  .cartao-clicavel:focus-visible,
+  .cartao-clicavel:active {
+    transform: none;
+    transition: none;
   }
 }

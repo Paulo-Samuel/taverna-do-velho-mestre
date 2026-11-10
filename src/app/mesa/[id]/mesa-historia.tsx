@@ -15,7 +15,10 @@ import { emUsoPorOutroAparelho, ondeEsta, outroAparelhoCom } from "@/components/
 import { Codex, type AbaCodex } from "@/components/historia/codex";
 import { PessoasAqui } from "@/components/historia/pessoas-aqui";
 import { pessoasPresentes, textoDaCenaAtual } from "@/components/historia/pessoas-presentes";
-import { COR_GRAU, corDoNome, mapaDeNomes, NOME_GRAU } from "@/components/historia/cores";
+import { corDoNome, mapaDeNomes } from "@/components/historia/cores";
+import { EsperaMestre } from "@/components/historia/espera-mestre";
+import { SelosDaAcao } from "@/components/historia/selos-da-acao";
+import { usaD20 } from "@/components/historia/usa-d20";
 import { fonteGotica } from "@/components/historia/fonte-gotica";
 import { LinhaDado } from "@/components/historia/linha-dado";
 import { NarracaoLivro, montarDestaque, trecho } from "@/components/historia/narracao-livro";
@@ -59,9 +62,18 @@ function assumirDaUrl(estado: EstadoMesa, valor: string | null) {
   if (pid && estado.personagens.some((p) => p.id === pid)) identidade.salvarPersonagemAtivo(estado.campanha.id, pid);
 }
 
+/** Rótulo "Mestre" acima da primeira prosa de cada turno no modo rolagem: a narração lê como a fala do mestre numa conversa. */
+function rotuloMestre() {
+  return (
+    <p className="mb-1.5 flex items-center gap-2 text-sm font-semibold tracking-[0.14em] text-ambar [font-variant-caps:all-small-caps]">
+      <Icone nome="book" /> Mestre <span aria-hidden className="h-px flex-1 bg-linear-to-r from-ambar/50 to-transparent" />
+    </p>
+  );
+}
+
 /**
  * Liga cada ação de jogador ao teste que ela provocou (o primeiro pedido de teste daquele personagem depois da ação),
- * para o cartão da ação mostrar "Perícia · Sucesso" no canto.
+ * para o cartão da ação mostrar os selos (perícia, grau e, em d20, o dado natural) embaixo do texto.
  */
 function desfechosDasAcoes(mensagens: Mensagem[]): Map<number, DesfechoAcao> {
   const desfechos = new Map<number, DesfechoAcao>();
@@ -76,11 +88,27 @@ function desfechosDasAcoes(mensagens: Mensagem[]): Map<number, DesfechoAcao> {
     const acao = abertas.get(pid);
     if (acao === undefined) continue;
     if (d.tipo === "pedido_teste" && d.status !== "cancelado") {
-      const r = (d.resultado ?? {}) as { grau?: string };
-      desfechos.set(acao, { teste: String(d.teste ?? "Teste"), grau: d.status === "resolvido" ? (r.grau ?? null) : null });
+      const r = (d.resultado ?? {}) as { grau?: string; natural?: unknown };
+      const resolvido = d.status === "resolvido";
+      const expressao = typeof d.expressao === "string" && d.expressao.trim() ? d.expressao : undefined;
+      const dadoPrincipal = typeof d.dadoPrincipal === "string" && d.dadoPrincipal.trim() ? d.dadoPrincipal : undefined;
+      desfechos.set(acao, {
+        teste: String(d.teste ?? "Teste"),
+        grau: resolvido && typeof r.grau === "string" ? r.grau : null,
+        natural: resolvido && typeof r.natural === "number" ? r.natural : null,
+        // pedido antigo, sem expressão nem dado principal gravados: na dúvida o selo de dado natural não aparece
+        // (o usaD20 sozinho assumiria d20, e um 1 ou 20 de d100/parada ganharia selo de "natural")
+        d20: (expressao !== undefined || dadoPrincipal !== undefined) && usaD20({ expressao, dadoPrincipal }),
+      });
       abertas.delete(pid);
     } else if (d.tipo === "teste") {
-      desfechos.set(acao, { teste: String(d.teste ?? "Teste"), grau: typeof d.grau === "string" ? d.grau : null });
+      desfechos.set(acao, {
+        teste: String(d.teste ?? "Teste"),
+        grau: typeof d.grau === "string" ? d.grau : null,
+        natural: typeof d.natural === "number" ? d.natural : null,
+        // sem expressão gravada, na dúvida o selo de dado natural não aparece
+        d20: typeof d.expressao === "string" && usaD20({ expressao: d.expressao }),
+      });
       abertas.delete(pid);
     }
   }
@@ -446,6 +474,9 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
     return agruparTurnos(mesa.mensagens).map((turno) => ({ turno, cena: montarCena(turno, rastro) }));
   }, [cenas, mesa.mensagens]);
 
+  // o texto chegando agora só leva o rótulo "Mestre" se o turno em curso ainda não tem prosa (senão o rótulo já está lá em cima)
+  const ultimoTurnoTemProsa = cenasRolagem.at(-1)?.cena.pecas.some((p) => p.tipo === "prosa") ?? false;
+
   const prosa = useMemo<Prosa>(
     () => ({
       classe: "narracao-livro text-foreground/90",
@@ -469,20 +500,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
         icone={p ? <Retrato ficha={p.ficha} tamanho={22} className="rounded-full" /> : undefined}
         autor={m.autor}
         texto={m.texto}
-        detalhe={
-          d ? (
-            <>
-              <span className="text-muted">{d.teste} · </span>
-              {d.grau ? (
-                <span className="font-semibold" style={{ color: COR_GRAU[d.grau] }}>
-                  {NOME_GRAU[d.grau] ?? d.grau}
-                </span>
-              ) : (
-                <span className="italic text-ambar">rolando…</span>
-              )}
-            </>
-          ) : undefined
-        }
+        detalhe={d ? <SelosDaAcao desfecho={d} compacto /> : undefined}
       />
     );
   }
@@ -602,14 +620,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
       no: cenas ? (
         <MestreEscrevendo frase={comecando ? "O mestre arruma a mesa e abre o livro" : undefined} />
       ) : (
-        <p className="my-8 flex items-center justify-center gap-2 text-sm italic text-muted" role="status">
-          O mestre está pensando
-          <span className="pensando text-ambar" aria-hidden>
-            <i />
-            <i />
-            <i />
-          </span>
-        </p>
+        <EsperaMestre semente={total} />
       ),
     });
   // o dado já foi rolado e o resultado espera na fila (invisível): sem isto o palco ficava mudo entre o dado e a narração
@@ -817,6 +828,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
                 {/* turno a turno, montado como no leitor: prosa contínua, cartões no lugar e "o que mudou" no fim */}
                 {cenasRolagem.map(({ turno, cena }, t) => {
                   const { corpo, fecho } = separarFecho(cena.pecas);
+                  const primeiraProsa = corpo.find((p) => p.tipo === "prosa");
                   const ultimaProsa = corpo.findLast((p) => p.tipo === "prosa");
                   const comFerramentas = t === cenasRolagem.length - 1 && podeDesfazer && ultimoMestre !== null && turno.itens.some((m) => m.id === ultimoMestre);
                   return (
@@ -825,6 +837,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
                       {corpo.map((p) =>
                         p.tipo === "prosa" ? (
                           <div key={p.chave} className="surgir group my-5">
+                            {p === primeiraProsa && rotuloMestre()}
                             <ProsaCena paragrafos={p.paragrafos} inline={prosa.inline} separador={prosa.separador} classe={prosa.classe} />
                             <div className="mt-1 flex min-h-8 flex-wrap items-center justify-end gap-1">
                               {comFerramentas && p === ultimaProsa && (
@@ -852,6 +865,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
                 {/* texto do mestre chegando agora */}
                 {mesa.aoVivo && (
                   <div className="my-5">
+                    {!ultimoTurnoTemProsa && rotuloMestre()}
                     <ProsaCena paragrafos={paragrafosDaNarracao(mesa.aoVivo, -1)} inline={prosa.inline} separador={prosa.separador} classe={prosa.classe} escrevendo />
                   </div>
                 )}
