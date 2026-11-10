@@ -126,7 +126,7 @@ export default async function Aventuras({ searchParams }: { searchParams: Promis
 
       <nav aria-label="Filtrar por sistema" className="mb-6">
         {/* a folga de 4px (p-1 com -m-1) existe para a rolagem lateral não cortar o contorno de foco das pílulas */}
-        <ul className="-m-1 flex snap-x flex-nowrap gap-2 overflow-x-auto p-1 sm:m-0 sm:flex-wrap sm:overflow-visible sm:p-0">
+        <ul className="relative -m-1 flex snap-x flex-nowrap gap-2 overflow-x-auto p-1 sm:m-0 sm:flex-wrap sm:overflow-visible sm:p-0">
           {botoes.map((f) => {
             const marcado = f.id === ativo;
             return (
