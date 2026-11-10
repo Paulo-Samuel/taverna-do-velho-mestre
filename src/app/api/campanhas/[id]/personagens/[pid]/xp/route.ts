@@ -59,7 +59,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/campanhas/[
   if (mesaOcupada(campanha.id)) return Response.json({ erro: "O mestre está narrando. Gaste o XP quando ele terminar (o sangue espera)." }, { status: 409 });
 
   const lido = ESQUEMA.safeParse(await request.json().catch(() => null));
-  if (!lido.success) return Response.json({ erro: "Pedido de compra em formato estranho." }, { status: 400 });
+  if (!lido.success) return Response.json({ erro: "Não entendi essa compra. Recarregue a página e tente de novo." }, { status: 400 });
   const pedido = lido.data;
   const xpAntes = personagem.ficha.xp;
   const res = "desfazer" in pedido ? desfazer(personagem.ficha) : comprar(personagem.ficha, pedido.compra);

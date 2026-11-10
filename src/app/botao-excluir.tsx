@@ -12,7 +12,7 @@ function AcoesDoDialogo({ refCancelar, aoCancelar }: { refCancelar: RefObject<HT
         Deixa quieto
       </button>
       <button type="submit" className="btn-perigo-cheio min-h-11 px-4" disabled={pending} aria-busy={pending}>
-        {pending ? "Levando para o porão…" : "Excluir"}
+        {pending ? "Levando para a lixeira…" : "Excluir"}
       </button>
     </div>
   );
@@ -53,7 +53,7 @@ export function BotaoExcluir({ nome }: { nome: string }) {
         ref={dialogo}
         aria-labelledby={idTitulo}
         aria-describedby={idTexto}
-        className="cartao surgir m-auto w-[calc(100vw-2rem)] max-w-sm p-0 text-left text-sm font-normal normal-case tracking-normal text-foreground backdrop:bg-background/70 backdrop:backdrop-blur-sm"
+        className="cartao dialogo-suave m-auto w-[calc(100vw-2rem)] max-w-sm p-0 text-left text-sm font-normal normal-case tracking-normal text-foreground backdrop:bg-background/70 backdrop:backdrop-blur-sm"
         // o clique que acerta o próprio <dialog> (e não o miolo) foi no fundo escurecido
         onClick={(e) => {
           if (e.target === e.currentTarget) fechar();

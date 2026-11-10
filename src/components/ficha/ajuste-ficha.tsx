@@ -303,7 +303,7 @@ function Botao({ rotulo, simbolo, desligado, aoClicar, grande, classe = "" }: { 
       disabled={desligado}
       onClick={aoClicar}
       // before: no celular a área de toque chega a 40px sem aumentar o desenho do botão
-      className={`relative grid before:absolute before:-inset-2.5 sm:before:hidden ${grande ? "size-7 text-sm" : "size-5 text-xs"} shrink-0 place-items-center rounded-full border border-border bg-surface leading-none text-muted transition hover:border-ambar hover:text-ambar focus-visible:border-ambar focus-visible:text-ambar focus-visible:outline-none disabled:cursor-not-allowed disabled:border-border/40 disabled:text-muted/30 disabled:hover:border-border/40 disabled:hover:text-muted/30 ${classe}`}
+      className={`relative grid before:absolute before:-inset-2.5 sm:before:hidden ${grande ? "size-7 text-sm" : "size-5 text-xs"} shrink-0 place-items-center rounded-full border border-border bg-surface leading-none text-muted transition hover:border-ambar hover:text-ambar focus-visible:border-ambar focus-visible:text-ambar focus-visible:outline-2 focus-visible:outline-ambar focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:border-border/40 disabled:text-muted/30 disabled:hover:border-border/40 disabled:hover:text-muted/30 ${classe}`}
     >
       {simbolo}
     </button>
@@ -405,7 +405,7 @@ export function AdicionarNaLista({ ajuste, lista, dica }: { ajuste: AjusteFicha;
         type="button"
         disabled={ajuste.bloqueado}
         onClick={() => setAberto(true)}
-        className="mt-1 text-xs text-muted hover:text-ambar focus-visible:text-ambar focus-visible:outline-none disabled:text-muted/40"
+        className="relative mt-1 rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ambar text-xs text-muted before:absolute before:-inset-x-1 before:-inset-y-3 hover:text-ambar focus-visible:text-ambar disabled:text-muted/40 sm:before:hidden"
       >
         + {rotulo}
       </button>
@@ -423,10 +423,11 @@ export function AdicionarNaLista({ ajuste, lista, dica }: { ajuste: AjusteFicha;
         aria-label={lista === "condicoes" ? "Nova condição" : "Novo item"}
         className="campo min-w-0 flex-1 px-2 py-1 text-xs"
       />
-      <button type="submit" className="btn-borda px-2 py-1 text-xs" disabled={ajuste.bloqueado || !texto.trim()}>
-        ok
+      {/* before: folga de toque só para cima e para baixo, para não cobrir o campo ao lado */}
+      <button type="submit" className="btn-borda relative px-2 py-1 text-xs before:absolute before:inset-x-0 before:-inset-y-2 sm:before:hidden" disabled={ajuste.bloqueado || !texto.trim()}>
+        Pôr
       </button>
-      <button type="button" className="px-1 text-xs text-muted hover:text-foreground" onClick={() => setAberto(false)} aria-label="Fechar">
+      <button type="button" className="relative px-1 text-xs text-muted before:absolute before:-inset-y-3 before:-left-1.5 before:-right-3.5 hover:text-foreground sm:before:hidden" onClick={() => setAberto(false)} aria-label="Fechar o ajuste">
         <Icone nome="close" />
       </button>
     </form>
@@ -452,7 +453,7 @@ export function SeletorCondicao({ ajuste, condicoes, dica }: { ajuste: AjusteFic
         type="button"
         disabled={ajuste.bloqueado}
         onClick={() => setAberto(true)}
-        className="mt-1 text-xs text-muted hover:text-ambar focus-visible:text-ambar focus-visible:outline-none disabled:text-muted/40"
+        className="relative mt-1 rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ambar text-xs text-muted before:absolute before:-inset-x-1 before:-inset-y-3 hover:text-ambar focus-visible:text-ambar disabled:text-muted/40 sm:before:hidden"
       >
         + condição
       </button>
@@ -493,13 +494,13 @@ export function SeletorCondicao({ ajuste, condicoes, dica }: { ajuste: AjusteFic
           <Botao rotulo="Aumentar valor" simbolo="+" desligado={valor >= max} aoClicar={() => setValor((v) => Math.min(max, v + 1))} grande={false} />
         </span>
       )}
-      <button type="submit" className="btn-borda px-2 py-1 text-xs" disabled={ajuste.bloqueado}>
-        {existente ? "trocar" : "ok"}
+      <button type="submit" className="btn-borda relative px-2 py-1 text-xs before:absolute before:inset-x-0 before:-inset-y-2 sm:before:hidden" disabled={ajuste.bloqueado}>
+        {existente ? "Trocar" : "Pôr"}
       </button>
-      <button type="button" className="px-1 text-xs text-muted hover:text-foreground" onClick={() => setLivre(true)}>
+      <button type="button" className="relative px-1 text-xs text-muted before:absolute before:-inset-x-1 before:-inset-y-3 hover:text-foreground sm:before:hidden" onClick={() => setLivre(true)}>
         outra…
       </button>
-      <button type="button" className="px-1 text-xs text-muted hover:text-foreground" onClick={() => setAberto(false)} aria-label="Fechar">
+      <button type="button" className="relative px-1 text-xs text-muted before:absolute before:-inset-y-3 before:-left-1.5 before:-right-3.5 hover:text-foreground sm:before:hidden" onClick={() => setAberto(false)} aria-label="Fechar o ajuste">
         <Icone nome="close" />
       </button>
       {def.efeito && <p className="w-full text-xs text-muted">{def.efeito}</p>}
@@ -548,7 +549,7 @@ export function BotaoRemover({ ajuste, lista, texto, colado = false }: { ajuste:
       aria-label={`Tirar ${texto}`}
       title={`Tirar ${texto}`}
       // before: no celular a área de toque chega a 40px sem aumentar o desenho do ×; colado, ela cresce só para a direita (não cobre o "+")
-      className={`relative shrink-0 px-0.5 text-[11px] leading-none text-muted before:absolute before:-inset-x-3.5 before:-inset-y-3.5 ${colado ? "before:-left-0.5 before:-right-[23px]" : ""} hover:text-sangue focus-visible:text-sangue focus-visible:outline-none disabled:text-muted/30 disabled:hover:text-muted/30 sm:before:hidden ${classeRevelar(ajuste, "item")}`}
+      className={`relative shrink-0 px-0.5 text-[11px] leading-none text-muted before:absolute before:-inset-x-3.5 before:-inset-y-3.5 ${colado ? "before:-left-0.5 before:-right-[23px]" : ""} hover:text-sangue rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ambar focus-visible:text-sangue disabled:text-muted/30 disabled:hover:text-muted/30 sm:before:hidden ${classeRevelar(ajuste, "item")}`}
     >
       <Icone nome="close" />
     </button>

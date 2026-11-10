@@ -6,6 +6,7 @@ import type { AcoesMesa, Mesa } from "@/lib/cliente/use-mesa";
 import type { PersonagemVisivel } from "@/lib/mesa";
 import { corDoRecurso } from "@/components/ficha/cores-recurso";
 import { Icone } from "@/components/icones";
+import { EstadoVazio } from "@/components/estado-vazio";
 import { Avatar, quemAgiu, resumoPersonagem } from "./avatar";
 
 // Grupo da mesa: cartão de cada personagem (vida, recursos, condições, quem controla), troca do ativo,
@@ -22,7 +23,7 @@ function Barra({ rotulo, atual, max, cor }: { rotulo: string; atual: number; max
         </span>
       </div>
       <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-surface-2">
-        <div className={`h-full rounded-full transition-[width] duration-500 ${cor}`} style={{ width: `${pct}%` }} />
+        <div className={`h-full rounded-full transition-[width] duration-[var(--mov-barra)] ease-out motion-reduce:transition-none ${cor}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -65,23 +66,25 @@ function Responsavel({ personagem, campanhaId, sugestao, aoErro }: { personagem:
           setValor(personagem.jogador || sugestao);
           setEditando(true);
         }}
-        className="text-left text-muted hover:text-ambar"
+        className="inline-flex min-h-10 items-center gap-1 rounded px-1.5 text-left text-muted hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar sm:min-h-0 sm:px-0"
         title="Quem responde por este personagem"
       >
-        {personagem.jogador ? (
-          <>
-            de <span className="text-foreground">{personagem.jogador}</span>
-          </>
-        ) : (
-          "sem dono (qualquer um joga)"
-        )}{" "}
+        <span>
+          {personagem.jogador ? (
+            <>
+              de <span className="text-foreground">{personagem.jogador}</span>
+            </>
+          ) : (
+            "sem dono (qualquer um joga)"
+          )}
+        </span>
         <Icone nome="pencil" />
       </button>
     );
   }
   return (
     <form
-      className="flex w-full gap-1"
+      className="flex w-full items-center gap-1"
       onSubmit={(e) => {
         e.preventDefault();
         void salvar(valor.trim());
@@ -91,15 +94,15 @@ function Responsavel({ personagem, campanhaId, sugestao, aoErro }: { personagem:
         value={valor}
         onChange={(e) => setValor(e.target.value)}
         maxLength={40}
-        placeholder="apelido do jogador (vazio = livre)"
+        placeholder="Apelido do jogador (vazio = livre)"
         aria-label={`Responsável por ${personagem.ficha.nome}`}
         className="campo min-w-0 flex-1 px-2 py-1 text-xs"
         autoFocus
       />
-      <button className="rounded-md border border-ambar px-2 text-xs text-ambar" disabled={salvando}>
+      <button className="btn-borda min-h-10 px-3 text-xs sm:min-h-0 sm:px-2 sm:py-1" disabled={salvando}>
         ok
       </button>
-      <button type="button" className="px-1 text-xs text-muted hover:text-foreground" onClick={() => setEditando(false)} aria-label="Cancelar">
+      <button type="button" className="grid size-10 shrink-0 place-items-center rounded-md text-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ambar sm:size-8" onClick={() => setEditando(false)} aria-label="Cancelar">
         <Icone nome="close" />
       </button>
     </form>
@@ -224,23 +227,23 @@ function CartaoPersonagem({
             agindo agora
           </span>
         ) : (
-          <button type="button" className="rounded-md border border-ambar/60 px-2.5 py-1 text-ambar hover:bg-ambar/10" onClick={() => acoes.escolherPersonagem(p.id)}>
+          <button type="button" className="inline-flex min-h-10 items-center rounded-md border border-ambar/60 px-2.5 py-1 text-ambar hover:bg-ambar/10 focus-visible:outline-2 focus-visible:outline-ambar sm:min-h-0" onClick={() => acoes.escolherPersonagem(p.id)}>
             Jogar com este{indice < 9 && <span className="ml-1 hidden text-muted sm:inline">Alt+{indice + 1}</span>}
           </button>
         )}
         <span className="flex-1" />
         {confirmando ? (
-          <span className="flex items-center gap-2">
+          <span className="flex flex-wrap items-center justify-end gap-3">
             <span className="text-muted">Tirar do grupo?</span>
-            <button type="button" className="text-sangue hover:underline" disabled={removendo} onClick={() => void remover()}>
+            <button type="button" className="btn-perigo min-h-10 px-3 text-xs sm:min-h-0 sm:py-1" disabled={removendo} onClick={() => void remover()}>
               {removendo ? "tirando…" : "sim, tirar"}
             </button>
-            <button type="button" className="text-muted hover:text-foreground" onClick={() => setConfirmando(false)}>
+            <button type="button" className="inline-flex min-h-10 items-center rounded px-1.5 text-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ambar sm:min-h-0 sm:px-0" onClick={() => setConfirmando(false)}>
               não
             </button>
           </span>
         ) : (
-          <button type="button" className="text-muted hover:text-sangue" onClick={() => setConfirmando(true)} disabled={mesa.ocupado} title={mesa.ocupado ? "Espere o mestre terminar" : undefined}>
+          <button type="button" className="inline-flex min-h-10 items-center rounded px-1.5 text-muted hover:text-sangue focus-visible:outline-2 focus-visible:outline-ambar sm:min-h-0 sm:px-0" onClick={() => setConfirmando(true)} disabled={mesa.ocupado} title={mesa.ocupado ? "Espere o mestre terminar" : undefined}>
             remover
           </button>
         )}
@@ -269,7 +272,9 @@ export function PainelGrupo({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
       )}
 
       {mesa.personagens.length === 0 ? (
-        <p className="text-muted">Mesa vazia. Nem o bardo apareceu.</p>
+        <EstadoVazio compacto icone="person">
+          Mesa vazia. Nem o bardo apareceu.
+        </EstadoVazio>
       ) : (
         <ul className="space-y-2.5">
           {mesa.personagens.map((p, i) => (
@@ -281,15 +286,20 @@ export function PainelGrupo({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
       {erro && (
         <div className="flex items-start justify-between gap-2 rounded-md border border-sangue/60 bg-sangue/10 px-3 py-2 text-xs">
           <p>{erro}</p>
-          <button onClick={() => setErro(null)} className="text-muted hover:text-foreground" aria-label="Fechar">
+          <button type="button" onClick={() => setErro(null)} className="-my-1.5 -mr-2 grid size-10 shrink-0 place-items-center rounded-md text-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ambar sm:size-8" aria-label="Fechar o aviso">
             <Icone nome="close" />
           </button>
         </div>
       )}
 
-      <Link href={`/mesa/${mesa.campanha.id}/personagens/novo`} className="btn-borda w-full">
+      <Link href={`/mesa/${mesa.campanha.id}/personagens/novo`} className={`${mesa.personagens.length === 0 ? "btn-ambar" : "btn-borda"} w-full`}>
         + Adicionar personagem
       </Link>
+      {mesa.personagens.length === 1 && (
+        <p className="mt-2 text-center text-xs text-muted">
+          Aventura solo por enquanto. Dá para sentar mais gente neste computador ou chamar pela rede com o convite, no menu do cabeçalho.
+        </p>
+      )}
       {mesa.personagens.length > 1 && (
         <p className="text-center text-xs text-muted">Mesa local: troque quem age pelos chips acima do campo de ação ou com Alt+1…9.</p>
       )}

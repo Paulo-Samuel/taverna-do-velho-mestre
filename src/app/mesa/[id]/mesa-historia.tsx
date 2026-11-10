@@ -26,6 +26,7 @@ import { PainelAcao } from "@/components/historia/painel-acao";
 import { PedidoTeste, dadosDoPedido } from "@/components/historia/pedido-teste";
 import { decisaoAberta, DecisaoDoTeste } from "@/components/chat/cartao-dado";
 import { Retrato } from "@/components/historia/retrato";
+import { faixaDaVida, porcentoDaVida, tomDaVida, type TomVida } from "@/components/historia/tom-vida";
 import { dadosFimSessao, montarCena, paragrafosDaNarracao, rastrearMudancas, separarFecho, textoParaOuvir } from "@/components/leitor/cena";
 import { AcaoTopo, ATALHOS_LEITOR, LeitorCenas, type BlocoCauda, type ControleLeitor, type Prosa } from "@/components/leitor/leitor-cenas";
 import { Mudancas } from "@/components/leitor/mudancas";
@@ -34,13 +35,16 @@ import { agruparTurnos } from "@/components/leitor/turnos";
 import { useTelaBaixa } from "@/components/leitor/altura";
 import { useEscalaLeitor, usePreferenciasLeitor } from "@/components/leitor/preferencias";
 import { EstiloProsa, Ornamento } from "@/components/leitor/prosa";
+import { AnunciadorNarracao } from "@/components/mesa/anunciador-narracao";
 import { CabecalhoMesa } from "@/components/mesa/cabecalho-mesa";
 import { CartaoNoiteEncerrada, EncerrarNoite, FaixaFechando } from "@/components/sessao/encerrar-noite";
 import { chipsDaNoite, ehFimDaNoite, noiteAtual, noiteEncerrada, sessaoDaMesa } from "@/components/sessao/noite";
 import { Ouvir, useLeituraAutomatica } from "@/components/voz/voz";
 import * as identidade from "@/lib/cliente/identidade";
+import { comportamentoDeRolagem, ehMensagemNova } from "@/lib/cliente/movimento";
 import { parar as pararVoz } from "@/lib/cliente/voz";
 import { useMesa } from "@/lib/cliente/use-mesa";
+import { useTituloDaVez } from "@/lib/cliente/use-titulo-da-vez";
 import { INICIO, podeDecidir, RESULTADO_TESTE } from "@/lib/constantes";
 import type { Mensagem } from "@/lib/db";
 import type { EstadoMesa } from "@/lib/mesa";
@@ -115,6 +119,9 @@ function desfechosDasAcoes(mensagens: Mensagem[]): Map<number, DesfechoAcao> {
   return desfechos;
 }
 
+/** cor da barra de vida do rodapé, por faixa (tom-vida.ts) */
+const COR_DA_VIDA = { boa: "bg-musgo", media: "bg-ambar", ruim: "bg-sangue" } as const;
+
 export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoMesa; comecarSozinho: boolean }) {
   // roda uma vez, na renderização, antes dos efeitos do useMesa (como na mesa avançada)
   const busca = useSearchParams();
@@ -124,7 +131,14 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   const [codexAberto, setCodexAberto] = useState(false);
   const [abaCodex, setAbaCodex] = useState<AbaCodex>("personagem");
   const [pessoaFoco, setPessoaFoco] = useState<number | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
+  // aviso flutuante sobre o rodapé: recado (âmbar, 5 s) ou erro (sangue, 8 s, role="alert")
+  const [aviso, setAvisoBruto] = useState<{ texto: string; tom: "info" | "erro" } | null>(null);
+  const setAviso = useCallback((texto: string | null) => setAvisoBruto(texto ? { texto, tom: "info" } : null), []);
+  const avisarErro = useCallback((texto: string) => setAvisoBruto({ texto, tom: "erro" }), []);
+  /** o que já estava na mesa quando a página abriu não reanima ao montar (só o que chega depois ganha o "surgir") */
+  const [ultimoIdNaMontagem] = useState(() => estadoInicial.mensagens.reduce((m, x) => Math.max(m, x.id), 0));
+  /** "Começar a aventura" já clicado: o botão espera o mestre em vez de aceitar outro clique */
+  const [iniciando, setIniciando] = useState(false);
   const [longeDoFim, setLongeDoFim] = useState(false);
   const [vistas, setVistas] = useState(estadoInicial.mensagens.length);
   const rolador = useRef<HTMLDivElement>(null);
@@ -143,7 +157,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   const { modo, paginasEmTelaBaixa } = usePreferenciasLeitor();
   const escala = useEscalaLeitor();
   /** o espaço do leitor (palco + barra), igual nos dois modos: é a altura que decide a tela baixa */
-  const palco = useRef<HTMLDivElement>(null);
+  const palco = useRef<HTMLElement>(null);
   const telaBaixa = useTelaBaixa(palco);
   const cenas = modo === "cenas" && !(telaBaixa && !paginasEmTelaBaixa);
   const leitor = useRef<ControleLeitor>(null);
@@ -166,6 +180,22 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   const filaVisivel = mesa.fila.filter((a) => !a.acao.startsWith(RESULTADO_TESTE));
   const minhaNaFila = ativo ? filaVisivel.some((a) => a.personagemId === ativo.id) : false;
   const personagemDe = (id: number | null | undefined) => mesa.personagens.find((p) => p.id === id) ?? null;
+  // a aba do navegador avisa quando é a vez da pessoa (ou quando o dado dela espera)
+  useTituloDaVez(
+    meuPendente ? "dado" : !mesa.ocupado && pendentes.length === 0 && Boolean(ativo) && !minhaNaFila && !mesa.semSinal && mesa.mensagens.length > 0 ? "vez" : null,
+  );
+  // vida no rodapé: a moldura do retrato lampeja quando o número muda (dano ou cura). Ajustado durante a renderização, como as
+  // novidades do códex; trocar de personagem só troca o valor de referência, sem lampejo.
+  const idAtivo = ativo?.id ?? null;
+  const pvAtivo = ativo?.ficha.pv ?? null;
+  const [vidaVista, setVidaVista] = useState({ id: idAtivo, pv: pvAtivo });
+  const [lampejo, setLampejo] = useState<{ tom: TomVida; n: number } | null>(null);
+  if (vidaVista.id !== idAtivo || vidaVista.pv !== pvAtivo) {
+    setVidaVista({ id: idAtivo, pv: pvAtivo });
+    const tom = vidaVista.id === idAtivo && pvAtivo !== null ? tomDaVida(vidaVista.pv, pvAtivo) : null;
+    if (tom) setLampejo((l) => ({ tom, n: (l?.n ?? 0) + 1 }));
+    else if (vidaVista.id !== idAtivo) setLampejo(null);
+  }
   /** O mestre já tem o resultado do dado na fila (ação interna, invisível) e ainda não começou a narrar. */
   const lendoResultado = mesa.lendoResultado && !mesa.ocupado && pendentes.length === 0;
   // ação por um personagem que outro aparelho está usando agora: a pergunta "mandar mesmo assim?" é feita uma vez por personagem
@@ -252,7 +282,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
 
   useEffect(() => {
     if (!aviso) return;
-    const t = setTimeout(() => setAviso(null), 5000);
+    const t = setTimeout(() => setAvisoBruto(null), aviso.tom === "erro" ? 8000 : 5000);
     return () => clearTimeout(t);
   }, [aviso]);
 
@@ -371,8 +401,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
     }
     const cartao = document.getElementById(`pedido-${id}`);
     if (!cartao) return;
-    const reduzido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    cartao.scrollIntoView({ behavior: reduzido ? "auto" : "smooth", block: "center" });
+    cartao.scrollIntoView({ behavior: comportamentoDeRolagem(), block: "center" });
     cartao.querySelector<HTMLButtonElement>("button[data-rolar]")?.focus({ preventScroll: true });
   }
 
@@ -423,7 +452,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
     }).catch(() => null);
     const corpo = resp ? ((await resp.json().catch(() => ({}))) as Desfeito & { erro?: string }) : null;
     if (!resp?.ok || !corpo) {
-      setAviso(corpo?.erro ?? "Não deu para tentar de novo. Confira a conexão.");
+      avisarErro(corpo?.erro ?? "Não deu para tentar de novo. Confira a conexão.");
       return;
     }
     acoes.limparErro();
@@ -510,11 +539,11 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   function desenhar(m: Mensagem) {
     if (m.tipo === "mestre")
       return (
-        <div key={m.id} className="surgir group my-5">
+        <div key={m.id} className={`${ehMensagemNova(m.id, ultimoIdNaMontagem) ? "surgir " : ""}group my-5`}>
           <NarracaoLivro texto={m.texto} destaque={destaque} />
           <div className="mt-1 flex min-h-8 flex-wrap items-center justify-end gap-1">
             {m.id === ultimoMestre && podeDesfazer && (
-              <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={setAviso} className="mr-auto -ml-2.5" fechamento={Boolean(encerrada)} />
+              <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={avisarErro} className="mr-auto -ml-2.5" fechamento={Boolean(encerrada)} />
             )}
             <Ouvir id={`msg-${m.id}`} texto={m.texto} />
           </div>
@@ -578,7 +607,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
       return <LinhaDado key={m.id} mensagem={m} novo={mesa.novas.has(m.id)} />;
     }
     return (
-      <p key={m.id} className="surgir my-6 text-center text-xs uppercase tracking-[0.3em] text-muted">
+      <p key={m.id} className={`${ehMensagemNova(m.id, ultimoIdNaMontagem) ? "surgir " : ""}my-6 text-center text-xs uppercase tracking-[0.3em] text-muted`}>
         ✦ {m.texto} ✦
       </p>
     );
@@ -704,11 +733,29 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
             Vai jogar mais gente? Adicione os personagens antes de começar: o mestre apresenta todo mundo na cena de abertura.
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
-            <Link href={linkNovo} className="btn-borda min-h-12 gap-1.5">
+            <Link
+              href={linkNovo}
+              className={`btn-borda min-h-12 gap-1.5 ${iniciando ? "pointer-events-none opacity-50" : ""}`}
+              aria-disabled={iniciando || undefined}
+              tabIndex={iniciando ? -1 : undefined}
+            >
               <Icone nome="plus" /> Adicionar personagem
             </Link>
-            <button type="button" className="btn-palco" onClick={() => void acoes.controle("iniciar")}>
-              Começar a aventura
+            <button
+              type="button"
+              className="btn-palco"
+              disabled={iniciando}
+              aria-busy={iniciando}
+              onClick={async () => {
+                setIniciando(true);
+                try {
+                  await acoes.controle("iniciar");
+                } finally {
+                  setIniciando(false);
+                }
+              }}
+            >
+              {iniciando ? "Chamando o mestre…" : "Começar a aventura"}
             </button>
           </div>
         </>
@@ -727,6 +774,8 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
     <div className="fixed inset-0 z-30 flex flex-col overflow-hidden text-foreground" style={{ ...escala, "--fonte-capitular": fonteGotica.style.fontFamily } as CSSProperties}>
       <CeuEstrelado />
       <EstiloProsa />
+      {/* leitor de tela: a narração nova é anunciada sem tirar o foco do campo */}
+      <AnunciadorNarracao mensagens={mesa.mensagens} />
 
       {/* o mesmo cabeçalho da mesa avançada (mesmos botões, mesma ordem); aqui o painel é o Códex; tela baixa (baixo:): 44 px */}
       <CabecalhoMesa
@@ -762,7 +811,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
         <button
           type="button"
           onClick={() => abrirCodex()}
-          className="group fixed left-0 top-1/2 z-20 hidden -translate-y-1/2 flex-col items-center gap-2 rounded-r-lg border border-l-0 border-ambar/30 bg-surface/80 px-1.5 py-3 text-muted backdrop-blur transition hover:border-ambar/70 hover:pl-2.5 hover:text-ambar motion-reduce:transition-none lg:flex"
+          className="group fixed left-0 top-1/2 z-20 hidden -translate-y-1/2 flex-col items-center gap-2 rounded-r-lg border border-l-0 border-ambar/30 bg-surface/80 px-1.5 py-3 text-muted backdrop-blur transition-[translate,color,border-color] hover:translate-x-0.5 hover:border-ambar/70 hover:text-ambar motion-reduce:transition-none lg:flex"
           aria-label="Abrir o códex"
           title="Códex (tecla C)"
         >
@@ -781,7 +830,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
       <AjudaAtalhos aberta={ajuda} aoFechar={() => setAjuda(false)} extras={[["C", "abre e fecha o códex"], ...(cenas ? ATALHOS_LEITOR : [])]} />
 
       {/* o livro: uma luz de vela suave atrás da coluna de texto e a vinheta nas bordas dão o ar de página; a altura deste espaço decide a tela baixa */}
-      <div ref={palco} className="relative z-10 flex min-h-0 flex-1 flex-col" data-espaco-leitor>
+      <main id="palco-da-mesa" tabIndex={-1} ref={palco} className="relative z-10 flex min-h-0 flex-1 flex-col focus:outline-none" data-espaco-leitor>
         <div
           className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_42%_62%_at_50%_44%,color-mix(in_srgb,var(--pergaminho)_5.5%,transparent),transparent_72%),radial-gradient(ellipse_80%_90%_at_50%_50%,transparent_55%,color-mix(in_srgb,black_35%,transparent))]"
           aria-hidden
@@ -805,6 +854,10 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
           aoContinuar={() => {
             longeRef.current = false;
             if (!cenas) irParaOFim(true);
+            // o cartão saiu: o foco volta ao campo de ação (só com mouse, para não abrir o teclado do celular)
+            if (window.matchMedia("(pointer: fine)").matches) setTimeout(() => campo.current?.focus(), 50);
+            // no toque, o foco fica no palco (não some no <body> nem abre o teclado)
+            else palco.current?.focus({ preventScroll: true });
           }}
         />
         {/* com o "Anteriormente" aberto, a leitura de trás do véu sai do foco e do toque */}
@@ -826,7 +879,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
             transicao="virar"
             ferramentas={(t) =>
               podeDesfazer && ultimoMestre !== null && t.itens.some((m) => m.id === ultimoMestre) ? (
-                <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={setAviso} compacto fechamento={t.itens.some(ehFimDaNoite)} />
+                <AcoesTurno campanhaId={mesa.campanha.id} aoConcluir={aoDesfazer} aoErro={avisarErro} compacto fechamento={t.itens.some(ehFimDaNoite)} />
               ) : null
             }
             aoMudarFim={setNoFimDaCena}
@@ -849,7 +902,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
                       {turno.acoes.map(desenhar)}
                       {corpo.map((p) =>
                         p.tipo === "prosa" ? (
-                          <div key={p.chave} className="surgir group my-5">
+                          <div key={p.chave} className={`${ehMensagemNova(p.ids[0], ultimoIdNaMontagem) ? "surgir " : ""}group my-5`}>
                             {p === primeiraProsa && rotuloMestre()}
                             <ProsaCena paragrafos={p.paragrafos} inline={prosa.inline} separador={prosa.separador} classe={prosa.classe} />
                             <div className="mt-1 flex min-h-8 flex-wrap items-center justify-end gap-1">
@@ -857,7 +910,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
                                 <AcoesTurno
                                   campanhaId={mesa.campanha.id}
                                   aoConcluir={aoDesfazer}
-                                  aoErro={setAviso}
+                                  aoErro={avisarErro}
                                   className="mr-auto -ml-2.5"
                                   fechamento={turno.itens.some(ehFimDaNoite)}
                                 />
@@ -904,16 +957,22 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
           </>
         )}
         </div>
-      </div>
+      </main>
 
       {/* rodapé enxuto: sugestões (espaço reservado), campo de ação com o retrato e o aviso flutuando por cima */}
       <footer className="relative z-10 border-t border-border/30 bg-background/70 backdrop-blur">
         {aviso && (
           <p
-            className="surgir pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 max-w-[calc(100%-2rem)] -translate-x-1/2 truncate rounded-full border border-ambar/50 bg-surface/95 px-4 py-1.5 text-sm text-ambar shadow-lg"
-            role="status"
+            className={`surgir pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-max max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-2xl border bg-surface/95 px-4 py-1.5 text-center text-sm shadow-lg ${
+              aviso.tom === "erro" ? "border-sangue/60 text-foreground" : "border-ambar/50 text-ambar"
+            }`}
+            role={aviso.tom === "erro" ? "alert" : "status"}
           >
-            {aviso}
+            {/* o corte em 3 linhas fica no miolo: com o padding no mesmo elemento, a ponta da 4ª linha aparecia na folga de baixo */}
+            <span className="line-clamp-3 whitespace-normal text-balance">
+              {aviso.tom === "erro" && <Icone nome="warning" className="mr-1.5 text-sangue" />}
+              {aviso.texto}
+            </span>
           </p>
         )}
         <div className="leitor-medida mx-auto box-content px-4 pb-[max(env(safe-area-inset-bottom),0.4rem)] pt-2 sm:px-6 sm:pt-2.5 baixo:pt-1">
@@ -972,7 +1031,8 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
                   : noiteNova
                     ? `Noite ${noiteNova}: o que ${ativo.ficha.nome} faz?`
                     : `O que ${ativo.ficha.nome} faz?`
-                : "Fale com o mestre ((fora do jogo))"
+                : // curto: o campo fica estreito ao lado de "Escolher personagem" (que já diz a outra metade) e o placeholder não quebra linha
+                  "Fale com o mestre, fora do jogo"
             }
             rotuloCampo={ativo ? `Ação de ${ativo.ficha.nome}` : "Mensagem ao mestre"}
             enviar={enviar}
@@ -981,7 +1041,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
             inicio={
               ativo ? (
                 <div className="flex shrink-0 items-center gap-1">
-                  {/* o retrato abre a ficha (com a vida embaixo); com mais gente no grupo, as setas trocam de personagem */}
+                  {/* o retrato abre a ficha; a barra fina na base é a vida (musgo, âmbar, sangue) e a moldura lampeja no dano e na cura */}
                   <button
                     type="button"
                     onClick={() => abrirCodex("personagem")}
@@ -990,15 +1050,17 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
                     title={`${ativo.ficha.nome} · ${mesa.sistema.rotulos.pv} ${ativo.ficha.pv}/${ativo.ficha.pvMax} · ver a ficha (C)`}
                   >
                     <Retrato ficha={ativo.ficha} tamanho={38} className="rounded" />
-                    <span
-                      className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 inline-flex items-center gap-0.5 whitespace-nowrap rounded-full border border-border bg-background px-1.5 text-[11px] leading-4 tabular-nums ${
-                        ativo.ficha.pvMax > 0 && ativo.ficha.pv <= ativo.ficha.pvMax / 4 ? "text-sangue" : "text-muted"
-                      }`}
-                      aria-hidden
-                    >
-                      <Icone nome="heart" />
-                      {ativo.ficha.pv}
-                    </span>
+                    {ativo.ficha.pvMax > 0 && (
+                      <span aria-hidden data-vida={faixaDaVida(ativo.ficha.pv, ativo.ficha.pvMax)} className="absolute inset-x-1 bottom-0.5 h-1 overflow-hidden rounded-full bg-background/80 ring-1 ring-border/60">
+                        <span
+                          className={`block h-full rounded-full transition-[width] duration-[var(--mov-barra)] motion-reduce:transition-none ${COR_DA_VIDA[faixaDaVida(ativo.ficha.pv, ativo.ficha.pvMax)]}`}
+                          style={{ width: `${porcentoDaVida(ativo.ficha.pv, ativo.ficha.pvMax)}%` }}
+                        />
+                      </span>
+                    )}
+                    {lampejo && (
+                      <span key={lampejo.n} aria-hidden onAnimationEnd={() => setLampejo(null)} className={`pointer-events-none absolute inset-0 rounded-md ${lampejo.tom === "perdeu" ? "lampejo-perda" : "lampejo-ganho"}`} />
+                    )}
                   </button>
                   {mesa.personagens.length > 1 && (
                     <button

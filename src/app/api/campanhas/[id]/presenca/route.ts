@@ -10,7 +10,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/campanhas/[
   if (!acessoPermitido(request, campanha)) return Response.json({ erro: "Esta mesa pede PIN." }, { status: 403 });
 
   const corpo = (await request.json().catch(() => ({}))) as { clienteId?: string; apelido?: string; personagemId?: number | null };
-  if (!corpo.clienteId) return Response.json({ erro: "clienteId obrigatório." }, { status: 400 });
+  if (!corpo.clienteId) return Response.json({ erro: "A taverna não reconheceu este aparelho. Recarregue a página." }, { status: 400 });
   atualizarPresenca(campanha.id, corpo.clienteId, {
     ...(typeof corpo.apelido === "string" ? { apelido: corpo.apelido.trim().slice(0, 40) || "Viajante" } : {}),
     ...(corpo.personagemId !== undefined ? { personagemId: corpo.personagemId } : {}),

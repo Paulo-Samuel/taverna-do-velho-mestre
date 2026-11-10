@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
+import { Fragment, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
 import { emCampoDeTexto } from "@/components/chat/atalhos";
 import { Ouvir } from "@/components/voz/voz";
 import type { Mensagem } from "@/lib/db";
@@ -62,7 +62,7 @@ const ESTILO = `
 .leitor-fluxo p{orphans:2;widows:2}
 .leitor-fluxo [data-inteiro],.leitor-fluxo [data-cartao],.leitor-topo{break-inside:avoid}
 .leitor-topo,.leitor-grudar{break-after:avoid}
-.leitor-fluxo [data-cartao]{transition:opacity .45s ease}
+.leitor-fluxo [data-cartao]{transition:opacity .22s ease}
 .leitor-fluxo [data-leitor-oculto]{visibility:hidden;opacity:0}
 .leitor-fluxo [data-compacto]:not([data-compacto="não"])>*{margin-top:.6rem!important;margin-bottom:.6rem!important}
 .leitor-fluxo [data-versao-compacta] .pedido-teste{padding-top:.5rem;padding-bottom:.7rem}
@@ -76,7 +76,11 @@ const ESTILO = `
 @media (max-height:600px){[data-nav-leitor] button,[data-nav-leitor] a{min-height:1.75rem}}
 @keyframes leitor-chamar{0%,100%{opacity:.55;transform:none}50%{opacity:1;transform:translateX(2px)}}
 .leitor-chamar{animation:leitor-chamar 2.2s ease-in-out infinite}
-@media (prefers-reduced-motion:reduce){.leitor-fluxo [data-cartao]{transition:none}.leitor-chamar{animation:none}}
+@keyframes leitor-virar{from{opacity:.6;transform:translateX(var(--virar,6px))}to{opacity:1;transform:none}}
+@keyframes leitor-virar-b{from{opacity:.6;transform:translateX(var(--virar,6px))}to{opacity:1;transform:none}}
+.leitor-virar{animation:leitor-virar .18s ease-out}
+.leitor-virar[data-virada="b"]{animation-name:leitor-virar-b}
+@media (prefers-reduced-motion:reduce){.leitor-fluxo [data-cartao]{transition:none}.leitor-chamar{animation:none}.leitor-virar,.leitor-virar[data-virada="b"]{animation:none}}
 `;
 
 /**
@@ -116,7 +120,7 @@ export function AcaoTopo({
           {nome}
         </span>
         {autor && autor !== nome && <span className="text-xs text-muted"> ({autor})</span>}
-        <span aria-hidden className="mx-2 inline-block h-px w-3 bg-border align-middle" />
+        <span className="text-muted">:</span>{" "}
         <span className="italic">{t}</span>
       </p>
       {/* o teste que a ação virou: no canto no desktop, numa linha própria no celular (a ação não fica espremida) */}
@@ -310,7 +314,9 @@ export function LeitorCenas({
   // o que já estava na mesa ao abrir aparece inteiro; o que chega nesta sessão se revela
   const [iniciais] = useState(() => new Set(mensagens.map((m) => m.id)));
   const lido = !turno.chave.startsWith("novo") && [...turno.acoes, ...turno.itens].every((m) => iniciais.has(m.id)) && !aoVivo;
-  const { animar } = usePreferenciasLeitor();
+  // fonte, coluna e entrelinha entram aqui de propósito: trocar qualquer uma renderiza o leitor de novo, e o useRevelar mede
+  // (e repagina) depois de cada render. A coluna ainda mexe na largura do visor; a entrelinha só na altura do texto.
+  const { animar, fonte, coluna, entrelinha } = usePreferenciasLeitor();
   const menos = useMenosMovimento();
   const anima = animar && !menos && suportaRevelar();
   // a cena fecha a noite (tem o marcador de fim): ver o efeito "abre na última página" abaixo
@@ -330,6 +336,20 @@ export function LeitorCenas({
   const paginas = medido ? layout.paginas : 1;
   const paginaAtual = Math.min(pagina, paginas - 1);
   const maisPaginas = paginaAtual < paginas - 1;
+
+  // virada de página: um sinal só e curto (.leitor-virar, 180 ms, opacidade + 6 px do lado de onde a folha vem). Conta as
+  // viradas da cena para a animação recomeçar a cada troca; cena nova zera (ela já entra com o próprio esmaecer).
+  const [virada, setVirada] = useState({ chave: turno.chave, pagina: paginaAtual, n: 0, dir: 1 });
+  if (virada.chave !== turno.chave || virada.pagina !== paginaAtual) {
+    const mesmaCena = virada.chave === turno.chave;
+    setVirada({ chave: turno.chave, pagina: paginaAtual, n: mesmaCena ? virada.n + 1 : 0, dir: paginaAtual >= virada.pagina ? 1 : -1 });
+  }
+  // a transição antiga do useRevelar (280/440 ms, por script, no mesmo visor) passaria por cima da folha de estilo: sai de cena
+  // para sobrar um ritmo só. Ele trata o cancelamento como fim e mede de novo. Só opacidade e transform: a conta não muda.
+  // Sem dependências de propósito: o useRevelar decide a virada pela medida dele, que pode andar sem a contagem daqui mudar.
+  useLayoutEffect(() => {
+    for (const a of visor.current?.getAnimations?.() ?? []) if (!("animationName" in a)) a.cancel();
+  });
   const noFim = !maisPaginas && completa;
 
   useEffect(() => {
@@ -516,7 +536,14 @@ export function LeitorCenas({
       >
         <div className="absolute inset-0 px-5 sm:px-6">
           <div className={`relative mx-auto h-full w-full ${largura}`}>
-            <div ref={visor} className="h-full overflow-hidden" data-visor>
+            <div
+              ref={visor}
+              className={`h-full overflow-hidden ${virada.n ? "leitor-virar" : ""}`}
+              style={{ "--virar": `${virada.dir * 6}px` } as CSSProperties}
+              data-virada={virada.n % 2 ? "a" : "b"}
+              data-ajuste={`${fonte}-${coluna}-${entrelinha}`}
+              data-visor
+            >
               <div
                 ref={fluxo}
                 className="leitor-fluxo h-full pb-4 [--respiro:1rem] sm:[--respiro:1.75rem] baixo:pb-2 baixo:[--respiro:0.75rem]"
@@ -611,7 +638,7 @@ export function LeitorCenas({
                       className="group relative grid size-7 place-items-center rounded focus-visible:outline-2 focus-visible:outline-ambar before:absolute before:inset-x-0 before:-inset-y-1.5 sm:size-6 sm:before:hidden"
                     >
                       <span
-                        className={`block rounded-full transition-all duration-300 motion-reduce:transition-none ${
+                        className={`block rounded-full transition-[width,background-color] duration-200 motion-reduce:transition-none ${
                           k === paginaAtual ? "h-1.5 w-4 bg-ambar" : "size-1.5 bg-muted/40 group-hover:bg-muted/80"
                         }`}
                       />

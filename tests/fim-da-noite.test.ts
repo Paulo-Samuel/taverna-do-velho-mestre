@@ -84,7 +84,7 @@ describe("noite", () => {
       msg("dado", { tipo: "pedido_teste", teste: "Remorso", personagem: "Vera", status: "resolvido", resultado: { sucesso: true } }),
       marcador(2),
     ];
-    assert.deepEqual(chipsDaNoite(ms as never[]), ["Vera: +3 XP", "Vera: Remorso — Humanidade mantida"]);
+    assert.deepEqual(chipsDaNoite(ms as never[]), ["Vera: +3 XP", "Vera: Remorso, Humanidade mantida"]);
   });
 });
 

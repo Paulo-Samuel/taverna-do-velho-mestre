@@ -165,7 +165,7 @@ export function chipsDaNoite(mensagens: Mensagem[]): string[] {
     if (!res || (d.tipo === "pedido_teste" && d.status !== "resolvido")) continue;
     const ok = sucessoDe(res);
     const nome = typeof d.personagem === "string" ? d.personagem : "";
-    chips.push(`${nome ? `${nome}: ` : ""}Remorso ${ok === false ? "— Humanidade −1" : ok ? "— Humanidade mantida" : "rolado"}`);
+    chips.push(`${nome ? `${nome}: ` : ""}${ok === false ? "Remorso, Humanidade −1" : ok ? "Remorso, Humanidade mantida" : "Remorso rolado"}`);
   }
   return chips;
 }

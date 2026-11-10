@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { EstadoVazio } from "@/components/estado-vazio";
 import { CeuEstrelado } from "@/components/historia/ceu-estrelado";
 import { fonteGotica } from "@/components/historia/fonte-gotica";
 import { Retrato, RetratoSVG } from "@/components/historia/retrato";
@@ -180,6 +182,7 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
         </div>
       </div>
 
+      <main>
       <article className="relative z-10 mx-auto max-w-[44rem] px-5 pb-24 sm:px-8">
         {/* capa */}
         <header className="livro-capa my-6 flex min-h-[78dvh] flex-col items-center justify-center rounded-sm border border-ambar/30 px-4 py-16 text-center outline outline-1 outline-offset-4 outline-[color-mix(in_srgb,var(--ambar)_30%,transparent)] sm:px-8">
@@ -239,7 +242,19 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
         )}
 
         {!temNarracao && (
-          <p className="livro-capitulo py-16 text-center italic text-muted">As páginas ainda estão em branco. O mestre só escreve quando alguém se senta à mesa.</p>
+          <div className="livro-capitulo py-16">
+            <EstadoVazio
+              icone="book"
+              className="print:border-0"
+              acao={
+                <Link href={`/mesa/${id}`} className="nao-imprimir btn-ambar min-h-11">
+                  Ir para a mesa
+                </Link>
+              }
+            >
+              As páginas ainda estão em branco. O mestre só escreve quando alguém se senta à mesa.
+            </EstadoVazio>
+          </div>
         )}
 
         {/* capítulos */}
@@ -342,6 +357,7 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
           <p className="mt-3">Escrito na Taverna do Velho Mestre. Os personagens são IA; as desculpas pelas rolagens ruins são de vocês.</p>
         </footer>
       </article>
+      </main>
     </div>
   );
 }

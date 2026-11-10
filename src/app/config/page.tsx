@@ -32,7 +32,7 @@ export default async function PaginaConfig() {
   if (!ehDestaMaquina(h.get("host"), h.get("x-forwarded-for"))) {
     return (
       <main className="mx-auto max-w-xl px-4 py-12">
-        <p className="cartao p-6 text-muted">As configurações do mestre só abrem no computador da taverna. Daqui, só as mesas.</p>
+        <p className="cartao p-6 text-muted">As configurações do mestre só abrem na máquina da taverna. Daqui, só as mesas.</p>
         <PainelPreferencias />
       </main>
     );
@@ -62,6 +62,7 @@ export default async function PaginaConfig() {
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:py-10">
       <CabecalhoPagina
+        className="max-w-4xl"
         titulo="Configurações"
         subtitulo={
           <>

@@ -61,14 +61,22 @@ export function BotaoVoz({
   const { disponivel, falando, prefs } = useVoz();
   const [aberto, setAberto] = useState(false);
   const caixa = useRef<HTMLDivElement>(null);
+  // o botão que abriu o popover (o do cabeçalho ou a setinha): o Esc devolve o foco a ele
+  const botao = useRef<HTMLButtonElement>(null);
 
-  // popover: fecha com Esc ou clique fora
+  // popover: fecha com Esc (o foco volta ao botão) ou clique fora
   useEffect(() => {
     if (!aberto) return;
     const fora = (e: PointerEvent) => {
       if (caixa.current && !caixa.current.contains(e.target as Node)) setAberto(false);
     };
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setAberto(false);
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setAberto(false);
+      // só devolve o foco se ele estava aqui dentro (ou perdido): quem já foi para outro canto não é puxado de volta
+      const foco = document.activeElement;
+      if (!foco || foco === document.body || caixa.current?.contains(foco)) botao.current?.focus();
+    };
     document.addEventListener("pointerdown", fora);
     document.addEventListener("keydown", esc);
     return () => {
@@ -94,6 +102,7 @@ export function BotaoVoz({
       {compacto ? (
         // cabeçalho das mesas: um botão só de 40x40; o liga/desliga, a voz e a velocidade moram no popover
         <button
+          ref={botao}
           type="button"
           onClick={() => setAberto((a) => !a)}
           title={dica}
@@ -124,6 +133,7 @@ export function BotaoVoz({
           <span className="hidden text-xs font-semibold xl:inline">Ler</span>
         </button>
         <button
+          ref={botao}
           type="button"
           onClick={() => setAberto((a) => !a)}
           title="Voz e velocidade da leitura"
@@ -131,16 +141,16 @@ export function BotaoVoz({
           aria-expanded={aberto}
           className={`${compacto ? "hidden sm:grid" : "grid"} h-10 min-w-7 place-items-center border-l border-border px-1.5 text-xs text-muted transition hover:text-ambar sm:h-9`}
         >
-          <span aria-hidden>▾</span>
+          <Icone nome="chevronDown" />
         </button>
       </div>
       )}
 
       {aberto && (
-        <div className={`cartao surgir bg-surface! absolute z-50 w-72 ${acima ? "bottom-full left-0 mb-2" : "right-0 top-full mt-2"} max-w-[calc(100vw-1rem)] p-3 text-foreground`} role="dialog" aria-label="Leitura em voz alta">
+        <div className={`cartao surgir-menu bg-surface! absolute z-50 w-72 ${acima ? "bottom-full left-0 mb-2" : "right-0 top-full mt-2"} max-w-[calc(100vw-1rem)] p-3 text-foreground`} role="dialog" aria-label="Leitura em voz alta">
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="titulo text-sm text-ambar">Leitura em voz alta</span>
-            <button type="button" onClick={alternar} className="min-h-8 text-xs text-muted hover:text-ambar">
+            <button type="button" onClick={alternar} className="min-h-10 rounded-md px-1 text-xs text-muted hover:text-ambar">
               {prefs.auto ? "Desligar" : "Ligar"}
             </button>
           </div>
@@ -195,11 +205,11 @@ export function BotaoVoz({
               className="min-h-8 text-xs text-ambar hover:underline"
               onClick={() => falar("Puxe um banco, viajante. O mestre já está bêbado, mas ainda sabe ler.", { id: "teste-voz", interromper: true })}
             >
-              ▶ Testar a voz
+              <Icone nome="sound" /> Testar a voz
             </button>
             {falando && (
               <button type="button" className="min-h-8 text-xs text-muted hover:text-sangue" onClick={parar}>
-                ■ Calar o mestre
+                <Icone nome="stop" /> Calar o mestre
               </button>
             )}
           </div>
@@ -210,7 +220,7 @@ export function BotaoVoz({
 }
 
 /**
- * Linha do menu "⋯" do cabeçalho (telas estreitas): liga/desliga a leitura automática num toque. Voz e velocidade continuam
+ * Linha do menu "Mais opções" do cabeçalho (telas estreitas): liga/desliga a leitura automática num toque. Voz e velocidade continuam
  * no botão do cabeçalho largo e no painel. Some sem voz em português.
  */
 export function LinhaVoz({ aoUsar }: { aoUsar?: () => void }) {
@@ -219,8 +229,7 @@ export function LinhaVoz({ aoUsar }: { aoUsar?: () => void }) {
   return (
     <button
       type="button"
-      role="menuitemcheckbox"
-      aria-checked={prefs.auto}
+      aria-pressed={prefs.auto}
       onClick={() => {
         const auto = !prefs.auto;
         salvarPreferenciasVoz({ auto });
@@ -277,7 +286,7 @@ export function Ouvir({ id, texto, className = "", fixo = false }: { id: string;
             : "text-muted/70 hover:text-ambar sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
       } ${className}`}
     >
-      <span aria-hidden>{este ? "■" : <Icone nome="sound" />}</span>
+      <span aria-hidden>{este ? <Icone nome="stop" /> : <Icone nome="sound" />}</span>
       <span className={fixo ? "max-sm:sr-only" : ""}>{este ? "parar" : "ouvir"}</span>
     </button>
   );

@@ -5,6 +5,7 @@ import { useActionState, useEffect, useMemo, useState, useSyncExternalStore, typ
 import type { EstadoHistoria } from "@/app/nova/historia-acoes";
 import type { AventuraPublica } from "@/lib/aventuras/tipos";
 import { apelido as apelidoSalvo } from "@/lib/cliente/identidade";
+import { comportamentoDeRolagem } from "@/lib/cliente/movimento";
 import { DIFICULDADES, dificuldadeDe, TAMANHOS, tamanhoDe, type Dificuldade, type TamanhoNarracao } from "@/lib/mestre/estilo";
 import type { SistemaPublico } from "@/lib/sistemas/tipos";
 import { Musica } from "../musica";
@@ -387,8 +388,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
 
   function irPara(passo: number) {
     mudar({ passo: Math.max(0, Math.min(ultimo, passo)) });
-    const reduzido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    window.scrollTo({ top: 0, behavior: reduzido ? "auto" : "smooth" });
+    window.scrollTo({ top: 0, behavior: comportamentoDeRolagem() });
   }
 
   function avancar() {
@@ -876,7 +876,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                     <span className="font-semibold text-pergaminho">Como você quer o mestre?</span>
                     <span className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-muted">
                       {dificuldade.nome} · <span className="hidden sm:inline">narração</span> {narracao.nome.toLowerCase()}
-                      <span className="text-ambar transition group-open:rotate-180" aria-hidden>
+                      <span className="text-ambar transition group-open:rotate-180 motion-reduce:transition-none" aria-hidden>
                         <Icone nome="chevronDown" aria-hidden />
                       </span>
                     </span>
@@ -1166,7 +1166,7 @@ export function EdicaoHistoria({ semente, inicial, acao, mesa, ocupado }: PropsE
               </FaixaAviso>
             ) : ocupado ? (
               <FaixaAviso tom="info" className="surgir mb-3">
-                O Velho Mestre está contando a história agora. Pode escrever; guarde quando ele terminar.
+                O Velho Mestre está contando a história agora. Pode escrever; salve quando ele terminar.
               </FaixaAviso>
             ) : null}
             <div className="flex items-center gap-3">
@@ -1174,7 +1174,7 @@ export function EdicaoHistoria({ semente, inicial, acao, mesa, ocupado }: PropsE
                 Cancelar
               </Link>
               <button type="submit" className="btn-ambar min-h-12 flex-1 py-3 text-base" disabled={enviando} aria-busy={enviando}>
-                {enviando ? "Guardando…" : "Guardar"}
+                {enviando ? "Salvando…" : "Salvar a ficha"}
               </button>
             </div>
           </div>

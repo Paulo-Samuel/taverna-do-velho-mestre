@@ -74,20 +74,45 @@ function Barras({ itens, ajuste }: Extract<BlocoFicha, { tipo: "barras" }> & { a
               )}
             </div>
             {caixas ? (
-              <div className="flex flex-wrap gap-1">
-                {Array.from({ length: b.max }, (_, n) => (
-                  <span
-                    key={n}
-                    className={`h-3 w-5 rounded-sm border transition-colors duration-500 ${n < b.atual ? `${cor} border-transparent` : "border-border bg-surface-2"}`}
-                  />
-                ))}
-              </div>
+              <Caixinhas atual={b.atual} max={b.max} cor={cor} />
             ) : (
-              <div className="h-2 overflow-hidden rounded-full bg-surface-2">
-                <div className={`h-full rounded-full transition-all duration-700 ${cor}`} style={{ width: `${pct}%` }} />
+              <div className="relative h-2 overflow-hidden rounded-full bg-surface-2">
+                {/* rastro: mesma largura da barra, mas sai meio segundo depois e devagar; na perda, fica à mostra o que saiu */}
+                <div
+                  className="absolute inset-y-0 left-0 rounded-full bg-sangue/45 transition-[width] delay-500 duration-700 motion-reduce:transition-none"
+                  style={{ width: `${pct}%` }}
+                  aria-hidden
+                />
+                <div
+                  className={`relative h-full rounded-full transition-[width] duration-[var(--mov-barra)] motion-reduce:transition-none ${cor}`}
+                  style={{ width: `${pct}%` }}
+                />
               </div>
             )}
           </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Recurso pequeno em caixinhas. As que acabaram de mudar (gastas ou recuperadas) piscam uma vez. */
+function Caixinhas({ atual, max, cor }: { atual: number; max: number; cor: string }) {
+  // valor anterior guardado em estado e acertado durante a renderização (sem ref no render, sem efeito)
+  const [visto, setVisto] = useState({ atual, de: atual, vez: 0 });
+  if (visto.atual !== atual) setVisto({ atual, de: visto.atual, vez: visto.vez + 1 });
+  const de = visto.atual === atual ? visto.de : visto.atual;
+  const [menor, maior] = de < atual ? [de, atual] : [atual, de];
+  return (
+    <div className="flex flex-wrap gap-1">
+      {Array.from({ length: max }, (_, n) => {
+        const mudou = n >= menor && n < maior;
+        return (
+          <span
+            // a chave muda a cada alteração: a animação recomeça só nas caixinhas que mudaram
+            key={mudou ? `${n}-${visto.vez}` : n}
+            className={`h-3 w-5 rounded-sm border transition-colors duration-500 motion-reduce:transition-none ${mudou ? (atual < de ? "lampejo-perda" : "lampejo-ganho") : ""} ${n < atual ? `${cor} border-transparent` : "border-border bg-surface-2"}`}
+          />
         );
       })}
     </div>
@@ -379,7 +404,7 @@ export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste
             </div>
             {proximo !== null && (
               <div className="h-1 overflow-hidden rounded-full bg-surface-2">
-                <div className="h-full rounded-full bg-ambar-forte transition-all duration-700" style={{ width: `${pctXp}%` }} />
+                <div className="h-full rounded-full bg-ambar-forte transition-[width] duration-700 motion-reduce:transition-none" style={{ width: `${pctXp}%` }} />
               </div>
             )}
           </div>

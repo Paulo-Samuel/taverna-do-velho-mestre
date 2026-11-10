@@ -64,11 +64,24 @@ export type Livro = {
 /** Nota de rolagem para a margem, ou null quando é coisa interna. */
 function notaDoDado(m: Mensagem): string | null {
   const d = (m.dados ?? {}) as Record<string, unknown>;
-  if (d.tipo === "rolagem") return d.secreta ? null : m.texto;
-  if (d.tipo === "teste") return m.texto;
-  if (d.tipo === "pedido_teste") return d.status === "resolvido" ? m.texto : null;
-  if (d.tipo === "xp" && typeof d.resumo === "string") return d.resumo;
+  if (d.tipo === "rolagem") return d.secreta ? null : limparNota(m.texto);
+  if (d.tipo === "teste") return limparNota(m.texto);
+  if (d.tipo === "pedido_teste") return d.status === "resolvido" ? limparNota(m.texto) : null;
+  if (d.tipo === "xp" && typeof d.resumo === "string") return limparNota(d.resumo);
   return null;
+}
+
+/**
+ * Nota de rolagem sem travessão nem seta: "Diplomacia, Barganhar: 1d20+3 = 13 vs 17". Vale para a tela e para o Markdown.
+ * A seta depois da conta do dado vira "="; a seta de mudança de valor ("Fome 2 → 3", "(1 → 0)") vira "para", porque
+ * "Fome 2 = 3" seria mentira.
+ */
+export function limparNota(t: string): string {
+  return t.replace(/\s+—\s+/g, ", ").replace(/\s*→\s*/g, (seta: string, pos: number, tudo: string) => {
+    const antes = /(?:(\()|([\p{L}\d]*\p{L}[\p{L}\d]*)\s)\d+$/u.exec(tudo.slice(0, pos));
+    const mudanca = antes !== null && /^\d/.test(tudo.slice(pos + seta.length)) && !/^(vs|contra|cd)$/i.test(antes[2] ?? "");
+    return mudanca ? " para " : " = ";
+  });
 }
 
 function resumirFicha(sistema: Sistema, p: Personagem): FichaResumo {

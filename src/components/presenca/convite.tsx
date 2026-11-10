@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icone } from "@/components/icones";
+import { useFocoPreso } from "@/lib/cliente/use-foco-preso";
 
 // Convite para entrar pela rede local: endereço da máquina, QR code e PIN.
 // Os endereços e os QR codes vêm de /api/rede (o servidor sabe os IPs; o navegador não).
@@ -93,7 +94,7 @@ function IconeConvite() {
 
 /**
  * compacto: o botão de 40x40 do cabeçalho das mesas (ícone; "Convidar" escrito só em telas largas).
- * linha: uma linha do menu "⋯" do cabeçalho (celular).
+ * linha: uma linha do menu "Mais opções" do cabeçalho (celular).
  */
 export function Convite({
   campanhaId,
@@ -116,6 +117,16 @@ export function Convite({
   // o PIN pode mudar aqui mesmo antes do estado da mesa recarregar
   const [pinAgora, setPinAgora] = useState<boolean | null>(null);
   const comPin = pinAgora ?? temPin;
+  // diálogo: Tab fica preso nele e, ao fechar, o foco volta para o botão que abriu
+  const dialogo = useRef<HTMLDivElement>(null);
+  useFocoPreso(dialogo, aberto);
+
+  // ao abrir, o foco entra no diálogo (no contêiner, para o leitor de tela anunciar o título)
+  useEffect(() => {
+    if (!aberto) return;
+    const el = dialogo.current;
+    if (el && !el.contains(document.activeElement)) el.focus();
+  }, [aberto]);
 
   useEffect(() => {
     if (!aberto) return;
@@ -150,7 +161,6 @@ export function Convite({
       {linha ? (
         <button
           type="button"
-          role="menuitem"
           className={`flex min-h-11 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground/90 hover:bg-surface-2/60 hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar ${className}`}
           onClick={() => setAberto(true)}
           data-convidar
@@ -179,7 +189,9 @@ export function Convite({
 
       {aberto && (
         <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4"
+          ref={dialogo}
+          tabIndex={-1}
+          className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 outline-none"
           role="dialog"
           aria-modal="true"
           aria-labelledby="titulo-convite"
@@ -193,13 +205,18 @@ export function Convite({
                 </h2>
                 <p className="text-sm text-muted">Celulares e notebooks no mesmo Wi-Fi entram pelo navegador. Nada de instalar.</p>
               </div>
-              <button type="button" onClick={() => setAberto(false)} className="text-muted hover:text-foreground" aria-label="Fechar">
-                ✕
+              <button
+                type="button"
+                onClick={() => setAberto(false)}
+                className="grid size-10 shrink-0 place-items-center rounded-md text-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ambar"
+                aria-label="Fechar o convite"
+              >
+                <Icone nome="close" />
               </button>
             </div>
 
             {erro && <p className="rounded-md border border-sangue/60 bg-sangue/10 px-3 py-2 text-sm">{erro}</p>}
-            {!info && !erro && <p className="animate-pulse py-10 text-center text-sm text-muted">Procurando a taverna na rede…</p>}
+            {!info && !erro && <p className="animate-pulse py-10 motion-reduce:animate-none text-center text-sm text-muted">Procurando a taverna na rede…</p>}
 
             {info && !atual && (
               <p className="rounded-md border border-sangue/60 bg-sangue/10 px-3 py-2 text-sm">

@@ -65,7 +65,7 @@ export default async function AjustesMesa(props: PageProps<"/mesa/[id]/ajustes">
           titulo="Ajustes da mesa"
           subtitulo={
             <>
-              {sistema.nome} · {grupo.length} {grupo.length === 1 ? "personagem" : "personagens"} · criada em{" "}
+              {sistema.id === "historia" ? "Modo história" : sistema.nome} · {grupo.length} {grupo.length === 1 ? "personagem" : "personagens"} · criada em{" "}
               {new Date(campanha.criadaEm + "Z").toLocaleDateString("pt-BR")}
             </>
           }

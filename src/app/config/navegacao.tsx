@@ -72,7 +72,7 @@ export function Navegacao() {
         onClick={() => setAberto((a) => !a)}
       >
         <Icone nome={aberto ? "close" : "menu"} />
-        <span className="sr-only">{aberto ? "Fechar menu" : "Abrir menu"}</span>
+        <span className="sr-only">{aberto ? "Fechar menu de navegação" : "Abrir menu de navegação"}</span>
       </button>
 
       {aberto && (
@@ -84,7 +84,15 @@ export function Navegacao() {
             ref={menuRef}
             id="menu-celular"
             aria-label="Principal"
-            className="cartao surgir absolute inset-x-4 top-full z-40 mt-2 flex flex-col bg-surface! p-2 md:hidden"
+            className="cartao surgir-menu absolute inset-x-4 top-full z-40 mt-2 flex flex-col bg-surface! p-2 md:hidden"
+            // o foco saiu do menu (Tab para o resto da página): fecha. Sem relatedTarget (a janela perdeu o foco, ou o toque
+            // caiu em algo que não recebe foco) fica como está; o véu e o Esc cuidam desses casos.
+            onBlur={(e) => {
+              const destino = e.relatedTarget;
+              if (!(destino instanceof Node)) return;
+              if (e.currentTarget.contains(destino) || botaoRef.current?.contains(destino)) return;
+              setAberto(false);
+            }}
           >
             {itens((ativo) => `flex min-h-11 items-center gap-3 rounded-md px-3 py-3 ${ativo ? "bg-surface-2 text-ambar shadow-[inset_2px_0_0_var(--ambar)]" : "text-foreground hover:text-ambar"}`, true)}
           </nav>

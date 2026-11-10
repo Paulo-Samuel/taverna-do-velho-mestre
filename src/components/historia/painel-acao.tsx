@@ -16,12 +16,9 @@ import { LIMITE_ACAO, faltam, rotuloFaltam } from "@/components/historia/campo-c
 // Quando chega a vez da pessoa, o campo pisca uma vez na cor do tema (convite); perto do limite, um contador aparece
 // por cima da borda (vermelho clareado com a cor do texto nos últimos 20: o --sangue puro não dá 4,5:1 no tema da mesa). As duas coisas são só cor, sombra e sobreposição: a altura do painel não muda.
 
-// Só o meio da animação é fixado: o começo e o fim são a borda que o campo já tem (a do foco, se ele estiver em foco),
-// então o convite não apaga o realce do foco depois de tocar.
+// A piscada (.campo-convite) e a marca que fica enquanto é a vez e o campo está vazio (.campo-da-vez: borda âmbar e filete à
+// esquerda) moram no globals.css. A marca some quando a pessoa começa a digitar.
 const CSS = `
-@keyframes campo-convite{35%{box-shadow:0 0 0 3px color-mix(in srgb,var(--ambar) 30%,transparent);border-color:var(--ambar)}}
-.campo-convite{animation:campo-convite 1.4s ease-out 1}
-@media (prefers-reduced-motion:reduce){.campo-convite{animation:none}}
 .campo-contador-fim{color:color-mix(in srgb,var(--sangue) 60%,var(--foreground))}
 `;
 
@@ -102,8 +99,9 @@ export function PainelAcao({
         {CSS}
       </style>
       {(ver || reservar) && (
-        // três linhas de sugestão no desktop (3 × 28 + 2 × 3), uma no celular e na tela baixa (sem altura reservada); encostadas no campo
-        <div className="mb-2 flex min-h-10 flex-col justify-end largo:min-h-[90px] baixo:mb-1" data-vaga-sugestoes>
+        // três linhas de sugestão no desktop (3 × 28 + 2 × 3), uma no celular e na tela baixa (sem altura reservada); encostadas no campo.
+        // Tela baixa (zoom de 200%) com o dado esperando: a vaga some, que a barra do campo já diz o que falta
+        <div className={`mb-2 flex min-h-10 flex-col justify-end largo:min-h-[90px] baixo:mb-1 ${bloqueio ? "baixo:hidden" : ""}`} data-vaga-sugestoes>
           {ver ? (
             <SugestoesCompactas sugestoes={sugestoes} desabilitado={enviando || desabilitado} discretas={sugestoesDiscretas} aoEscolher={(t) => void mandar(t, false)} />
           ) : (
@@ -167,7 +165,7 @@ export function PainelAcao({
               maxLength={LIMITE_ACAO}
               aria-label={perguntar ? "Pergunta ao mestre, fora do jogo" : rotuloCampo}
               placeholder={perguntar ? "Pergunte ao mestre (regras, opções, chances)…" : placeholder}
-              className={`campo field-sizing-content max-h-36 min-h-11 min-w-0 flex-1 resize-none bg-surface-2/80 py-2.5 leading-snug [&:placeholder-shown]:max-h-11 [&:placeholder-shown]:overflow-hidden [&:placeholder-shown]:whitespace-nowrap ${convite ? "campo-convite" : ""} ${perguntar ? "border-dashed! border-ambar/60! bg-ambar/5!" : ""}`}
+              className={`campo field-sizing-content max-h-36 min-h-11 min-w-0 flex-1 resize-none bg-surface-2/80 py-2.5 leading-snug [&:placeholder-shown]:max-h-11 [&:placeholder-shown]:overflow-hidden [&:placeholder-shown]:whitespace-nowrap ${convite ? "campo-convite" : ""} ${convite && texto === "" ? "campo-da-vez" : ""} ${perguntar ? "border-dashed! border-ambar/60! bg-ambar/5!" : ""}`}
               data-campo-acao
             />
             {resta !== null && (

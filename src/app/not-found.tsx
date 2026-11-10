@@ -37,7 +37,7 @@ export default async function NaoEncontrado() {
                 Voltar às campanhas
               </Link>
               <Link href="/nova" className="btn-borda min-h-11">
-                Nova história
+                Nova campanha
               </Link>
             </div>
             <p className="mt-2">
@@ -52,7 +52,7 @@ export default async function NaoEncontrado() {
         ) : (
           <p className="mt-6 flex items-center justify-center gap-2 text-sm text-muted">
             <Icone nome="phone" className="text-base text-ambar" />
-            <span>Peça o link da mesa de novo para quem está no computador da taverna.</span>
+            <span>Peça o link da mesa de novo para quem está na máquina da taverna.</span>
           </p>
         )}
       </div>

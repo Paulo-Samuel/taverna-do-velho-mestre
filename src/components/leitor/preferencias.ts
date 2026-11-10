@@ -1,9 +1,10 @@
 "use client";
 
 import { useSyncExternalStore, type CSSProperties } from "react";
+import { COLUNAS, ENTRELINHAS, PASSO_PADRAO, passoValido } from "./conforto";
 
 // Preferências locais do leitor (deste navegador): cena a cena ou rolagem contínua, o texto se revelando aos poucos, o tamanho
-// da letra e, com a tela baixa (palco com menos de ~180 px: notebook a 150 %+, zoom 200 %), insistir nas páginas em vez de cair
+// da letra, a largura da coluna, a entrelinha e, com a tela baixa (palco com menos de ~180 px: notebook a 150 %+, zoom 200 %), insistir nas páginas em vez de cair
 // sozinho para a rolagem. localStorage pode não existir (aba anônima, bloqueio): tudo em try/catch, com o padrão "cena a cena,
 // animado, letra média, rolagem quando a tela é baixa".
 
@@ -13,6 +14,10 @@ export type PreferenciasLeitor = {
   animar: boolean;
   /** passo do tamanho da letra (índice de ESCALAS_FONTE) */
   fonte: number;
+  /** largura da coluna de leitura (índice de COLUNAS, em conforto.ts) */
+  coluna: number;
+  /** entrelinha da narração (índice de ENTRELINHAS, em conforto.ts) */
+  entrelinha: number;
   /** tela baixa: continuar em páginas (curtas) em vez da rolagem automática */
   paginasEmTelaBaixa: boolean;
 };
@@ -22,7 +27,7 @@ export const ESCALAS_FONTE = [0.88, 1, 1.12, 1.25];
 const FONTE_PADRAO = 1;
 
 const CHAVE = "taverna:leitor";
-const PADRAO: PreferenciasLeitor = { modo: "cenas", animar: true, fonte: FONTE_PADRAO, paginasEmTelaBaixa: false };
+const PADRAO: PreferenciasLeitor = { modo: "cenas", animar: true, fonte: FONTE_PADRAO, coluna: PASSO_PADRAO, entrelinha: PASSO_PADRAO, paginasEmTelaBaixa: false };
 
 const fonteValida = (f: unknown) => (typeof f === "number" && Number.isInteger(f) && f >= 0 && f < ESCALAS_FONTE.length ? f : FONTE_PADRAO);
 
@@ -37,6 +42,8 @@ function ler(): PreferenciasLeitor {
       modo: bruto?.modo === "rolagem" ? "rolagem" : "cenas",
       animar: bruto?.animar !== false,
       fonte: fonteValida(bruto?.fonte),
+      coluna: passoValido(bruto?.coluna, COLUNAS.length),
+      entrelinha: passoValido(bruto?.entrelinha, ENTRELINHAS.length),
       paginasEmTelaBaixa: bruto?.paginasEmTelaBaixa === true,
     };
   } catch {
@@ -48,6 +55,8 @@ function ler(): PreferenciasLeitor {
 export function salvarPreferenciasLeitor(mudancas: Partial<PreferenciasLeitor>) {
   atual = { ...ler(), ...mudancas };
   atual.fonte = fonteValida(atual.fonte);
+  atual.coluna = passoValido(atual.coluna, COLUNAS.length);
+  atual.entrelinha = passoValido(atual.entrelinha, ENTRELINHAS.length);
   try {
     localStorage.setItem(CHAVE, JSON.stringify(atual));
   } catch {
@@ -75,10 +84,18 @@ export function usePreferenciasLeitor(): PreferenciasLeitor {
   return useSyncExternalStore(assinar, ler, () => PADRAO);
 }
 
-/** Estilo com a escala da letra (--leitor-escala), para pôr na raiz da mesa: vale para o leitor cena a cena e para a rolagem. */
+/**
+ * Estilo com a escala da letra (--leitor-escala), a largura da coluna (--leitor-coluna) e, quando não é a de sempre, a
+ * entrelinha (--leitor-entrelinha), para pôr na raiz da mesa: vale para o leitor cena a cena e para a rolagem.
+ */
 export function useEscalaLeitor(): CSSProperties {
-  const { fonte } = usePreferenciasLeitor();
-  return { "--leitor-escala": ESCALAS_FONTE[fonte] } as CSSProperties;
+  const { fonte, coluna, entrelinha } = usePreferenciasLeitor();
+  const linha = ENTRELINHAS[entrelinha].valor;
+  return {
+    "--leitor-escala": ESCALAS_FONTE[fonte],
+    "--leitor-coluna": COLUNAS[coluna].fator,
+    ...(linha !== null ? { "--leitor-entrelinha": linha } : {}),
+  } as CSSProperties;
 }
 
 const CONSULTA_MOVIMENTO = "(prefers-reduced-motion: reduce)";

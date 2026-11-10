@@ -27,19 +27,19 @@
   body,
   [data-tema] {
     transition:
-      --background 0.6s ease,
-      --surface 0.6s ease,
-      --surface-2 0.6s ease,
-      --foreground 0.6s ease,
-      --muted 0.6s ease,
-      --border 0.6s ease,
-      --ambar 0.6s ease,
-      --ambar-forte 0.6s ease,
-      --sangue 0.6s ease,
-      --pergaminho 0.6s ease,
-      --botao 0.6s ease,
-      --botao-texto 0.6s ease,
-      --botao-hover 0.6s ease;
+      --background 0.25s ease,
+      --surface 0.25s ease,
+      --surface-2 0.25s ease,
+      --foreground 0.25s ease,
+      --muted 0.25s ease,
+      --border 0.25s ease,
+      --ambar 0.25s ease,
+      --ambar-forte 0.25s ease,
+      --sangue 0.25s ease,
+      --pergaminho 0.25s ease,
+      --botao 0.25s ease,
+      --botao-texto 0.25s ease,
+      --botao-hover 0.25s ease;
   }
   @media (prefers-reduced-motion: reduce) {
     body,

@@ -277,6 +277,19 @@ const CAMINHOS = {
       <path d="M14 4h6v6M20 4l-9 9" />
     </>
   ),
+  search: (
+    <>
+      <circle cx="10.8" cy="10.8" r="6.3" />
+      <path d="M15.5 15.5 20 20" />
+    </>
+  ),
+  cloud: <path d="M7 18.5h10a4 4 0 0 0 .6-7.96A5.5 5.5 0 0 0 7 9.6a4.5 4.5 0 0 0 0 8.9z" />,
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="8.2" />
+      <path d="M12 7.4V12l3 2" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type NomeIcone = keyof typeof CAMINHOS;

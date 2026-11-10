@@ -1,5 +1,6 @@
 // Fundo do modo história: noite funda com estrelas sutis (duas camadas; a de cima pisca devagar) e o
-// brilho de lareira do resto da taverna bem fraquinho no pé da página. Também traz os estilos próprios da mesa-livro.
+// brilho de lareira do resto da taverna bem fraquinho no pé da página. Também traz os estilos próprios da mesa-livro
+// (os pontinhos de espera moram no globals.css, para as duas mesas).
 // Tudo sai dos tokens do tema (--background, --ambar, --pergaminho, --matiz-5): o céu acompanha o sistema da campanha.
 
 const estrelas = (pontos: [number, number, number][], cor: string) =>
@@ -45,14 +46,10 @@ const CSS = `
 .ceu-historia::before { background-image: ${CAMADA_1}; background-size: 360px 360px; opacity: .55; }
 .ceu-historia::after { background-image: ${CAMADA_2}; background-size: 520px 520px; animation: ceu-piscar 7s ease-in-out infinite alternate; }
 @keyframes ceu-piscar { from { opacity: .25 } to { opacity: .75 } }
-.pensando i { display: inline-block; width: .38em; height: .38em; margin: 0 .12em; border-radius: 9999px; background: currentColor; animation: pensar 1.4s ease-in-out infinite; }
-.pensando i:nth-child(2) { animation-delay: .2s } .pensando i:nth-child(3) { animation-delay: .4s }
-@keyframes pensar { 0%, 80%, 100% { opacity: .2; transform: translateY(0) } 40% { opacity: 1; transform: translateY(-3px) } }
 .pedido-pendente { animation: pedido-brilho 2.8s ease-in-out infinite; }
 @keyframes pedido-brilho { 0%, 100% { box-shadow: 0 0 60px -24px var(--ambar) } 50% { box-shadow: 0 0 72px -12px var(--ambar) } }
 @media (prefers-reduced-motion: reduce) {
-  .ceu-historia::after, .pensando i, .pedido-pendente { animation: none }
-  .pensando i { opacity: .7 }
+  .ceu-historia::after, .pedido-pendente { animation: none }
 }
 `;
 

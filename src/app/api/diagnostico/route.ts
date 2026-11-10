@@ -11,7 +11,7 @@ import { portaAtual } from "@/lib/rede/enderecos";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  if (!ehLocal(request)) return Response.json({ erro: "O diagnóstico só abre no computador da taverna." }, { status: 403 });
+  if (!ehLocal(request)) return Response.json({ erro: "O diagnóstico só abre na máquina da taverna." }, { status: 403 });
   const diagnostico = await montarDiagnostico(portaAtual(request));
   if (new URL(request.url).searchParams.get("baixar")) {
     return new Response(diagnostico.texto, {

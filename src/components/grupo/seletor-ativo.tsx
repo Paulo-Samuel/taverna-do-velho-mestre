@@ -9,7 +9,7 @@ import { Icone } from "@/components/icones";
 // "Agindo como": chips com as iniciais de cada personagem para passar o teclado na mesa local (hot-seat).
 // Alt+1..9 troca direto. Pela rede dá para trocar também, mas avisa quando o personagem tem outro dono.
 // Quem entrou só assistindo (pela rede, sem reivindicar) vê o convite para escolher um personagem; o chip de um personagem
-// em uso em outro aparelho (📱) ou cujo dono está na mesa (🔒) pede confirmação antes de ser assumido.
+// em uso em outro aparelho (marca de celular) ou cujo dono está na mesa (marca de cadeado) pede confirmação antes de ser assumido.
 
 export function SeletorAtivo({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
   const { personagens } = mesa;
@@ -73,8 +73,10 @@ export function SeletorAtivo({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) 
           const eh = p.id === ativo?.id;
           const jaAgiu = agiram?.has(p.id);
           const outro = outroAparelhoCom(mesa, p.id);
-          // 📱 alguém está agindo com ele em outro aparelho; 🔒 o dono está na mesa (em outro aparelho), mesmo que com outro personagem
+          // celular: alguém está agindo com ele em outro aparelho; cadeado: o dono está na mesa (em outro aparelho), mesmo que com outro personagem
           const emUso = outro?.personagemId === p.id;
+          // o nome só aparece no ativo (ou quando é o único), para caber em 375px
+          const comNome = eh || personagens.length === 1;
           const marca = emUso ? <Icone nome="phone" /> : outro ? <Icone nome="lock" /> : null;
           const detalhe = emUso ? ` · em uso no aparelho de ${outro.apelido}` : outro ? ` · personagem de ${p.jogador}, que está na mesa` : "";
           return (
@@ -87,19 +89,18 @@ export function SeletorAtivo({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) 
               onClick={() => assumir(p.id)}
               title={`${p.ficha.nome}${i < 9 ? ` (Alt+${i + 1})` : ""}${jaAgiu ? " · já agiu nesta rodada" : ""}${detalhe}`}
               className={`relative flex min-h-10 items-center gap-1.5 rounded-full border py-0.5 pl-0.5 transition focus-visible:outline-2 focus-visible:outline-ambar sm:min-h-0 ${
-                eh ? "border-ambar bg-ambar/10 pr-2.5 text-foreground" : "border-transparent pr-0.5 hover:border-border"
-              }`}
+                eh ? "border-ambar bg-ambar/10 text-foreground" : "border-transparent hover:border-border"
+              } ${comNome ? "pr-2.5" : "pr-0.5"}`}
             >
               <Avatar mesa={mesa} personagem={p} tamanho="sm" />
-              {/* o nome só aparece no ativo (ou quando é o único), para caber em 375px */}
-              {(eh || personagens.length === 1) && <span className="max-w-[9rem] truncate text-sm font-semibold text-pergaminho">{p.ficha.nome}</span>}
+              {comNome && <span className="max-w-[9rem] truncate text-sm font-semibold text-pergaminho">{p.ficha.nome}</span>}
               {jaAgiu && (
-                <span className="absolute -right-0.5 -top-0.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-musgo text-[8px] text-foreground" aria-hidden>
-                  ✓
+                <span className="absolute -right-0.5 -top-0.5 grid size-4 place-items-center rounded-full bg-musgo text-[11px] text-foreground" aria-hidden>
+                  <Icone nome="check" />
                 </span>
               )}
               {marca && (
-                <span className="absolute -bottom-1 -right-0.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-surface text-[11px] leading-none" aria-hidden>
+                <span className="absolute -bottom-0.5 left-4 grid size-4 place-items-center rounded-full bg-surface text-[11px] leading-none" aria-hidden>
                   {marca}
                 </span>
               )}

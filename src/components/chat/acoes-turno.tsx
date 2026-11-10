@@ -12,14 +12,7 @@ export type { Desfeito };
 
 type Qual = "desfazer" | "refazer";
 
-// Os três pontinhos (.pensando) do botão de enviar moram no CSS do CeuEstrelado, que só a mesa do modo história monta.
-// A mesa avançada também usa estes botões: as mesmas regras vão aqui (idênticas, então não brigam quando as duas existem).
-const CSS = `
-.pensando i { display: inline-block; width: .38em; height: .38em; margin: 0 .12em; border-radius: 9999px; background: currentColor; animation: pensar 1.4s ease-in-out infinite; }
-.pensando i:nth-child(2) { animation-delay: .2s } .pensando i:nth-child(3) { animation-delay: .4s }
-@keyframes pensar { 0%, 80%, 100% { opacity: .2; transform: translateY(0) } 40% { opacity: 1; transform: translateY(-3px) } }
-@media (prefers-reduced-motion: reduce) { .pensando i { animation: none; opacity: .7 } }
-`;
+// Os três pontinhos da espera (.pensando) vêm do globals.css, um lugar só para as duas mesas.
 
 /** Quanto tempo o "Tem certeza?" espera o segundo clique. */
 const ESPERA_MS = 4000;
@@ -107,7 +100,7 @@ export function AcoesTurno({
               <span className="max-sm:hidden">Clique </span>de novo
             </span>
           ) : (
-            <span className="whitespace-nowrap lowercase max-sm:sr-only">{curto}</span>
+            <span className="whitespace-nowrap max-sm:sr-only">{curto}</span>
           )
         ) : (
           <span>{conf ? "Tem certeza? Clique de novo" : rotulo}</span>
@@ -118,13 +111,10 @@ export function AcoesTurno({
 
   return (
     <div className={`flex flex-wrap items-center gap-1 ${className}`} role="group" aria-label={fechamento ? "Reabrir a noite" : "Voltar o último turno do mestre"}>
-      <style href="taverna-pensando" precedence="default">
-        {CSS}
-      </style>
       {fechamento
         ? botao("desfazer", "undo", "Reabrir a noite", "Desfaz o fechamento: some o marcador de fim, o XP e o Remorso da noite, e o jogo continua de onde parou", "Reabrir")
         : botao("desfazer", "undo", "Desfazer", "Apaga a última resposta do mestre e devolve a sua ação ao campo, para reescrever")}
-      {!fechamento && botao("refazer", "redo", "Outra resposta", "O mestre responde de novo às mesmas ações (a resposta atual some)", "Outra")}
+      {!fechamento && botao("refazer", "redo", "Outra resposta", "O mestre responde de novo às mesmas ações (a resposta atual some)")}
     </div>
   );
 }

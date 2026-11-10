@@ -23,19 +23,20 @@ const COR_GRAU: Record<string, string> = {
 // animações extras do cartão; React 19 iça e deduplica este <style> pelo href
 const CSS = `
 @keyframes cd-pop { 0% { transform: scale(.4); opacity: 0 } 70% { transform: scale(1.18); opacity: 1 } 100% { transform: none } }
-.cd-pop { animation: cd-pop .45s .3s cubic-bezier(.2,.8,.3,1) both }
+.cd-pop { animation: cd-pop .3s .2s cubic-bezier(.2,.8,.3,1) both }
 @keyframes cd-face { from { transform: translateY(-8px) rotate(-30deg); opacity: 0 } to { transform: none; opacity: 1 } }
-.cd-face { animation: cd-face .35s cubic-bezier(.2,.8,.3,1) both; animation-delay: calc(var(--i, 0) * 70ms) }
+.cd-face { animation: cd-face .35s cubic-bezier(.2,.8,.3,1) both; animation-delay: calc(var(--i, 0) * 50ms) }
 @keyframes cd-brilho { 0%, 100% { box-shadow: 0 0 0 0 transparent } 50% { box-shadow: 0 0 30px -6px currentColor } }
-.cd-brilho { animation: cd-brilho 1.4s ease-in-out 2 }
+.cd-brilho { animation: cd-brilho 1s ease-in-out 1 }
 @media (prefers-reduced-motion: reduce) { .cd-pop, .cd-face, .cd-brilho { animation: none } }
 `;
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
-/** Crítico e falha crítica continuam marcados no cartão depois do reload: anel e halo, não só a cor do grau. */
-const ANEL_CRITICO = "border-ambar/60 ring-1 ring-ambar/35 shadow-[0_0_24px_-10px_var(--critico)]";
-const ANEL_FALHA = "border-sangue/60 ring-1 ring-sangue/30 shadow-[0_0_24px_-10px_var(--sangue)]";
+/** Crítico e falha crítica continuam marcados no cartão depois do reload: anel e halo, não só a cor do grau.
+ * Exportados: o cartão compacto do modo história (pedido-teste.tsx) usa a mesma moldura. */
+export const ANEL_CRITICO = "border-ambar/60 ring-1 ring-ambar/35 shadow-[0_0_24px_-10px_var(--critico)]";
+export const ANEL_FALHA = "border-sangue/60 ring-1 ring-sangue/30 shadow-[0_0_24px_-10px_var(--sangue)]";
 
 /** Selo pequeno no canto: manual, secreta, só para você... */
 function Selo({ children, cor = "border-border text-muted" }: { children: ReactNode; cor?: string }) {
@@ -92,7 +93,7 @@ function Face({
   const maximo = valor === lados;
   const minimo = valor === 1;
   const cor = descartado
-    ? "border-border/60 text-muted/60 line-through"
+    ? "border-border/60 text-muted line-through"
     : lados === 20 && maximo
       ? "border-ambar text-ambar bg-ambar/10"
       : lados === 20 && minimo
@@ -118,7 +119,7 @@ function Face({
 
 /** Dado Fate: +, − ou em branco. */
 function FaceFate({ valor, i, novo, descartado }: { valor: number; i: number; novo: boolean; descartado?: boolean }) {
-  const cor = descartado ? "text-muted/50 border-border/50" : valor > 0 ? "text-musgo border-musgo/60" : valor < 0 ? "text-sangue border-sangue/60" : "text-muted border-border";
+  const cor = descartado ? "text-muted line-through border-border/60" : valor > 0 ? "text-musgo border-musgo/60" : valor < 0 ? "text-sangue border-sangue/60" : "text-muted border-border";
   return (
     <span
       className={`inline-grid size-7 place-items-center rounded-md border bg-surface text-lg font-bold leading-none ${cor} ${novo ? "cd-face" : ""}`}
@@ -130,18 +131,37 @@ function FaceFate({ valor, i, novo, descartado }: { valor: number; i: number; no
   );
 }
 
-/** Hexágono de d20 com o número no meio. */
-function IconeD20({ valor, cor, novo, brilho }: { valor: ReactNode; cor: string; novo: boolean; brilho?: boolean }) {
+/** Hexágono de d20 com o número no meio. `tamanho` "sm" é o do cartão compacto do modo história; `style` leva a cor do grau
+ * quando ela vem de variável (COR_GRAU) e `preenchimento` troca a opacidade do fundo (crítico: .12). */
+export function IconeD20({
+  valor,
+  cor,
+  novo,
+  brilho,
+  tamanho = "md",
+  preenchimento = 0.14,
+  style,
+}: {
+  valor: ReactNode;
+  cor: string;
+  novo: boolean;
+  brilho?: boolean;
+  tamanho?: "md" | "sm";
+  preenchimento?: number;
+  style?: CSSProperties;
+}) {
   return (
     <div
-      className={`relative grid size-14 shrink-0 place-items-center rounded-full ${cor} ${novo ? "dado-rolando" : ""} ${novo && brilho ? "cd-brilho" : ""}`}
+      className={`relative grid ${tamanho === "sm" ? "size-10" : "size-14"} shrink-0 place-items-center rounded-full ${cor} ${novo ? "dado-rolando" : ""} ${novo && brilho ? "cd-brilho" : ""}`}
+      style={style}
       aria-hidden
     >
       <svg viewBox="0 0 100 100" className="absolute inset-0">
-        <polygon points="50,3 93,27 93,73 50,97 7,73 7,27" fill="currentColor" fillOpacity=".14" stroke="currentColor" strokeWidth="4" />
-        <polygon points="50,22 77,68 23,68" fill="none" stroke="currentColor" strokeOpacity=".45" strokeWidth="2.5" />
+        <polygon points="50,3 93,27 93,73 50,97 7,73 7,27" fill="currentColor" fillOpacity={preenchimento} stroke="currentColor" strokeWidth="4" />
+        {/* no tamanho pequeno o triângulo fica mais fraco: a 40px ele passa por cima do número */}
+        <polygon points="50,22 77,68 23,68" fill="none" stroke="currentColor" strokeOpacity={tamanho === "sm" ? 0.2 : 0.45} strokeWidth="2.5" />
       </svg>
-      <span className="titulo relative text-xl">{valor}</span>
+      <span className={`titulo relative tabular-nums ${tamanho === "sm" ? "text-base" : "text-xl"}`}>{valor}</span>
     </div>
   );
 }
@@ -157,7 +177,7 @@ function D6({ valor, i, novo }: { valor: number; i: number; novo: boolean }) {
     6: [[28, 26], [72, 26], [28, 50], [72, 50], [28, 74], [72, 74]],
   };
   return (
-    <svg viewBox="0 0 100 100" className={`size-10 text-pergaminho ${novo ? "dado-rolando" : ""}`} style={{ animationDelay: `${i * 90}ms` }} aria-label={`d6: ${valor}`}>
+    <svg viewBox="0 0 100 100" className={`size-10 text-pergaminho ${novo ? "dado-rolando" : ""}`} style={{ animationDelay: `${i * 50}ms` }} aria-label={`d6: ${valor}`}>
       <rect x="6" y="6" width="88" height="88" rx="18" fill="currentColor" fillOpacity=".1" stroke="currentColor" strokeWidth="5" />
       {(pips[valor] ?? []).map(([x, y], k) => (
         <circle key={k} cx={x} cy={y} r="8" fill="currentColor" />
@@ -230,7 +250,7 @@ export function LinhaOposicao({ r, novo = false }: { r: { oposicao?: unknown }; 
       <span className="text-foreground/85">{textoOposicaoCartao(o)}</span>
       {d10 &&
         o.dados.map((v, i) => (
-          <span key={i} className={`grid size-5 place-items-center rounded border text-[11px] tabular-nums ${novo ? "cd-pop" : ""} ${v >= 6 ? "border-foreground/40 text-foreground/85" : "border-border text-muted/70"}`}>
+          <span key={i} className={`grid size-5 place-items-center rounded border text-[11px] tabular-nums ${novo ? "cd-pop" : ""} ${v >= 6 ? "border-foreground/40 text-foreground/85" : "border-border text-foreground/70"}`}>
             {v}
           </span>
         ))}
@@ -433,7 +453,7 @@ function D10({ valor, fome, despertar, i, novo, pequeno }: { valor: number; fome
         "text-[var(--critico)]"
       : sucesso
         ? "text-pergaminho"
-        : "text-muted/70";
+        : "text-foreground/70";
   const titulo = fome ? (despertar ? "Despertar" : dez ? "10 de Fome" : bestial ? "1 de Fome: a Besta" : "dado de Fome") : dez ? "10" : sucesso ? "sucesso" : "falha";
   return (
     <span
@@ -453,7 +473,13 @@ function D10({ valor, fome, despertar, i, novo, pequeno }: { valor: number; fome
         />
         <polyline points="8,40 50,58 92,40" fill="none" stroke={fome ? "var(--sangue)" : "currentColor"} strokeOpacity=".4" strokeWidth="3" />
       </svg>
-      <span className={`relative -mt-1 text-xs font-semibold tabular-nums ${dez ? "text-sm" : ""}`}>{valor}</span>
+      {/* dado de Fome sem sucesso: o número clareia com pergaminho (sangue a 70% sobre o fundo de sangue não dava leitura) */}
+      <span
+        className={`relative -mt-1 text-xs font-semibold tabular-nums ${dez ? "text-sm" : ""}`}
+        style={fome && !dez && !sucesso && !bestial ? { color: "color-mix(in srgb, var(--sangue) 45%, var(--pergaminho))" } : undefined}
+      >
+        {valor}
+      </span>
       {fome && dez && !despertar && (
         <span className="absolute -right-1 -top-1.5 text-[11px] text-sangue" aria-hidden>
           ᐯᐯ
@@ -689,7 +715,7 @@ function SangueVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: 
             <span className={pesou ? "text-sangue" : "text-muted"}>{textoFome(x)}</span>
           </div>
         </div>
-        <span className={`titulo max-w-[7.5rem] shrink-0 text-balance text-right text-base leading-tight sm:text-lg ${cor} ${novo ? "cd-pop" : ""}`}>{r.rotuloGrau}</span>
+        <Grau r={r} cor={cor} novo={novo} />
       </div>
       {surto && ganho > 0 && <p className="mt-1.5 text-xs text-[var(--critico)]">+{ganho} dados no próximo teste (fora de disciplinas)</p>}
       {x.rerrolagem && x.rolagens.some((f) => f.length > 1) && <p className="mt-1 text-xs text-muted">
@@ -834,7 +860,7 @@ function Ficha({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: bool
           <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-background/60">
             {/* a parte perdida (ou ganha) aparece clarinha atrás da barra atual */}
             <div className={`absolute inset-y-0 left-0 ${delta < 0 ? "bg-sangue/35" : "bg-musgo/35"}`} style={{ width: `${Math.max(pctAntes, pctAgora)}%` }} />
-            <div className={`absolute inset-y-0 left-0 transition-[width] duration-700 ${pctAgora > 50 ? "bg-musgo" : pctAgora > 20 ? "bg-ambar" : "bg-sangue"}`} style={{ width: `${Math.min(pctAntes, pctAgora)}%` }} />
+            <div className={`absolute inset-y-0 left-0 transition-[width] duration-[var(--mov-barra)] ease-out motion-reduce:transition-none ${pctAgora > 50 ? "bg-musgo" : pctAgora > 20 ? "bg-ambar" : "bg-sangue"}`} style={{ width: `${Math.min(pctAntes, pctAgora)}%` }} />
           </div>
           <span className="shrink-0 text-xs tabular-nums text-muted">
             {pv}/{pvMax}
@@ -1225,7 +1251,7 @@ export function DecisaoDoTeste({
       )}
       {resta !== null && prazo !== null && (
         <div className="mx-auto mt-3 h-1 max-w-xs overflow-hidden rounded-full bg-border/60" aria-hidden>
-          <div className="h-full bg-ambar/80 transition-[width] duration-300 ease-linear" style={{ width: `${Math.min(100, (resta / prazo) * 100)}%` }} />
+          <div className="h-full bg-ambar/80 transition-[width] duration-300 ease-linear motion-reduce:transition-none" style={{ width: `${Math.min(100, (resta / prazo) * 100)}%` }} />
         </div>
       )}
       <p className="mt-1 text-xs text-muted">

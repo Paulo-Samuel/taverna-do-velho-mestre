@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { valorDaCondicao } from "@/lib/sistemas/pf2e/condicoes";
 import type { Cena, CondicaoDef, Combatente, SistemaPublico } from "@/lib/sistemas/tipos";
-import { TextoComIcones } from "@/components/icones";
+import { Icone, type NomeIcone } from "@/components/icones";
+import { EstadoVazio } from "@/components/estado-vazio";
 
 // Painel da cena: onde o grupo está, quando, com que tempo e o que está acontecendo,
 // mais o rastreador de combate (rodada, ordem de iniciativa, quem age, PV e condições).
@@ -38,7 +39,7 @@ function BarraPv({ c, numeros }: { c: Combatente; numeros: boolean }) {
         aria-valuenow={c.pv ?? 0}
         aria-valuetext={numeros ? `${c.pv} de ${max}` : estado.rotulo}
       >
-        <div className={`h-full rounded-full transition-[width] duration-500 ${estado.barra}`} style={{ width: `${pct}%` }} />
+        <div className={`h-full rounded-full transition-[width] duration-[var(--mov-barra)] ease-out motion-reduce:transition-none ${estado.barra}`} style={{ width: `${pct}%` }} />
       </div>
       <span className={`w-20 shrink-0 text-right text-[11px] ${estado.cor}`}>{numeros ? `${c.pv}/${c.pvMax ?? "?"}` : estado.rotulo}</span>
     </div>
@@ -161,7 +162,9 @@ function Rastreador({ combate, sistema }: { combate: NonNullable<Cena["combate"]
   return (
     <section className="cartao p-3" aria-label="Combate">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="titulo text-lg text-sangue">⚔ Combate</h3>
+        <h3 className="titulo flex items-center gap-1.5 text-lg text-sangue">
+          <Icone nome="swords" /> Combate
+        </h3>
         <span className="rounded-full border border-border px-2.5 py-0.5 text-xs text-pergaminho">Rodada {combate.rodada}</span>
       </div>
       {atual && (
@@ -197,12 +200,16 @@ function Rastreador({ combate, sistema }: { combate: NonNullable<Cena["combate"]
 export function PainelCena({ cena, sistema }: { cena: Cena; sistema: SistemaPublico }) {
   const combate = cena.combate?.ativo && cena.combate.ordem.length ? cena.combate : null;
   if (!cena.local && !cena.situacao && !cena.momento && !cena.clima && !combate) {
-    return <p className="text-sm text-muted">O mestre ainda não descreveu a cena. Ele costuma fazer isso quando lembra que existe um mundo.</p>;
+    return (
+      <EstadoVazio compacto icone="place" dica="Aparece aqui o lugar, a hora e o clima assim que ele narrar a abertura.">
+        O mestre ainda não descreveu a cena. Ele costuma fazer isso quando lembra que existe um mundo.
+      </EstadoVazio>
+    );
   }
   const detalhes = [
-    cena.momento && { icone: "☾", rotulo: "Momento", valor: cena.momento },
-    cena.clima && { icone: "☁", rotulo: "Clima", valor: cena.clima },
-  ].filter(Boolean) as { icone: string; rotulo: string; valor: string }[];
+    cena.momento && { icone: "moon", rotulo: "Momento", valor: cena.momento },
+    cena.clima && { icone: "cloud", rotulo: "Clima", valor: cena.clima },
+  ].filter(Boolean) as { icone: NomeIcone; rotulo: string; valor: string }[];
 
   return (
     <div className="space-y-3 text-sm">
@@ -213,7 +220,7 @@ export function PainelCena({ cena, sistema }: { cena: Cena; sistema: SistemaPubl
             <ul className="mt-1.5 flex flex-wrap gap-1.5">
               {detalhes.map((d) => (
                 <li key={d.rotulo} className="flex items-center gap-1 rounded-full border border-border bg-surface-2/70 px-2.5 py-0.5 text-xs text-muted">
-                  <span aria-hidden><TextoComIcones texto={d.icone} /></span>
+                  <Icone nome={d.icone} />
                   <span className="sr-only">{d.rotulo}: </span>
                   {d.valor}
                 </li>

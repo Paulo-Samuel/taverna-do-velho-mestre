@@ -180,6 +180,14 @@ export function Anteriormente({
     return () => document.removeEventListener("keydown", esc);
   }, [fase]);
 
+  // recolheu (Esc, chevron ou clique no véu): o foco fica na pílula, em vez de cair no <body>
+  const botaoPilula = useRef<HTMLButtonElement>(null);
+  const faseAnterior = useRef(fase);
+  useEffect(() => {
+    if (faseAnterior.current === "aberto" && fase === "recolhido") botaoPilula.current?.focus({ preventScroll: true });
+    faseAnterior.current = fase;
+  }, [fase]);
+
   if (fase === "oculto") return null;
 
   const continuar = () => {
@@ -189,12 +197,34 @@ export function Anteriormente({
 
   if (fase === "recolhido")
     return (
-      <div className="pointer-events-none absolute inset-x-0 top-2 z-20 flex justify-center px-4">
+      <div
+        className={`pointer-events-none z-20 flex justify-end px-4 ${
+          // no livro, a coluna de texto ocupa a largura toda até a tela ficar bem larga: ali a pílula ganha uma linha própria
+          // (não cobre a ação do topo da cena); em tela larga ela flutua na margem direita, fora da coluna
+          livro ? "relative shrink-0 pt-2 xl:absolute xl:inset-x-0 xl:top-2 xl:pt-0" : "absolute inset-x-0 top-2"
+        }`}
+      >
+        {/* no canto, fora do caminho do texto; no celular só o ícone (o nome fica para o leitor de tela e para a dica) */}
         <div className="pointer-events-auto surgir flex items-center overflow-hidden rounded-full border border-ambar/40 bg-surface/95 text-xs shadow-lg backdrop-blur">
-          <button type="button" onClick={() => setFase("aberto")} className="inline-flex min-h-10 items-center gap-1.5 px-3 text-ambar hover:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ambar sm:min-h-9" aria-expanded={false}>
-            <Icone nome="scroll" /> Anteriormente…
+          <button
+            ref={botaoPilula}
+            type="button"
+            onClick={() => setFase("aberto")}
+            className="relative inline-flex min-h-10 items-center gap-1.5 px-3 text-ambar hover:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ambar max-sm:w-10 max-sm:justify-center max-sm:px-0 sm:min-h-9"
+            aria-expanded={false}
+            aria-label="Abrir o resumo: Anteriormente"
+            title="Anteriormente…"
+          >
+            <Icone nome="scroll" /> <span className="max-sm:sr-only">Anteriormente…</span>
           </button>
-          <button type="button" onClick={() => setFase("oculto")} className="grid min-h-10 w-10 place-items-center border-l border-border text-muted hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ambar sm:min-h-9 sm:w-9" aria-label="Dispensar o resumo">
+          <button
+            type="button"
+            onClick={() => {
+              setFase("oculto");
+              // a pílula some: o foco vai ao palco da mesa, em vez de cair no <body>
+              document.getElementById("palco-da-mesa")?.focus({ preventScroll: true });
+            }}
+            className="grid min-h-10 w-10 place-items-center border-l border-border text-muted hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ambar sm:min-h-9 sm:w-9" aria-label="Dispensar o resumo">
             <Icone nome="close" />
           </button>
         </div>

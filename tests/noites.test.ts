@@ -108,6 +108,28 @@ function noiteJogada(campanhaId: number, jogadas = 3) {
   }
 }
 
+// ---------- limparNota (puro) ----------
+
+describe("limparNota", () => {
+  it("troca o travessão por vírgula e a seta por sinal de igual", () => {
+    assert.equal(livro.limparNota("Diplomacia — Barganhar: 1d20+3 → 13 vs 17"), "Diplomacia, Barganhar: 1d20+3 = 13 vs 17");
+    assert.equal(livro.limparNota("Furtividade: 1d20+5→18"), "Furtividade: 1d20+5 = 18");
+  });
+
+  it("seta de mudança de valor vira 'para', e o resultado depois de 'vs' continua com '='", () => {
+    assert.equal(livro.limparNota("Despertar: 4 → Fome 2 → 3"), "Despertar: 4 = Fome 2 para 3");
+    assert.equal(livro.limparNota("Ponto de Herói (1 → 0): d20 5 → 17"), "Ponto de Herói (1 para 0): d20 5 para 17");
+    assert.equal(livro.limparNota("Potência de Sangue 1 → 2 — a noite cobrou"), "Potência de Sangue 1 para 2, a noite cobrou");
+    assert.equal(livro.limparNota("Caça: 5d10 (2 de Fome) vs 3 → 4 vs 3 · Sucesso"), "Caça: 5d10 (2 de Fome) vs 3 = 4 vs 3 · Sucesso");
+    assert.equal(livro.limparNota("Porta: 1d20 → 13 vs 8"), "Porta: 1d20 = 13 vs 8");
+  });
+
+  it("devolve igual a nota que não tem travessão nem seta", () => {
+    const nota = "Percepção: 1d20+2 = 9 vs 12 (falha)";
+    assert.equal(livro.limparNota(nota), nota);
+  });
+});
+
 // ---------- dividirNoites (puro) ----------
 
 describe("dividirNoites", () => {

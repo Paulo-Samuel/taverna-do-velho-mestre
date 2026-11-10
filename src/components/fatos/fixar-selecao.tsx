@@ -5,9 +5,9 @@ import { MAX_TEXTO_FATO } from "./limites";
 import { ancoraDe, type Ancora, type ControleFatos } from "./use-fatos";
 import { Icone } from "@/components/icones";
 
-// "📌 Fixar" flutuante: ao selecionar um trecho da narração (qualquer bloco com data-fixavel, nos dois modos de leitura;
+// Botão "Fixar" flutuante: ao selecionar um trecho da narração (qualquer bloco com data-fixavel, nos dois modos de leitura;
 // no celular, a seleção por toque longo), aparece o botão; ele abre o mini-popover para editar e confirmar.
-// O mesmo popover atende o 📌 das entradas do diário (controle.propor). Um por mesa.
+// O mesmo popover atende o alfinete das entradas do diário (controle.propor). Um por mesa.
 
 /** Trecho selecionado dentro de um bloco fixável (ou null). */
 function selecaoFixavel(): { texto: string; ancora: Ancora } | null {
@@ -183,7 +183,7 @@ export function FixarSelecao({ controle }: { controle: ControleFatos }) {
   );
 }
 
-/** Botãozinho "📌" (entradas do diário/códex): abre o popover com a frase-resumo. */
+/** Botãozinho de alfinete (entradas do diário/códex): abre o popover com a frase-resumo. */
 export function BotaoFixar({ texto, controle, rotulo }: { texto: string; controle: ControleFatos; rotulo: string }) {
   return (
     <button
@@ -192,7 +192,7 @@ export function BotaoFixar({ texto, controle, rotulo }: { texto: string; control
         e.stopPropagation();
         controle.propor(texto, ancoraDe(e.currentTarget));
       }}
-      className="grid size-7 shrink-0 place-items-center rounded-md text-xs opacity-60 transition hover:bg-surface-2 hover:opacity-100 focus-visible:opacity-100"
+      className="relative grid size-7 shrink-0 place-items-center rounded-md text-xs opacity-80 transition before:absolute before:-inset-2 hover:bg-surface-2 hover:opacity-100 focus-visible:opacity-100"
       aria-label={`Fixar: ${rotulo}`}
       title="Fixar um resumo desta entrada (o mestre nunca esquece)"
       data-botao-fixar

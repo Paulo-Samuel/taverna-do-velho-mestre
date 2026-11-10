@@ -16,7 +16,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/campanhas/[
 
   const corpo = (await request.json().catch(() => ({}))) as { mensagemId?: unknown; aceitar?: unknown; dados?: unknown; opcao?: unknown; clienteId?: unknown };
   const mensagemId = Number(corpo.mensagemId);
-  if (!Number.isInteger(mensagemId)) return Response.json({ erro: "Qual teste?" }, { status: 400 });
+  if (!Number.isInteger(mensagemId)) return Response.json({ erro: "Esse teste sumiu da mesa. Recarregue a página." }, { status: 400 });
   const dados = Array.isArray(corpo.dados) ? corpo.dados.map(Number) : undefined;
   if (dados && (dados.length > 3 || dados.some((i) => !Number.isInteger(i)))) return Response.json({ erro: "Escolha até 3 dados." }, { status: 400 });
   const opcao = typeof corpo.opcao === "string" && corpo.opcao.length <= 40 ? corpo.opcao : undefined;

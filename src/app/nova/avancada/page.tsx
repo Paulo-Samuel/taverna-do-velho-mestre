@@ -6,7 +6,7 @@ import { sistemasPublicos } from "@/lib/sistemas";
 import { criarCampanhaAcao } from "../acoes";
 import { personagensParaTrazer } from "../copiar-personagem";
 
-export const metadata: Metadata = { title: "Nova campanha (avançado)" };
+export const metadata: Metadata = { title: "Nova campanha · modo avançado" };
 // lê o banco (personagens de outras mesas) e os cabeçalhos (máquina da taverna?): não pode ser pré-renderizada
 export const dynamic = "force-dynamic";
 

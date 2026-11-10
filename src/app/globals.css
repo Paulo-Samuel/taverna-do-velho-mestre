@@ -32,6 +32,14 @@ html {
   color-scheme: dark;
 }
 
+/* Durações e curva do movimento: quem anima usa estes nomes, para a casa inteira andar no mesmo passo. */
+:root {
+  --mov-rapido: 140ms;
+  --mov-padrao: 220ms;
+  --mov-barra: 250ms;
+  --mov-curva: cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
 /* Foco de teclado sempre visível, em âmbar. Fica na camada base: quem usa focus:outline-none de propósito continua mandando. */
 @layer base {
   :focus-visible {
@@ -126,6 +134,12 @@ body {
     background-color: color-mix(in srgb, var(--sangue) 12%, transparent);
     color: color-mix(in srgb, var(--sangue) 70%, var(--pergaminho));
   }
+  /* apertado: o tingimento engrossa, o tamanho não muda (a mesa pagina por altura); conferido no tests/matizes.test.ts */
+  &:active:not(:disabled) {
+    border-color: var(--sangue);
+    background-color: color-mix(in srgb, var(--sangue) 20%, transparent);
+    color: color-mix(in srgb, var(--sangue) 70%, var(--pergaminho));
+  }
 }
 
 /* perigo cheio: só na confirmação final (o texto usa a cor do fundo, conferida no tests/matizes.test.ts) */
@@ -135,6 +149,10 @@ body {
   color: var(--background);
   &:hover:not(:disabled) {
     background-color: color-mix(in srgb, var(--sangue) 85%, var(--pergaminho));
+  }
+  /* apertado: afunda por sombra interna, sem mexer na cor do texto nem do fundo */
+  &:active:not(:disabled) {
+    box-shadow: inset 0 2px 6px color-mix(in srgb, var(--background) 45%, transparent);
   }
 }
 
@@ -174,6 +192,11 @@ body {
     border-color: var(--matiz, var(--ambar));
     box-shadow: 0 0 32px -16px var(--matiz, var(--ambar));
     transform: translateY(-1px);
+  }
+  /* apertado: volta ao chão e o brilho encolhe */
+  &:active {
+    transform: none;
+    box-shadow: 0 0 18px -14px var(--matiz, var(--ambar));
   }
 }
 
@@ -253,7 +276,234 @@ body {
   }
 }
 .surgir {
-  animation: surgir 0.35s ease-out both;
+  animation: surgir var(--mov-padrao) ease-out both;
+}
+
+/* menu e popover: nascem do canto, sem deslizar */
+@keyframes surgir-menu {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.surgir-menu {
+  animation: surgir-menu var(--mov-rapido) var(--mov-curva) both;
+  transform-origin: top right;
+}
+
+/* pontinhos da espera: <span class="pensando"><i /><i /><i /></span>, na cor do texto */
+.pensando i {
+  display: inline-block;
+  width: 0.38em;
+  height: 0.38em;
+  margin: 0 0.12em;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: pensar 1.4s ease-in-out infinite;
+}
+.pensando i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.pensando i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes pensar {
+  0%,
+  80%,
+  100% {
+    opacity: 0.2;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+/* esqueleto de carregamento: dê largura e altura ao elemento. Posição, canto e fundo ficam na camada de componentes, para
+   `absolute`, `rounded-*` e `bg-*` no mesmo elemento continuarem mandando; só o corte do brilho fica fora das camadas. */
+@layer components {
+  .esqueleto {
+    position: relative;
+    border-radius: 0.5rem;
+    background-color: var(--surface-2);
+  }
+}
+.esqueleto {
+  overflow: hidden;
+}
+.esqueleto::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--pergaminho) 8%, transparent), transparent);
+  transform: translateX(-100%);
+  animation: esqueleto 1.4s ease-in-out infinite;
+}
+@keyframes esqueleto {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* halo de destaque (crítico, subir de nível), na cor do texto do elemento. Sem quadro de início e de fim: o pulso sai da
+   sombra (ou do anel) que o elemento já tem e volta para ela, sem apagá-la nem dar um estalo no fim. */
+@keyframes halo-pulso {
+  50% {
+    box-shadow: 0 0 30px -6px currentColor;
+  }
+}
+.halo-pulso {
+  animation: halo-pulso 1s ease-in-out 2;
+}
+
+/* lampejo de vida: uma vez, só sombra (não mexe no tamanho) */
+@keyframes lampejo {
+  0% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  30% {
+    box-shadow:
+      0 0 0 2px var(--lampejo-cor),
+      0 0 18px -2px var(--lampejo-cor);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+.lampejo-perda {
+  --lampejo-cor: var(--sangue);
+  animation: lampejo 0.6s ease-out 1;
+}
+.lampejo-ganho {
+  --lampejo-cor: var(--musgo);
+  animation: lampejo 0.6s ease-out 1;
+}
+
+/* convite do campo de ação (pisca uma vez) e a marca que fica enquanto for a sua vez */
+@keyframes campo-convite {
+  35% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ambar) 30%, transparent);
+    border-color: var(--ambar);
+  }
+}
+.campo-convite {
+  animation: campo-convite 1.4s ease-out 1;
+}
+.campo-da-vez {
+  border-color: color-mix(in srgb, var(--ambar) 60%, var(--border));
+}
+/* com o foco, a borda volta a ser o âmbar cheio do `campo` (esta regra fica fora das camadas e ganharia dele) */
+.campo-da-vez:focus {
+  border-color: var(--ambar);
+}
+.campo-da-vez:not(:focus-visible) {
+  box-shadow: inset 3px 0 0 var(--ambar);
+}
+
+/* link de pular para o conteúdo: mora fora da tela por transform (não cria rolagem) e desce no foco de teclado */
+.pular-conteudo {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 70;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  background: var(--botao);
+  color: var(--botao-texto);
+  font-size: 0.875rem;
+  font-weight: 600;
+  transform: translateY(-200%);
+}
+.pular-conteudo:focus-visible {
+  transform: none;
+}
+/* Na mesa (fixed, cobre a casca inteira) o cabeçalho e o rodapé da casa ficam atrás dela: sem isto o Tab passava por links
+   que ninguém vê. Com eles fora do caminho, o link de pular do layout sobra e fica só o da mesa ("Pular para a história"). */
+body:has(#palco-da-mesa) > header,
+body:has(#palco-da-mesa) > footer {
+  visibility: hidden;
+}
+body:has(#palco-da-mesa) > .pular-conteudo {
+  display: none;
+}
+
+/* diálogo nativo com entrada e saída (melhoria progressiva: sem suporte, some de estalo) */
+dialog.dialogo-suave {
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    overlay 0.15s allow-discrete,
+    display 0.15s allow-discrete;
+}
+dialog.dialogo-suave[open] {
+  opacity: 1;
+  transform: none;
+}
+@starting-style {
+  dialog.dialogo-suave[open] {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+dialog.dialogo-suave::backdrop {
+  opacity: 0;
+  transition:
+    opacity 0.15s ease,
+    overlay 0.15s allow-discrete,
+    display 0.15s allow-discrete;
+}
+dialog.dialogo-suave[open]::backdrop {
+  opacity: 1;
+}
+@starting-style {
+  dialog.dialogo-suave[open]::backdrop {
+    opacity: 0;
+  }
+}
+
+/* sanfonas (<details>) abrem junto com a seta, sem JS; o leitor contínuo fica de fora */
+@supports (interpolate-size: allow-keywords) {
+  /* só nas sanfonas (o ::details-content herda): na raiz, qualquer transição de altura da casa passaria a animar até `auto`,
+     e a mesa pagina medindo altura */
+  details {
+    interpolate-size: allow-keywords;
+  }
+  .leitor-fluxo details {
+    interpolate-size: numeric-only;
+  }
+  details::details-content {
+    block-size: 0;
+    overflow: clip;
+    opacity: 0;
+    transition:
+      block-size 0.2s ease,
+      opacity 0.2s ease,
+      content-visibility 0.2s allow-discrete;
+  }
+  /* aberta, deixa de cortar (anel de foco e menus que saem da caixa), mas só depois de terminar de abrir */
+  details[open]::details-content {
+    block-size: auto;
+    opacity: 1;
+    overflow: visible;
+    transition:
+      block-size 0.2s ease,
+      opacity 0.2s ease,
+      content-visibility 0.2s allow-discrete,
+      overflow 0s 0.2s allow-discrete;
+  }
+  .leitor-fluxo details::details-content {
+    transition: none;
+  }
 }
 
 /* d20 girando antes de mostrar o número */
@@ -263,15 +513,15 @@ body {
     opacity: 0;
   }
   60% {
-    transform: rotate(540deg) scale(1.15);
+    transform: rotate(270deg) scale(1.1);
     opacity: 1;
   }
   100% {
-    transform: rotate(720deg) scale(1);
+    transform: rotate(360deg) scale(1);
   }
 }
 .dado-rolando {
-  animation: rolar 0.7s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  animation: rolar 0.45s cubic-bezier(0.2, 0.8, 0.3, 1) both;
 }
 
 @keyframes cursor {
@@ -290,8 +540,27 @@ body {
   .surgir,
   .dado-rolando,
   .cursor::after,
-  .ceu-topo::before {
+  .ceu-topo::before,
+  .surgir-menu,
+  .pensando i,
+  .esqueleto::after,
+  .halo-pulso,
+  .lampejo-perda,
+  .lampejo-ganho,
+  .campo-convite,
+  .animate-pulse,
+  .animate-bounce {
     animation: none;
+  }
+  /* parados, os pontinhos ficam visíveis (o girador continua girando: parado parece travado) */
+  .pensando i {
+    opacity: 0.7;
+  }
+  dialog.dialogo-suave,
+  dialog.dialogo-suave::backdrop,
+  details::details-content,
+  details[open]::details-content {
+    transition: none;
   }
   /* sem subir nem deslizar: botões e cartões só trocam de cor */
   .btn-ambar,

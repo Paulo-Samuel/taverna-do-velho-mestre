@@ -7,7 +7,7 @@ import { Catalogo, type ItemCatalogo } from "./catalogo";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Sistemas" };
+export const metadata: Metadata = { title: "Sistemas da casa" };
 
 // Texto de atribuição que cada licença pede. O resumo curto de cada sistema vem do próprio registro (Sistema.licenca);
 // aqui fica a forma longa, que algumas licenças exigem quase palavra por palavra (por isso parte está no original em inglês).

@@ -12,9 +12,10 @@ import type { AcoesMesa, Mesa } from "@/lib/cliente/use-mesa";
 import { dadosDoTema } from "@/lib/temas";
 
 // Cabeçalho único das duas mesas (avançada e modo história): os mesmos botões, sempre na mesma ordem —
-// voltar · título (duas linhas no celular) · presença · Convidar · Som · Ler · Voz · Livro · ⚙ · 🌙 Encerrar · ⋯ · painel.
-// Todo botão é o mesmo quadrado de 40x40 com ícone SVG (utilitário botao-cabecalho). O que não cabe vai para o menu "⋯" pela
-// largura: abaixo de 1024 px saem Voz, Livro e ⚙; abaixo de 640 px saem também Convidar, Ler e Encerrar (que continua no pé
+// voltar · título (duas linhas no celular) · presença · Convidar · Som · Ler · Voz · Livro · Ajustes · Encerrar (lua) · Mais opções · painel.
+// Antes de tudo vem o link "Pular para a história" (só aparece com foco), que leva o teclado direto ao palco.
+// Todo botão é o mesmo quadrado de 40x40 com ícone SVG (utilitário botao-cabecalho). O que não cabe vai para o menu "Mais opções" pela
+// largura: abaixo de 1024 px saem Voz, Livro e Ajustes; abaixo de 640 px saem também Convidar, Ler e Encerrar (que continua no pé
 // do painel/Códex). O "painel" é o último: a ficha (mesa avançada, < lg) ou o Códex (modo história).
 
 function IconeLivro() {
@@ -93,7 +94,8 @@ export function CabecalhoMesa({
   const rodada = mesa.campanha.modo === "rodada";
   const dicaEncerrar = urgente ? "Encerrar a noite (há Remorso para rolar)" : "Encerrar a noite: Remorso, XP e o fim do capítulo no livro";
 
-  // menu ⋯: fecha com Esc (o foco volta ao botão) ou clique fora; abre com o foco no primeiro item visível
+  // menu "Mais opções": fecha com Esc (o foco volta ao botão), clique fora ou quando o foco sai da caixa; abre com o foco no
+  // primeiro item visível. É um grupo de botões e links comuns (Tab anda entre eles), não um menu ARIA de mentira.
   useEffect(() => {
     if (!menu) return;
     const fora = (e: PointerEvent) => {
@@ -101,6 +103,14 @@ export function CabecalhoMesa({
     };
     const esc = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      // um popover ou diálogo aberto daqui de dentro (trilha, convite) fecha primeiro e devolve o foco à linha dele
+      // (se ele não devolver, o foco não fica perdido na página: cai no botão do menu)
+      if (caixaMenu.current?.querySelector('[role="dialog"]')) {
+        setTimeout(() => {
+          if (!caixaMenu.current?.contains(document.activeElement)) botaoMenu.current?.focus();
+        }, 0);
+        return;
+      }
       setMenu(false);
       botaoMenu.current?.focus();
     };
@@ -119,6 +129,9 @@ export function CabecalhoMesa({
 
   return (
     <header className={`relative z-20 shrink-0 border-b ${className}`}>
+      <a href="#palco-da-mesa" className="pular-conteudo">
+        Pular para a história
+      </a>
       <div className={`mx-auto flex h-14 ${largura} items-center gap-0.5 px-1.5 sm:gap-1 sm:px-4 baixo:h-11`} data-cabecalho-mesa>
         <Link href="/" className="botao-cabecalho" aria-label="Voltar para as campanhas" title="Voltar para as campanhas" data-ordem="voltar">
           <IconeVoltar />
@@ -150,7 +163,16 @@ export function CabecalhoMesa({
           {urgente && <Pontinho />}
         </button>
         {/* transbordo: o que a largura não comporta */}
-        <div ref={caixaMenu} className="relative" data-ordem="mais">
+        <div
+          ref={caixaMenu}
+          className="relative"
+          data-ordem="mais"
+          onBlur={(e) => {
+            // o foco foi para fora da caixa: fecha. Com relatedTarget nulo (clique em área vazia de um popover aberto daqui) fica.
+            const para = e.relatedTarget;
+            if (para instanceof Node && !e.currentTarget.contains(para)) setMenu(false);
+          }}
+        >
           <button
             ref={botaoMenu}
             type="button"
@@ -158,7 +180,7 @@ export function CabecalhoMesa({
             className={`botao-cabecalho ${menu ? "text-ambar" : ""}`}
             aria-label={urgente ? "Mais opções (há Remorso para rolar)" : "Mais opções"}
             title="Mais opções"
-            aria-haspopup="menu"
+            aria-controls="mais-opcoes-mesa"
             aria-expanded={menu}
             data-menu-mais
           >
@@ -166,7 +188,15 @@ export function CabecalhoMesa({
             {urgente && <Pontinho className="sm:hidden" />}
           </button>
           {menu && (
-            <div role="menu" aria-label="Mais opções da mesa" className="cartao surgir bg-surface! absolute right-0 top-full z-50 mt-2 w-64 max-w-[calc(100vw-1rem)] p-1.5 text-foreground">
+            // animationFillMode backwards: terminada a entrada, o menu fica sem transform nenhum. Com o preenchimento "both" da classe
+            // sobra uma matriz identidade, que prende dentro do menu o que é position: fixed (o diálogo do convite, a folha da trilha).
+            <div
+              id="mais-opcoes-mesa"
+              role="group"
+              aria-label="Mais opções da mesa"
+              className="cartao surgir-menu bg-surface! absolute right-0 top-full z-50 mt-2 w-64 max-w-[calc(100vw-1rem)] p-1.5 text-foreground"
+              style={{ animationFillMode: "backwards" }}
+            >
               <div data-item-menu>
                 <Convite campanhaId={id} temPin={mesa.campanha.temPin} linha />
               </div>
@@ -179,13 +209,13 @@ export function CabecalhoMesa({
               <div data-item-menu>
                 <LinhaVoz />
               </div>
-              <Link href={`/mesa/${id}/livro`} role="menuitem" className={`${LINHA} lg:hidden`} data-item-menu>
+              <Link href={`/mesa/${id}/livro`} className={`${LINHA} lg:hidden`} data-item-menu>
                 <span className="text-muted">
                   <IconeLivro />
                 </span>
                 Livro da campanha
               </Link>
-              <Link href={`/mesa/${id}/ajustes`} role="menuitem" className={`${LINHA} lg:hidden`} data-item-menu>
+              <Link href={`/mesa/${id}/ajustes`} className={`${LINHA} lg:hidden`} data-item-menu>
                 <span className="text-muted">
                   <IconeAjustes />
                 </span>
@@ -194,7 +224,6 @@ export function CabecalhoMesa({
               <div className="my-1 h-px bg-border lg:hidden" aria-hidden />
               <button
                 type="button"
-                role="menuitem"
                 className={`${LINHA} sm:hidden`}
                 onClick={() => {
                   setMenu(false);

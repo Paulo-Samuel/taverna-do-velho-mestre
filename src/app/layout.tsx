@@ -57,6 +57,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="pt-BR" className={`${corpo.variable} ${titulo.variable} ${classesFontesTemas}`}>
       <body className="flex min-h-dvh flex-col font-sans text-[17px] antialiased">
+        <a href="#conteudo" className="pular-conteudo">
+          Pular para o conteúdo
+        </a>
         <header className="relative z-20 border-t-2 border-t-ambar border-b border-b-border bg-background/95">
           <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4">
             {daMaquina ? (
@@ -73,7 +76,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             {daMaquina && <Navegacao />}
           </div>
         </header>
-        <div className="flex-1">{children}</div>
+        <div id="conteudo" tabIndex={-1} className="flex-1 focus:outline-none">
+          {children}
+        </div>
         {/* mesmo critério da navegação: quem vem pela rede só vê mesas (que são fixed e cobrem cabeçalho e rodapé) */}
         {daMaquina && <RodapeCasa />}
       </body>

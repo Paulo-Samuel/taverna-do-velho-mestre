@@ -95,7 +95,7 @@ export async function excluirCampanhaAcao(campanhaId: number, _anterior: EstadoA
     console.error("[taverna] excluir campanha:", erro);
     return { erro: "Não deu para guardar a campanha na lixeira (disco cheio?), então nada foi apagado." };
   }
-  publicar(campanha.id, { e: "erro", erro: "Esta campanha foi apagada na máquina da taverna. Hora de procurar outra mesa." });
+  publicar(campanha.id, { e: "erro", erro: "Esta campanha foi para a lixeira na máquina da taverna. Hora de procurar outra mesa." });
   revalidatePath("/");
   redirect(arquivo ? `/backup?excluida=${encodeURIComponent(arquivo)}` : "/");
 }

@@ -4,7 +4,9 @@ import { COPIAS_GUARDADAS, LIXEIRA_GUARDADAS, listarCopias, listarLixeira, pasta
 import { obterCampanha, versaoDoEsquema } from "@/lib/db";
 import { daMaquinaNaPagina } from "@/lib/rede/acesso";
 import { SISTEMAS } from "@/lib/sistemas";
+import { haQuanto } from "@/lib/ha-quanto";
 import { CabecalhoPagina } from "@/components/cabecalho-pagina";
+import { EstadoVazio } from "@/components/estado-vazio";
 import { FaixaAviso } from "@/components/faixa-aviso";
 import { Icone } from "@/components/icones";
 import { LinkVoltar } from "@/components/link-voltar";
@@ -31,14 +33,6 @@ function motivo(c: CopiaBanco) {
   return v ? `Antes de atualizar o banco (da v${v[1]} para a v${v[2]})` : "Antes de atualizar o banco";
 }
 
-function haQuanto(d: Date) {
-  const horas = (Date.now() - d.getTime()) / 3_600_000;
-  if (horas < 1) return "há menos de uma hora";
-  if (horas < 24) return `há ${Math.floor(horas)} h`;
-  const dias = Math.floor(horas / 24);
-  return dias === 1 ? "ontem" : `há ${dias} dias`;
-}
-
 // cor da plaquinha de cada tipo de cópia (texto literal, para o Tailwind enxergar a classe)
 const MATIZ_DO_MOTIVO: Record<CopiaBanco["motivo"], string> = { diaria: "matiz-1", manual: "matiz-2", migracao: "matiz-7" };
 
@@ -46,7 +40,7 @@ export default async function PaginaBackup(props: PageProps<"/backup">) {
   if (!(await daMaquinaNaPagina())) {
     return (
       <main className="mx-auto max-w-xl px-4 py-12">
-        <p className="cartao p-6 text-muted">As cópias do banco e a lixeira só abrem no computador da taverna. Daqui, só as mesas.</p>
+        <p className="cartao p-6 text-muted">As cópias do banco e a lixeira só abrem na máquina da taverna. Daqui, só as mesas.</p>
       </main>
     );
   }
@@ -114,12 +108,10 @@ export default async function PaginaBackup(props: PageProps<"/backup">) {
         <p className="mb-3 text-sm text-muted">
           A taverna copia o banco inteiro (todas as campanhas) uma vez por dia e antes de cada atualização do formato, e guarda as {COPIAS_GUARDADAS} mais
           novas.{" "}
-          {ultima ? (
+          {ultima && (
             <>
               Última: <span className="text-foreground">{haQuanto(ultima.criadaEm)}</span>.
             </>
-          ) : (
-            "Ainda não há nenhuma."
           )}
         </p>
         <div className="mb-4 flex flex-wrap gap-2">
@@ -130,7 +122,11 @@ export default async function PaginaBackup(props: PageProps<"/backup">) {
             <Icone nome="download" /> Baixar o banco
           </a>
         </div>
-        {copias.length > 0 && (
+        {copias.length === 0 ? (
+          <EstadoVazio compacto icone="book">
+            Nenhuma cópia ainda. A primeira sai sozinha amanhã, ou agora mesmo no botão acima.
+          </EstadoVazio>
+        ) : (
           <ul className="divide-y divide-border rounded-lg border border-border">
             {copias.map((c) => (
               <li key={c.arquivo} className="flex items-center justify-between gap-x-3 px-3 py-1 text-sm">
@@ -174,7 +170,7 @@ export default async function PaginaBackup(props: PageProps<"/backup">) {
 
       <SecaoCartao id="importar" titulo="Importar campanha" icone="scroll" matiz="matiz-2">
         <p className="mb-3 text-sm text-muted">
-          Um arquivo de “Exportar campanha” (Ajustes da mesa), desta ou de outra taverna, vira uma mesa nova aqui. Arquivo de uma taverna mais nova pede
+          Um arquivo de “Exportar campanha” (Ajustes da mesa), desta ou de outra taverna, vira uma campanha nova aqui. Arquivo de uma taverna mais nova pede
           atualizar esta primeiro.
         </p>
         <ImportarCampanha />
@@ -186,10 +182,9 @@ export default async function PaginaBackup(props: PageProps<"/backup">) {
           recentes.
         </p>
         {lixeira.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-6 text-center text-sm text-muted">
-            <Icone nome="skull" className="text-4xl" />
-            <p>Vazia. Nenhuma campanha foi excluída por aqui.</p>
-          </div>
+          <EstadoVazio compacto icone="skull">
+            Vazia. Nenhuma campanha foi excluída por aqui.
+          </EstadoVazio>
         ) : (
           <ul className="space-y-2">
             {lixeira.map((i) => (

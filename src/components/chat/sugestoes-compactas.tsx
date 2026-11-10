@@ -12,17 +12,12 @@ import { descricaoDoTeste, tipoDoTeste } from "@/components/historia/tipo-teste"
 // No leitor cena a cena elas ficam apagadinhas até a pessoa chegar ao fim da cena; aí entram uma a uma, com destaque.
 // Apagadinhas = cada peça um tom abaixo (texto, borda e seta; o selo só perde saturação, porque opacidade o derrubaria
 // abaixo de 4,5:1), sem filtro no bloco: o texto segue acima de 4,5:1.
-// A entrada (sugestao-entrar, com fill "both") termina em opacidade 1; com prefers-reduced-motion não há animação e as linhas já nascem cheias.
+// A entrada é o .surgir do globals.css (220 ms), com 40 ms de atraso por linha e teto de 160 ms: a última sugestão não fica
+// esperando a fila. Com prefers-reduced-motion não há animação e as linhas já nascem cheias.
 // Clicar numa sugestão envia a ação na hora.
 
 /** O que o botão-resumo diz enquanto a cena ainda não acabou (title e nome acessível). */
 const DICA_DISCRETAS = "Sugestões do mestre: dá para escolher antes de terminar a cena";
-
-const CSS = `
-@keyframes sugestao-entrar{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.sugestao-entrar{animation:sugestao-entrar .4s cubic-bezier(.2,.7,.25,1) both}
-@media (prefers-reduced-motion:reduce){.sugestao-entrar{animation:none}}
-`;
 
 export function SugestoesCompactas({
   sugestoes,
@@ -73,9 +68,6 @@ export function SugestoesCompactas({
       className="relative"
       data-sugestoes={discretas ? "discretas" : "destaque"}
     >
-      <style href="taverna-sugestoes" precedence="default">
-        {CSS}
-      </style>
       {/* celular ou tela baixa: uma linha que abre a lista por cima */}
       <button
         type="button"
@@ -84,7 +76,7 @@ export function SugestoesCompactas({
         aria-controls="lista-sugestoes"
         title={discretas ? DICA_DISCRETAS : undefined}
         aria-label={discretas ? `${sugestoes.length} ${sugestoes.length === 1 ? "sugestão" : "sugestões"}${pericias.length > 0 ? ` · ${pericias.join(" · ")}` : ""}. ${DICA_DISCRETAS}` : undefined}
-        className={`sugestao-entrar flex min-h-10 w-full items-center gap-2 rounded-lg border bg-surface/60 px-3 text-left text-sm focus-visible:border-ambar focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ambar largo:hidden ${discretas ? "border-border/40" : "border-border/70"}`}
+        className={`surgir flex min-h-10 w-full items-center gap-2 rounded-lg border bg-surface/60 px-3 text-left text-sm focus-visible:border-ambar focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ambar largo:hidden ${discretas ? "border-border/40" : "border-border/70"}`}
       >
         <span className={`shrink-0 ${discretas ? "text-muted" : "text-ambar"}`} aria-hidden>
           <Icone nome="arrowRight" />
@@ -105,7 +97,7 @@ export function SugestoesCompactas({
         aria-label="Ações sugeridas pelo mestre"
       >
         {sugestoes.map((s, i) => (
-          <li key={`${entrada}-${i}-${s.texto}`} className="sugestao-entrar" style={{ animationDelay: `${i * 70}ms` }}>
+          <li key={`${entrada}-${i}-${s.texto}`} className="surgir" style={{ animationDelay: `${Math.min(i, 4) * 40}ms` }}>
             <button
               type="button"
               onClick={() => escolher(s.texto)}

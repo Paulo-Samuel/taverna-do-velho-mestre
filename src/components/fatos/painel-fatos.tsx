@@ -5,8 +5,9 @@ import type { Fato } from "@/lib/db";
 import { MAX_CARACTERES_NO_PROMPT, MAX_FATOS_NO_PROMPT, MAX_TEXTO_FATO, quantosEntram } from "./limites";
 import type { ControleFatos } from "./use-fatos";
 import { Icone } from "@/components/icones";
+import { EstadoVazio } from "@/components/estado-vazio";
 
-// Lista dos fatos fixados (aba "📌" da mesa avançada e do códex): fixar com Enter, editar, remover, reordenar (↑↓ ou arrastar).
+// Lista dos fatos fixados (aba do alfinete da mesa avançada e do códex): fixar com Enter, editar, remover, reordenar (setas ou arrastar).
 // Os que passam do limite do prompt ficam esmaecidos: guardados, mas o mestre não lê.
 
 function ItemFato({
@@ -31,7 +32,7 @@ function ItemFato({
   const [editando, setEditando] = useState(false);
   const [texto, setTexto] = useState(f.texto);
   const [sobre, setSobre] = useState(false);
-  const botao = "grid size-8 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-ambar disabled:pointer-events-none disabled:opacity-30";
+  const botao = "grid size-10 sm:size-8 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-ambar disabled:pointer-events-none disabled:opacity-30";
 
   async function salvar() {
     const t = texto.trim();
@@ -118,10 +119,10 @@ function ItemFato({
       {!editando && (
         <div className="flex shrink-0 items-center [@media(pointer:fine)]:absolute [@media(pointer:fine)]:right-1 [@media(pointer:fine)]:top-1 [@media(pointer:fine)]:rounded-md [@media(pointer:fine)]:border [@media(pointer:fine)]:border-border [@media(pointer:fine)]:bg-surface [@media(pointer:fine)]:opacity-0 [@media(pointer:fine)]:shadow-lg [@media(pointer:fine)]:group-hover/fato:opacity-100 [@media(pointer:fine)]:focus-within:opacity-100">
           <button type="button" className={botao} onClick={() => controle.mover(f.id, -1)} disabled={primeiro} aria-label="Subir" title="Subir">
-            ↑
+            <Icone nome="arrowUp" />
           </button>
           <button type="button" className={botao} onClick={() => controle.mover(f.id, 1)} disabled={ultimo} aria-label="Descer" title="Descer">
-            ↓
+            <Icone nome="arrowDown" />
           </button>
           <button
             type="button"
@@ -133,10 +134,10 @@ function ItemFato({
             aria-label="Editar"
             title="Editar"
           >
-            ✎
+            <Icone nome="pencil" />
           </button>
           <button type="button" className={`${botao} hover:text-sangue`} onClick={() => void controle.remover(f.id)} aria-label="Desafixar" title="Desafixar">
-            ✕
+            <Icone nome="close" />
           </button>
         </div>
       )}
@@ -197,22 +198,29 @@ export function PainelFatos({ controle }: { controle: ControleFatos }) {
       )}
 
       {controle.erro && (
-        <p className="flex items-start gap-2 rounded-md border border-sangue/50 bg-sangue/10 px-2.5 py-1.5 text-xs" role="alert">
-          <span className="flex-1">{controle.erro}</span>
-          <button type="button" onClick={controle.limparErro} className="text-muted hover:text-foreground" aria-label="Fechar o aviso">
-            ✕
+        <p className="flex items-center gap-2 rounded-md border border-sangue/50 bg-sangue/10 py-0.5 pl-2.5 pr-0.5 text-xs" role="alert">
+          <span className="min-w-0 flex-1 py-1">{controle.erro}</span>
+          <button type="button" onClick={controle.limparErro} className="grid size-10 shrink-0 place-items-center rounded-md text-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ambar" aria-label="Fechar o aviso">
+            <Icone nome="close" />
           </button>
         </p>
       )}
 
       {entram < fatos.length && (
         <p className="rounded-md border border-ambar/50 bg-ambar/10 px-2.5 py-1.5 text-xs leading-relaxed text-ambar" role="status">
-          ⚠ Passou do limite: o mestre só lê os {entram} primeiros (até {MAX_FATOS_NO_PROMPT} fatos e {MAX_CARACTERES_NO_PROMPT} caracteres). Os de baixo
+          <Icone nome="warning" /> Passou do limite: o mestre só lê os {entram} primeiros (até {MAX_FATOS_NO_PROMPT} fatos e {MAX_CARACTERES_NO_PROMPT} caracteres). Os de baixo
           ficam guardados na gaveta. Enxugue, junte ou suba os importantes.
         </p>
       )}
 
-      {fatos.length ? (
+      {!controle.carregado && !fatos.length ? (
+        <div className="relative space-y-2" aria-busy="true">
+          <span className="sr-only">Abrindo o livro de fatos…</span>
+          <div className="esqueleto h-9 w-full" />
+          <div className="esqueleto h-9 w-full" />
+          <div className="esqueleto h-9 w-full" />
+        </div>
+      ) : fatos.length ? (
         <ul className="space-y-1.5" aria-label="Fatos fixados">
           {fatos.map((f, i) => (
             <ItemFato
@@ -229,11 +237,9 @@ export function PainelFatos({ controle }: { controle: ControleFatos }) {
           ))}
         </ul>
       ) : (
-        controle.carregado && (
-          <p className="rounded-lg border border-dashed border-border px-4 py-5 text-center text-xs italic leading-relaxed text-muted">
-            Nada fixado. O mestre lembra do que quer, quando quer. Fixe aqui o que ele não pode esquecer: dívidas, juramentos, quem sabe o quê.
-          </p>
-        )
+        <EstadoVazio compacto icone="pin">
+          Nada fixado. O mestre lembra do que quer, quando quer. Fixe aqui o que ele não pode esquecer: dívidas, juramentos, quem sabe o quê.
+        </EstadoVazio>
       )}
 
       {fatos.length > 0 && (

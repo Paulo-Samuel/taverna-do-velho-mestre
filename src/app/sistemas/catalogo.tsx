@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useDeferredValue, useEffect, useState } from "react";
+import { EstadoVazio } from "@/components/estado-vazio";
 import { Icone } from "@/components/icones";
 import { dadosDoTema, temaDoSistema } from "@/lib/temas";
 
@@ -79,9 +80,9 @@ export function Catalogo({ itens }: { itens: ItemCatalogo[] }) {
             type="search"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            placeholder="Procurar classe, raça, papel…"
+            placeholder="Buscar classe, raça, papel…"
             className="campo sm:max-w-lg"
-            aria-label="Procurar no catálogo"
+            aria-label="Buscar no catálogo"
           />
           <label className="flex min-h-10 cursor-pointer items-center gap-2 text-sm text-muted hover:text-foreground">
             <input type="checkbox" checked={soProntos} onChange={(e) => setSoProntos(e.target.checked)} className="size-5 shrink-0 accent-[var(--ambar)]" />
@@ -115,17 +116,24 @@ export function Catalogo({ itens }: { itens: ItemCatalogo[] }) {
       </div>
 
       {visiveis.length === 0 && (
-        <div className="cartao mt-6 p-6 text-muted">
-          <p>Nada com esse nome. Nem o bardo inventaria isso.</p>
-          <button type="button" className="btn-borda mt-4 min-h-10"
-            onClick={() => {
-              setBusca("");
-              setSoProntos(false);
-            }}
-          >
-            Limpar a busca
-          </button>
-        </div>
+        <EstadoVazio
+          icone="search"
+          className="mt-6"
+          acao={
+            <button
+              type="button"
+              className="btn-borda min-h-10"
+              onClick={() => {
+                setBusca("");
+                setSoProntos(false);
+              }}
+            >
+              Limpar a busca
+            </button>
+          }
+        >
+          Nada com esse nome. Nem o bardo inventaria isso.
+        </EstadoVazio>
       )}
 
       <div className="mt-6 space-y-6">
@@ -243,7 +251,9 @@ function Lista({ titulo, itens }: { titulo: string; itens: Verbete[] }) {
         {titulo} <span className="text-sm text-muted">({itens.length})</span>
       </h3>
       {itens.length === 0 ? (
-        <p className="text-sm italic text-muted">Nada aqui com essa busca.</p>
+        <EstadoVazio compacto icone="search">
+          Nada aqui com essa busca.
+        </EstadoVazio>
       ) : (
         <ul className="space-y-3">
           {itens.map((v) => (

@@ -198,7 +198,20 @@ function Moldura({ c }: { c: Ctx }) {
   );
 }
 
-export function RetratoSVG({ dados, tamanho = 96, className, titulo }: { dados: DadosRetrato; tamanho?: number; className?: string; titulo?: string }) {
+/** `decorativo`: o nome já está escrito ao lado (chip, botão com rótulo); o desenho some da árvore de acessibilidade. */
+export function RetratoSVG({
+  dados,
+  tamanho = 96,
+  className,
+  titulo,
+  decorativo,
+}: {
+  dados: DadosRetrato;
+  tamanho?: number;
+  className?: string;
+  titulo?: string;
+  decorativo?: boolean;
+}) {
   const bruto = useId();
   const c = criarCtx(dados, `rt${bruto.replace(/[^a-zA-Z0-9]/g, "")}`);
   const d = c.d;
@@ -212,8 +225,7 @@ export function RetratoSVG({ dados, tamanho = 96, className, titulo }: { dados: 
       width={tamanho}
       height={tamanho}
       className={className}
-      role="img"
-      aria-label={titulo ?? "Retrato do personagem"}
+      {...(decorativo ? { "aria-hidden": true } : { role: "img", "aria-label": titulo ?? "Retrato do personagem" })}
       xmlns="http://www.w3.org/2000/svg"
     >
       <Definicoes c={c} />

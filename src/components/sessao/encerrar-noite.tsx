@@ -6,12 +6,14 @@ import { BotaoGastarXp } from "@/components/ficha/gastar-xp";
 import { manchasDe, pedirRemorso } from "@/components/ficha/ajuste-ficha";
 import type { AcoesMesa, Mesa } from "@/lib/cliente/use-mesa";
 import { noiteAtual, noiteEncerrada, remorsoDesde, sessaoDaMesa, ultimoMarcador, xpDesde, type EstadoRemorso } from "./noite";
-import { Icone } from "@/components/icones";
+import { Icone, type NomeIcone } from "@/components/icones";
+import { LinkVoltar } from "@/components/link-voltar";
+import { useFocoPreso } from "@/lib/cliente/use-foco-preso";
 
-// "🌙 Encerrar a noite" como ritual, nas duas mesas (o botão mora no cabeçalho; no celular, no pé do painel/Códex).
+// "Encerrar a noite" como ritual, nas duas mesas (o botão mora no cabeçalho; no celular, no pé do painel/Códex).
 // Diálogo em três passos: 1) Remorso (Vampiro): cada personagem com Manchas rola o próprio teste no cartão do dado
 // (POST /personagens/[pid]/remorso, pacote W21) ou o grupo deixa "o mestre decide"; 2) XP: o que o sistema dá e as linhas
-// "+N XP — motivo" que chegarem; 3) fechar: POST /encerrar ({ semRemorso }) → a mesa liga o "fechando" e o marcador chega.
+// "+N XP: motivo" que chegarem; 3) fechar: POST /encerrar ({ semRemorso }), e a mesa liga o "fechando" e o marcador chega.
 // O 409 do servidor aparece com o motivo dele e, se for teste esperando, um "ir para o dado".
 
 /** O que cada sistema dá de XP no fim da noite (texto curto; quem decide a conta é o mestre). */
@@ -60,7 +62,8 @@ export function EncerrarNoite({
   const [pedindo, setPedindo] = useState<number | null>(null);
   const [erroRemorso, setErroRemorso] = useState<string | null>(null);
   const caixa = useRef<HTMLDivElement>(null);
-  const devolverFoco = useRef<HTMLElement | null>(null);
+  // Tab fica dentro do diálogo e, ao fechar, o foco volta a quem o abriu (o gancho não move o foco ao abrir)
+  useFocoPreso(caixa, aberto);
 
   const vampiro = mesa.sistema.id === "vtm5";
   const desde = ultimoMarcador(mesa.mensagens) + 1;
@@ -85,10 +88,9 @@ export function EncerrarNoite({
   const pendente = remorso.find((x) => x.estado?.tipo === "pendente")?.estado ?? null;
   const xp = xpDesde(mesa.mensagens, desde);
 
-  // abriu: guarda quem tinha o foco, foca o diálogo; fechou: devolve
+  // abriu: foca o botão do passo (quem devolve o foco ao fechar é o useFocoPreso)
   useEffect(() => {
     if (!aberto) return;
-    devolverFoco.current = document.activeElement as HTMLElement | null;
     const t = setTimeout(() => caixa.current?.querySelector<HTMLElement>("[data-foco-inicial]")?.focus(), 30);
     const esc = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -100,7 +102,6 @@ export function EncerrarNoite({
     return () => {
       clearTimeout(t);
       document.removeEventListener("keydown", esc);
-      devolverFoco.current?.focus?.({ preventScroll: true });
     };
   }, [aberto]);
 
@@ -206,8 +207,8 @@ export function EncerrarNoite({
               {pronta ? "O livro ganhou um fim de capítulo." : "O mestre fecha a cena, reparte o XP e marca o fim do capítulo no livro."}
             </p>
           </div>
-          <button type="button" onClick={aoFechar} className="grid size-10 shrink-0 place-items-center rounded-md text-muted hover:text-foreground" aria-label="Fechar">
-            ✕
+          <button type="button" onClick={aoFechar} className="grid size-10 shrink-0 place-items-center rounded-md text-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ambar" aria-label="Fechar sem encerrar a noite">
+            <Icone nome="close" />
           </button>
         </div>
 
@@ -386,7 +387,7 @@ export function CartaoNoiteEncerrada({
   const proxima = sessao ? sessao + 1 : null;
   return (
     <section className="surgir rounded-xl border border-ambar/40 bg-surface/80 px-4 py-3 text-sm shadow-[0_0_30px_-18px_var(--ambar)]" aria-labelledby="titulo-noite-encerrada" data-noite-encerrada>
-      <h2 id="titulo-noite-encerrada" className="titulo flex flex-wrap items-baseline gap-x-2 text-lg text-pergaminho">
+      <h2 id="titulo-noite-encerrada" className="leitor-fim-noite-titulo flex flex-wrap items-baseline gap-x-2">
         <span className="text-ambar">
           <IconeLua className="inline size-4 align-[-2px]" />
         </span>
@@ -395,26 +396,45 @@ export function CartaoNoiteEncerrada({
       </h2>
       {chips.length > 0 && (
         <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="O que a noite deu">
-          {chips.map((c) => (
-            <li key={c} className="etiqueta border-ambar/40 text-foreground/90">
-              {c}
-            </li>
-          ))}
+          {chips.map((c) => {
+            const tipo = tipoDoChip(c);
+            return (
+              <li key={c} className={tipo.classe} data-chip-noite={tipo.nome}>
+                {tipo.icone && (
+                  <span className={tipo.corIcone}>
+                    <Icone nome={tipo.icone} />
+                  </span>
+                )}
+                {c}
+              </li>
+            );
+          })}
         </ul>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Link href="/" className="btn-borda min-h-10 px-3 py-1.5 text-xs">
-          ← Voltar às campanhas
-        </Link>
+        <LinkVoltar href="/" className="pr-1">
+          Voltar às campanhas
+        </LinkVoltar>
         <Link href={`/mesa/${mesa.campanha.id}/livro`} className="btn-borda min-h-10 px-3 py-1.5 text-xs"><Icone nome="scroll" />  Ler o livro
         </Link>
         {mesa.sistema.id === "vtm5" && ativo && <BotaoGastarXp personagem={ativo} />}
-        <button type="button" onClick={aoContinuar} className="ml-auto min-h-10 rounded-md px-2 text-xs text-ambar underline-offset-4 hover:underline" data-continuar-jogando>
-          Continuar jogando{proxima ? ` (abre a noite ${proxima})` : ""} →
+        <button type="button" onClick={aoContinuar} className="btn-ambar ml-auto min-h-10 px-4 text-sm" data-continuar-jogando>
+          Continuar jogando{proxima ? ` (abre a noite ${proxima})` : ""} <Icone nome="arrowRight" />
         </button>
       </div>
     </section>
   );
+}
+
+/**
+ * Plaquinha de cada coisa que a noite deu, decidida pelo texto do chip (chipsDaNoite): XP no âmbar do tema, Remorso e Manchas
+ * com a borda e a gota em sangue (o texto fica na cor de leitura: o --sangue puro não dá 4,5:1), missão com o pergaminho.
+ */
+function tipoDoChip(texto: string): { nome: string; classe: string; icone: NomeIcone | null; corIcone: string } {
+  if (texto.includes("XP")) return { nome: "xp", classe: "etiqueta-matiz", icone: "sparkle", corIcone: "" };
+  if (/Remorso|Mancha/.test(texto)) return { nome: "remorso", classe: "etiqueta border-sangue/70 text-foreground/90", icone: "drop", corIcone: "text-sangue" };
+  if (/miss[ãa]o/i.test(texto)) return { nome: "missao", classe: "etiqueta text-foreground/90", icone: "scroll", corIcone: "text-musgo" };
+  return { nome: "outro", classe: "etiqueta text-foreground/90", icone: null, corIcone: "" };
 }
 
 function ListaXp({ linhas, className = "" }: { linhas: { mensagemId: number; personagem: string; ganho: number; motivo: string }[]; className?: string }) {
@@ -425,7 +445,7 @@ function ListaXp({ linhas, className = "" }: { linhas: { mensagemId: number; per
           <span className="font-semibold text-ambar tabular-nums">+{x.ganho} XP</span>
           <span className="min-w-0 text-foreground/85">
             {x.personagem && <span className="font-semibold">{x.personagem}</span>}
-            {x.motivo && ` — ${x.motivo}`}
+            {x.motivo && (x.personagem ? `: ${x.motivo}` : x.motivo)}
           </span>
         </li>
       ))}

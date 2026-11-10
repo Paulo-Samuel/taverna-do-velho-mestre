@@ -112,7 +112,7 @@ export function PreviaLateral({ sistema, e, opcoes, copia }: { sistema: SistemaP
           {sistema.atributos.map((a) => (
             <div key={a.id} className="rounded-md border border-border bg-surface-2/70 py-1 text-center">
               <p className="text-[11px] uppercase tracking-wider text-muted">{a.abrev}</p>
-              <p className="titulo text-base text-pergaminho">{e.atributos[a.id] || "—"}</p>
+              <p className="titulo text-base text-pergaminho">{e.atributos[a.id] || "-"}</p>
             </div>
           ))}
         </div>
@@ -251,7 +251,7 @@ export function Resumo({ sistema, e, opcoes, modo, passos, irPara, previa, carre
           {!copia && sistema.atributos.length > 0 && (
             <Linha rotulo="Atributos">
               {sistema.atributos.some((a) => e.atributos[a.id])
-                ? sistema.atributos.map((a) => `${a.abrev} ${e.atributos[a.id] || "—"}`).join(" · ")
+                ? sistema.atributos.map((a) => `${a.abrev} ${e.atributos[a.id] || "-"}`).join(" · ")
                 : `o sistema distribui (${metodo?.nome ?? "padrão"})`}
               {editar("atributos")}
             </Linha>
@@ -305,7 +305,7 @@ export function Resumo({ sistema, e, opcoes, modo, passos, irPara, previa, carre
               {sistema.id === "vtm5" ? ", Fome 1, sem Manchas" : ""}, nenhuma condição. A mesa de origem continua com o original.
             </p>
           )}
-          {!copia && carregando && <p className="animate-pulse text-sm italic text-muted">O mestre rabisca a ficha…</p>}
+          {!copia && carregando && <p className="animate-pulse text-sm italic text-muted motion-reduce:animate-none">O mestre rabisca a ficha…</p>}
           {!carregando && previa?.ok && (
             <>
               <CartaoFicha ficha={previa.ficha} blocos={previa.blocos} sistema={sistema} jogador={e.jogador.trim() || undefined} />

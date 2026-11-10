@@ -97,6 +97,8 @@ export function Musica({
   const [totalLocal, setTotalLocal] = useState<number | null>(null);
   const motor = useRef<Motor | null>(null);
   const caixa = useRef<HTMLDivElement>(null);
+  // o botão que abriu o popover (linha do menu, botão do cabeçalho ou a setinha): o Esc devolve o foco a ele
+  const botao = useRef<HTMLButtonElement>(null);
   const lidoEm = useRef(0);
   // id da campanha só depois de montar (a URL não existe no servidor): até lá a escolha manual é a padrão.
   // null também fora de uma mesa (/nova): aí não há escolha manual (a trilha é a da criação) e os chips não aparecem
@@ -172,13 +174,19 @@ export function Musica({
     motor.current?.definirPreferencias(prefs.ligado, volumeEfetivo);
   }, [prefs.ligado, volumeEfetivo]);
 
-  // popover: fecha com Esc ou clique fora
+  // popover: fecha com Esc (o foco volta ao botão) ou clique fora
   useEffect(() => {
     if (!aberto) return;
     const fora = (e: PointerEvent) => {
       if (caixa.current && !caixa.current.contains(e.target as Node)) setAberto(false);
     };
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setAberto(false);
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setAberto(false);
+      // só devolve o foco se ele estava aqui dentro (ou perdido): quem já foi para outro canto não é puxado de volta
+      const foco = document.activeElement;
+      if (!foco || foco === document.body || caixa.current?.contains(foco)) botao.current?.focus();
+    };
     document.addEventListener("pointerdown", fora);
     document.addEventListener("keydown", esc);
     return () => {
@@ -228,13 +236,14 @@ export function Musica({
     <div ref={caixa} className={`relative items-center ${linha ? "flex w-full" : "inline-flex shrink-0"}`}>
       {linha ? (
         <button
+          ref={botao}
           type="button"
           onClick={() => setAberto((a) => !a)}
           title={dica}
           aria-label={`Som: ${prefs.ligado ? "ligado" : "desligado"}. Abrir a trilha sonora`}
           aria-expanded={aberto}
           aria-haspopup="dialog"
-          className="flex min-h-10 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground/90 hover:bg-surface-2/60 hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar"
+          className="flex min-h-11 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground/90 hover:bg-surface-2/60 hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar"
           data-item-menu
         >
           <span className="text-muted">
@@ -246,6 +255,7 @@ export function Musica({
       ) : compacto ? (
         // cabeçalho das mesas: um botão só, como os vizinhos; o liga/desliga e o volume moram no popover
         <button
+          ref={botao}
           type="button"
           onClick={() => setAberto((a) => !a)}
           title={dica}
@@ -274,6 +284,7 @@ export function Musica({
           <IconeSom ligado={prefs.ligado} />
         </button>
         <button
+          ref={botao}
           type="button"
           onClick={() => setAberto((a) => !a)}
           title="Volume da música"
@@ -287,9 +298,15 @@ export function Musica({
       )}
 
       {aberto && (
-        // no celular o popover fica preso às bordas da tela (o botão pode estar no meio do cabeçalho)
+        // no celular o popover fica preso às bordas da tela (o botão pode estar no meio do cabeçalho).
+        // Aberto de dentro do menu "Mais opções" (linha): folha no rodapé no celular e, no desktop, à esquerda do menu,
+        // alinhado à linha Música, para o menu continuar inteiro à vista.
         <div
-          className="cartao surgir bg-surface! fixed inset-x-4 top-16 z-50 p-3 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72"
+          className={
+            linha
+              ? "cartao surgir bg-surface! fixed inset-x-4 bottom-4 z-50 max-h-[70dvh] overflow-y-auto p-3 sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-full sm:top-0 sm:mr-2 sm:w-72 sm:max-h-[calc(100dvh-9rem)]"
+              : "cartao surgir-menu bg-surface! fixed inset-x-4 top-16 z-50 p-3 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72"
+          }
           role="dialog"
           aria-label="Trilha sonora"
         >

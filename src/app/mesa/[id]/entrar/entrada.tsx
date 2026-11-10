@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { EstadoVazio } from "@/components/estado-vazio";
 import { FaixaAviso } from "@/components/faixa-aviso";
 import { Icone } from "@/components/icones";
 import * as identidade from "@/lib/cliente/identidade";
@@ -14,7 +15,8 @@ type Presente = { apelido: string; personagemId: number | null; local: boolean }
 
 type Props = {
   campanha: { id: number; nome: string; cenario: string };
-  sistema: { nome: string; nomeCurto: string };
+  /** `id` é opcional: a página ainda manda só os nomes, então o modo história também é reconhecido pelo nome */
+  sistema: { id?: string; nome: string; nomeCurto: string };
   temPin: boolean;
   liberado: boolean;
   local: boolean;
@@ -82,6 +84,8 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
 
   const nomeLimpo = apelido.trim();
   const pronto = confirmado && liberado;
+  // na tela é frase comum ("Modo história"); o nome próprio do sistema fica para o mestre
+  const nomeDoSistema = sistema.id === "historia" || sistema.nome === "Modo História" ? "Modo história" : sistema.nome;
 
   function confirmarApelido() {
     if (!nomeLimpo) return;
@@ -124,10 +128,10 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
   }
 
   return (
-    <div className="mx-auto flex min-h-[calc(100dvh-8rem)] max-w-xl flex-col justify-center space-y-4 px-4 py-6 [&_:focus-visible]:outline-2 [&_:focus-visible]:outline-offset-2 [&_:focus-visible]:outline-ambar">
+    <main className="mx-auto flex min-h-[calc(100dvh-8rem)] max-w-xl flex-col justify-center space-y-4 px-4 py-6 [&_:focus-visible]:outline-2 [&_:focus-visible]:outline-offset-2 [&_:focus-visible]:outline-ambar">
       <header className="text-center">
         <p className="text-xs uppercase tracking-widest text-muted">
-          {sistema.nome} · {local ? "nesta máquina" : "pela rede local"}
+          {nomeDoSistema} · {local ? "nesta máquina" : "pela rede local"}
         </p>
         <h1 className="titulo titulo-brilho mt-1 text-3xl text-pergaminho sm:text-4xl">{campanha.nome}</h1>
         {campanha.cenario && <p className="mx-auto mt-2 line-clamp-3 max-w-md text-sm text-muted">{campanha.cenario}</p>}
@@ -222,9 +226,10 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
             </p>
           )}
 
-          {personagens.length === 0 && <p className="mb-3 text-sm text-muted">Ninguém criou personagem ainda. A mesa está esperando o primeiro herói (ou vítima).</p>}
+          {personagens.length === 0 && <EstadoVazio icone="person">Ninguém criou personagem ainda. A mesa está esperando o primeiro herói (ou vítima).</EstadoVazio>}
 
-          <ul className="space-y-2">
+          {/* lista vazia não vira <ul> sem itens (o leitor de tela anunciaria "lista, 0 itens") */}
+          {personagens.length > 0 && <ul className="space-y-2">
             {personagens.map((p) => {
               const meu = Boolean(p.jogador) && confirmado && mesmoNome(p.jogador, nomeLimpo);
               const donoOnline = Boolean(p.jogador) && !meu && presenca.some((j) => mesmoNome(j.apelido, p.jogador));
@@ -263,38 +268,44 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
                     type="button"
                     className={meu || !p.jogador ? "btn-ambar min-h-10 px-4 py-1.5" : "btn-borda min-h-10 px-4 py-1.5"}
                     disabled={!pronto || donoOnline || ocupado !== null}
+                    aria-busy={ocupado === p.id}
                     onClick={() => void pegar(p)}
                   >
-                    {ocupado === p.id ? "…" : meu ? "Continuar" : p.jogador ? "Assumir" : "Pegar"}
+                    {ocupado === p.id ? "Sentando…" : meu ? "Continuar" : p.jogador ? "Assumir" : "Pegar"}
                   </button>
                 </li>
               );
             })}
-          </ul>
+          </ul>}
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3 text-sm">
-            <Link
-              href={`/mesa/${campanha.id}/personagens/novo`}
-              aria-disabled={!confirmado || undefined}
-              tabIndex={confirmado ? undefined : -1}
-              className={`btn-borda min-h-10 py-1.5 ${confirmado ? "" : "pointer-events-none"}`}
-            >
-              Criar personagem novo
-            </Link>
-            <Link
-              href={`/mesa/${campanha.id}`}
-              aria-disabled={!confirmado || undefined}
-              tabIndex={confirmado ? undefined : -1}
-              className={`inline-flex min-h-10 items-center gap-1 text-muted hover:text-ambar ${confirmado ? "" : "pointer-events-none"}`}
-            >
-              Só assistir por enquanto <Icone nome="arrowRight" />
-            </Link>
+            {/* pointer-events-none esconde o title do mouse: a dica e o cursor ficam no invólucro */}
+            <span className={confirmado ? "inline-flex" : "inline-flex cursor-not-allowed"} title={confirmado ? undefined : "Diga seu apelido primeiro"}>
+              <Link
+                href={`/mesa/${campanha.id}/personagens/novo`}
+                aria-disabled={!confirmado || undefined}
+                tabIndex={confirmado ? undefined : -1}
+                className={`${personagens.length === 0 ? "btn-ambar" : "btn-borda"} min-h-10 py-1.5 ${confirmado ? "" : "pointer-events-none opacity-70"}`}
+              >
+                Criar personagem novo
+              </Link>
+            </span>
+            <span className={confirmado ? "inline-flex" : "inline-flex cursor-not-allowed"} title={confirmado ? undefined : "Diga seu apelido primeiro"}>
+              <Link
+                href={`/mesa/${campanha.id}`}
+                aria-disabled={!confirmado || undefined}
+                tabIndex={confirmado ? undefined : -1}
+                className={`inline-flex min-h-10 items-center gap-1 text-muted hover:text-ambar ${confirmado ? "" : "pointer-events-none opacity-70"}`}
+              >
+                Só assistir por enquanto <Icone nome="arrowRight" />
+              </Link>
+            </span>
           </div>
           </div>
         </Passo>
       )}
 
       {!liberado && !temPin && <p className="text-center text-sm text-muted">Esta mesa não deixou você entrar. Estranho: ela nem tem tranca.</p>}
-    </div>
+    </main>
   );
 }

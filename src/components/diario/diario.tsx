@@ -4,16 +4,18 @@ import { useMemo, useState } from "react";
 import { BotaoFixar } from "@/components/fatos/fixar-selecao";
 import { resumoDaEntrada, type ControleFatos } from "@/components/fatos/use-fatos";
 import type { EntradaDiario, TipoDiario } from "@/lib/sistemas/tipos";
+import { EstadoVazio } from "@/components/estado-vazio";
+import type { NomeIcone } from "@/components/icones";
 
 // Diário da campanha: missões, NPCs, lugares, itens e notas que o mestre registra com anotar_diario.
-// Abas por tipo, busca em tudo e ordem por atualização (missões abertas sempre no topo). O 📌 fixa um resumo da entrada.
+// Abas por tipo, busca em tudo e ordem por atualização (missões abertas sempre no topo). O alfinete fixa um resumo da entrada.
 
-const ABAS: { tipo: TipoDiario; rotulo: string; vazio: string }[] = [
-  { tipo: "missao", rotulo: "Missões", vazio: "Nenhuma missão. Vocês estão de férias, aparentemente." },
-  { tipo: "npc", rotulo: "NPCs", vazio: "Ninguém digno de nota. Ainda." },
-  { tipo: "local", rotulo: "Lugares", vazio: "Nenhum lugar anotado." },
-  { tipo: "item", rotulo: "Itens", vazio: "Nenhum item marcante." },
-  { tipo: "nota", rotulo: "Notas", vazio: "Nenhuma pista ou anotação." },
+const ABAS: { tipo: TipoDiario; rotulo: string; vazio: string; icone: NomeIcone }[] = [
+  { tipo: "missao", rotulo: "Missões", vazio: "Nenhuma missão. Vocês estão de férias, aparentemente.", icone: "scroll" },
+  { tipo: "npc", rotulo: "NPCs", vazio: "Ninguém digno de nota. Ainda.", icone: "person" },
+  { tipo: "local", rotulo: "Lugares", vazio: "Nenhum lugar anotado.", icone: "place" },
+  { tipo: "item", rotulo: "Itens", vazio: "Nenhum item marcante.", icone: "key" },
+  { tipo: "nota", rotulo: "Notas", vazio: "Nenhuma pista ou anotação.", icone: "pencil" },
 ];
 
 const STATUS: Record<string, { rotulo: string; classe: string }> = {
@@ -88,6 +90,7 @@ export function Diario({ entradas, fatos }: { entradas: EntradaDiario[]; fatos?:
 
   // sem escolha do jogador, abre na primeira aba que tem algo
   const aba = escolhida ?? ABAS.find((a) => contagem[a.tipo])?.tipo ?? "missao";
+  const abaAtual = ABAS.find((a) => a.tipo === aba);
   const termo = sem(busca.trim());
 
   const visiveis = useMemo(() => {
@@ -103,7 +106,11 @@ export function Diario({ entradas, fatos }: { entradas: EntradaDiario[]; fatos?:
   }, [entradas, termo, aba, ordem]);
 
   if (!entradas.length) {
-    return <p className="text-sm text-muted">Nada anotado ainda. O mestre registra aqui missões, NPCs e pistas conforme aparecem.</p>;
+    return (
+      <EstadoVazio compacto icone="scroll" dica="O mestre registra aqui missões, NPCs e pistas conforme aparecem.">
+        Nada anotado ainda.
+      </EstadoVazio>
+    );
   }
 
   return (
@@ -111,14 +118,15 @@ export function Diario({ entradas, fatos }: { entradas: EntradaDiario[]; fatos?:
       <div className="flex gap-2">
         <input
           type="search"
-          className="campo py-1.5 text-sm"
+          className="campo min-h-10 py-1.5 text-sm sm:min-h-0"
           placeholder="Buscar no diário…"
           aria-label="Buscar no diário"
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
         />
         <button
-          className="btn-borda shrink-0 px-3 py-1.5 text-xs"
+          type="button"
+          className="btn-borda min-h-10 shrink-0 px-3 py-1.5 text-xs sm:min-h-0"
           onClick={() => setOrdem((o) => (o === "recentes" ? "nome" : "recentes"))}
           title="Mudar a ordem"
         >
@@ -151,8 +159,22 @@ export function Diario({ entradas, fatos }: { entradas: EntradaDiario[]; fatos?:
             <Entrada key={e.id} e={e} mostrarTipo={Boolean(termo)} fatos={fatos} />
           ))}
         </ul>
+      ) : termo ? (
+        <EstadoVazio
+          compacto
+          icone="search"
+          acao={
+            <button type="button" className="btn-borda min-h-10 px-3 text-sm" onClick={() => setBusca("")}>
+              Limpar a busca
+            </button>
+          }
+        >
+          Nada com &quot;{busca.trim()}&quot;.
+        </EstadoVazio>
       ) : (
-        <p className="text-xs text-muted">{termo ? `Nada com "${busca.trim()}".` : ABAS.find((a) => a.tipo === aba)?.vazio}</p>
+        <EstadoVazio compacto icone={abaAtual?.icone} dica="O mestre anota aqui sozinho, conforme a história anda.">
+          {abaAtual?.vazio}
+        </EstadoVazio>
       )}
     </div>
   );

@@ -13,7 +13,7 @@ export async function generateMetadata(props: PageProps<"/mesa/[id]">): Promise<
   const { id } = await props.params;
   const campanha = obterCampanha(Number(id));
   if (!campanha) return { title: "Porta errada" };
-  if (!(await acessoNaPagina(campanha))) return { title: "Mesa" };
+  if (!(await acessoNaPagina(campanha))) return { title: "Mesa trancada" };
   return { title: campanha.nome };
 }
 

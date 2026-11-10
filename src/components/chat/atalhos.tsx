@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { Icone } from "@/components/icones";
+import { comportamentoDeRolagem } from "@/lib/cliente/movimento";
+import { useFocoPreso } from "@/lib/cliente/use-foco-preso";
 
 // Atalhos de teclado das mesas (só quando o foco NÃO está num campo de texto):
 // 1/2/3 escolhem a sugestão, R rola o teste pendente deste aparelho, / foca o campo de ação, Esc fecha, ? mostra a lista.
@@ -78,7 +80,7 @@ export function rolarPedido(mensagemId: number | null | undefined, rolarAte = tr
   const botao = document.querySelector<HTMLButtonElement>(`#pedido-${mensagemId} button[data-rolar]`);
   if (!botao || botao.disabled) return false;
   // no leitor cena a cena quem leva até o cartão é o leitor (scrollIntoView bagunçaria as páginas)
-  if (rolarAte) botao.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+  if (rolarAte) botao.scrollIntoView({ behavior: comportamentoDeRolagem(), block: "center" });
   botao.click();
   return true;
 }
@@ -107,6 +109,8 @@ const LISTA: [string, string][] = [
 /** Popover com a lista de atalhos ("?"). */
 export function AjudaAtalhos({ aberta, aoFechar, extras = [] }: { aberta: boolean; aoFechar: () => void; extras?: [string, string][] }) {
   const caixa = useRef<HTMLDivElement>(null);
+  // Tab fica dentro do popover e o foco volta a quem o abriu (o gancho não move o foco ao abrir: isso é do efeito abaixo)
+  useFocoPreso(caixa, aberta);
 
   useEffect(() => {
     if (!aberta) return;
@@ -130,7 +134,7 @@ export function AjudaAtalhos({ aberta, aoFechar, extras = [] }: { aberta: boolea
     >
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="titulo text-base text-ambar">Atalhos de teclado</p>
-        <button type="button" onClick={aoFechar} className="botao-cabecalho -mr-2 -mt-2" aria-label="Fechar">
+        <button type="button" onClick={aoFechar} className="botao-cabecalho -mr-2 -mt-2" aria-label="Fechar os atalhos">
           <Icone nome="close" />
         </button>
       </div>

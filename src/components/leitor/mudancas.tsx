@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { RetratoSVG } from "../historia/retrato/desenho";
 import type { Chip, GrupoChips } from "./cena";
-import { TextoComIcones } from "@/components/icones";
+import { Icone, TextoComIcones, type NomeIcone } from "@/components/icones";
 
 // "O que mudou na cena": as linhas de ficha, diário e XP do turno numa faixa de chips no fim da cena, por personagem
 // ("Samuel: Fome 1 → 2 · +1 Mancha"). Chips discretos na cor do tema; o detalhe (o motivo que o mestre deu) aparece ao passar o
@@ -15,6 +15,21 @@ import { TextoComIcones } from "@/components/icones";
 type Aberto = { chave: string; texto: string; x: number; y: number; abaixo: boolean; fixo: boolean; alvo: HTMLElement };
 
 const LARGURA_BALAO = 288;
+
+// Os glifos que a cena põe nos chips (cena.ts) viram ícones de verdade aqui. Fica local de propósito: no resto da taverna
+// alguns desses sinais têm outro sentido (o losango é custo de ação do PF2e), então não entram na tabela global de ícones.
+const ICONE_DO_GLIFO: Record<string, NomeIcone> = {
+  "❡": "scroll",
+  "⌂": "place",
+  "⁂": "eye",
+  "✎": "pencil",
+  "✓": "check",
+  "☾": "moon",
+  "♥": "heart",
+  "✦": "sparkle",
+  "▲": "arrowUp",
+  "▼": "arrowDown",
+};
 
 export function Mudancas({
   grupos,
@@ -52,6 +67,13 @@ export function Mudancas({
 
   if (!grupos.length) return null;
 
+  // posição de cada chip na faixa inteira (--i): a entrada em escada segue a ordem de leitura, não recomeça a cada grupo
+  const inicios: number[] = [];
+  grupos.reduce((soma, g) => {
+    inicios.push(soma);
+    return soma + g.chips.length;
+  }, 0);
+
   function abrir(el: HTMLElement, c: Chip, fixo: boolean) {
     const r = el.getBoundingClientRect();
     const abaixo = r.top < 120;
@@ -66,21 +88,23 @@ export function Mudancas({
     <section className={`leitor-mudancas ${variante === "faixa" ? "leitor-mudancas-faixa" : ""} ${className}`} aria-label="O que mudou na cena" data-mudancas={variante}>
       {variante === "bloco" && <p className="leitor-mudancas-titulo">O que mudou na cena</p>}
       <div className="leitor-mudancas-grupos">
-        {grupos.map((g) => {
+        {grupos.map((g, gi) => {
           const cor = g.tipo === "personagem" ? corDe?.(g.quem) : undefined;
           return (
             <div key={`${g.tipo}:${g.quem}`} className="leitor-mudancas-grupo" data-grupo={g.tipo}>
               <span className={`leitor-mudancas-quem ${g.tipo !== "personagem" ? "leitor-mudancas-quem-outro" : ""}`} style={cor ? { color: cor } : undefined}>
                 {g.quem}
               </span>
-              {g.chips.map((c) => {
+              {g.chips.map((c, ci) => {
                 const este = aberto?.chave === `${g.quem}:${c.chave}`;
                 const chip = { ...c, chave: `${g.quem}:${c.chave}` };
+                const nomeIcone = Object.hasOwn(ICONE_DO_GLIFO, c.icone) ? ICONE_DO_GLIFO[c.icone] : undefined;
                 return (
                   <button
                     key={c.chave}
                     type="button"
                     className={`leitor-chip leitor-chip-${c.tom}`}
+                    style={{ "--i": inicios[gi] + ci } as CSSProperties}
                     aria-describedby={este ? `${id}-balao` : undefined}
                     aria-expanded={este}
                     aria-label={`${c.rotulo}: ${c.detalhe}`}
@@ -105,8 +129,8 @@ export function Mudancas({
                         <RetratoSVG dados={c.retrato} tamanho={22} className={c.riscado ? "grayscale" : undefined} titulo="" />
                       </span>
                     ) : (
-                      <span aria-hidden className="leitor-chip-icone">
-                        <TextoComIcones texto={c.icone} />
+                      <span aria-hidden className="leitor-chip-icone" data-icone={nomeIcone}>
+                        {nomeIcone ? <Icone nome={nomeIcone} /> : <TextoComIcones texto={c.icone} />}
                       </span>
                     )}
                     <span className={c.riscado ? "line-through decoration-current/50" : ""}>{c.rotulo}</span>

@@ -33,7 +33,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/campanhas/[
       publicar(campanha.id, { e: "estado", ocupado: mesaOcupada(campanha.id), fila: listarFila(campanha.id) });
       break;
     default:
-      return Response.json({ erro: "Comando desconhecido." }, { status: 400 });
+      return Response.json({ erro: "A taverna não entendeu o pedido. Recarregue a página e tente de novo." }, { status: 400 });
   }
   return Response.json({ ok: true });
 }

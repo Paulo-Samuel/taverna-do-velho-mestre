@@ -36,7 +36,7 @@ const OPCOES: { id: IdProvedor; nome: string; custo: string; texto: string }[] =
     nome: "Claude Code (seu plano)",
     custo: "Sai da assinatura Pro/Max",
     texto:
-      "Usa o Claude Code instalado e logado neste computador. Não cobra nada à parte: gasta dos mesmos limites de 5 horas e semanal que você já tem no plano.",
+      "Usa o Claude Code instalado e logado nesta máquina. Não cobra nada à parte: gasta dos mesmos limites de 5 horas e semanal que você já tem no plano.",
   },
   {
     id: "api",
@@ -229,7 +229,7 @@ export function FormularioConfig({ ajustes, padroes }: { ajustes: AjustesMestre;
 
       <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center gap-3 border-t border-border bg-background/90 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
         <button type="submit" className="btn-ambar min-h-11" disabled={salvando}>
-          {salvando ? "Salvando…" : "Salvar"}
+          {salvando ? "Salvando…" : "Salvar configurações"}
         </button>
         <button type="button" className="btn-borda min-h-11" onClick={testar} disabled={testando}>
           {testando ? "Chamando o mestre…" : "Testar conexão"}
@@ -593,7 +593,7 @@ function AvisoUsoPessoal() {
     <div className="rounded-xl border border-ambar-forte/50 bg-ambar/5 p-4 text-sm text-muted">
       <p className="titulo mb-1 text-base text-ambar">Uso pessoal, palavra de taverneiro</p>
       <p>
-        Este modo só faz sentido no <strong className="text-foreground">seu</strong> computador, com o <strong className="text-foreground">seu</strong>{" "}
+        Este modo só faz sentido na <strong className="text-foreground">sua</strong> máquina, com o <strong className="text-foreground">seu</strong>{" "}
         login. O app não lê nem copia o token: apenas chama o Claude Code oficial. O que não pode: publicar a taverna na internet,
         oferecer o seu plano para outras pessoas usarem por conta própria ou distribuir o app configurado assim. Vai abrir a mesa
         para a turma ou instalar na máquina de alguém? Cada um com o próprio login, ou use a API, que é o caminho sem letra miúda.

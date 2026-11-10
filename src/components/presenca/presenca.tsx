@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { AcoesMesa, Mesa } from "@/lib/cliente/use-mesa";
 import { Icone } from "@/components/icones";
+import { useFocoPreso } from "@/lib/cliente/use-foco-preso";
 
 // Quem está na mesa agora (aparelhos conectados), o estado da conexão e o apelido deste aparelho.
 // Na primeira visita (sem apelido salvo) pergunta como chamar o jogador.
@@ -39,15 +40,23 @@ function CampoApelido({ inicial, aoSalvar, rotulo = "Salvar" }: { inicial: strin
 
 /** Pergunta o apelido na primeira visita deste aparelho. */
 function BoasVindas({ aoSalvar }: { aoSalvar: (nome: string) => void }) {
+  // enquanto a pergunta está na tela, Tab não escapa para a mesa atrás dela
+  const dialogo = useRef<HTMLDivElement>(null);
+  useFocoPreso(dialogo, true);
+  // o foco entra no diálogo ao aparecer (no contêiner: o leitor de tela anuncia a pergunta e o teclado do celular não pula)
+  useEffect(() => {
+    const el = dialogo.current;
+    if (el && !el.contains(document.activeElement)) el.focus();
+  }, []);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="titulo-apelido">
+    <div ref={dialogo} tabIndex={-1} className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 outline-none" role="dialog" aria-modal="true" aria-labelledby="titulo-apelido">
       <div className="cartao surgir w-full max-w-sm p-5">
         <h2 id="titulo-apelido" className="titulo text-xl text-ambar">
           Como te chamam na taverna?
         </h2>
         <p className="mb-4 mt-1 text-sm text-muted">Aparece para os outros na mesa. Dá para trocar depois, mas o taverneiro vai lembrar.</p>
         <CampoApelido inicial="" aoSalvar={aoSalvar} rotulo="Entrar" />
-        <button type="button" className="mt-3 text-xs text-muted hover:text-ambar" onClick={() => aoSalvar("Viajante")}>
+        <button type="button" className="mt-2 min-h-10 rounded-md text-xs text-muted hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar" onClick={() => aoSalvar("Viajante")}>
           Prefiro o anonimato de &quot;Viajante&quot;
         </button>
       </div>
@@ -59,6 +68,7 @@ export function Presenca({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
   const [aberto, setAberto] = useState(false);
   const [semAcesso, setSemAcesso] = useState(false);
   const caixa = useRef<HTMLDivElement>(null);
+  const botao = useRef<HTMLButtonElement>(null);
   const id = mesa.campanha.id;
   // três fases: "conectando" (primeira abertura, sem alarme), "ok" e "caiu" (vermelho; o EventSource tenta de novo sozinho)
   const conectado = mesa.conexao === "ok";
@@ -69,13 +79,19 @@ export function Presenca({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
     (a, b) => Number(b.clienteId === mesa.eu.clienteId) - Number(a.clienteId === mesa.eu.clienteId) || Number(b.local) - Number(a.local),
   );
 
-  // fecha o painel ao clicar fora ou apertar Esc
+  // fecha o painel ao clicar fora ou apertar Esc (aí o foco volta ao botão que abriu)
   useEffect(() => {
     if (!aberto) return;
     const fora = (e: PointerEvent) => {
       if (caixa.current && !caixa.current.contains(e.target as Node)) setAberto(false);
     };
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setAberto(false);
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setAberto(false);
+      // só devolve o foco se ele estava aqui dentro (ou perdido): quem já foi para outro canto não é puxado de volta
+      const foco = document.activeElement;
+      if (!foco || foco === document.body || caixa.current?.contains(foco)) botao.current?.focus();
+    };
     document.addEventListener("pointerdown", fora);
     document.addEventListener("keydown", esc);
     return () => {
@@ -96,11 +112,12 @@ export function Presenca({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
   }, [caiu, mesa.eu.clienteId, id]);
 
   const situacao = conectado ? "Conectado" : semAcesso ? "Barrado na porta" : caiu ? "Reconectando…" : "Conectando…";
-  const corDoPonto = conectado ? "bg-musgo" : caiu ? "animate-pulse bg-sangue" : "bg-muted/70";
+  const corDoPonto = conectado ? "bg-musgo" : caiu ? "animate-pulse bg-sangue motion-reduce:animate-none" : "bg-muted/70";
 
   return (
     <div ref={caixa} className="relative">
       <button
+        ref={botao}
         type="button"
         onClick={() => setAberto((v) => !v)}
         className="flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-xs text-muted hover:bg-surface-2/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ambar"
@@ -116,7 +133,7 @@ export function Presenca({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
       </button>
 
       {aberto && (
-        <div className="cartao surgir fixed inset-x-4 top-20 z-40 p-4 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80">
+        <div className="cartao surgir-menu fixed inset-x-4 top-20 z-40 p-4 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80">
           <p className={`mb-3 flex items-center gap-2 text-xs ${conectado ? "text-musgo" : caiu ? "text-sangue" : "text-muted"}`}>
             <span className={`size-2 rounded-full ${corDoPonto}`} />
             {conectado ? "Conectado à mesa" : semAcesso ? "O PIN da mesa mudou" : caiu ? "Sem sinal da taverna, tentando de novo…" : "Conectando à mesa…"}
@@ -150,7 +167,7 @@ export function Presenca({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
             {/* key: recomeça o campo quando o apelido muda por fora (outra aba, boas-vindas) */}
             <CampoApelido key={mesa.eu.apelido} inicial={mesa.eu.apelido} aoSalvar={acoes.mudarApelido} />
             <Link href={`/mesa/${id}/entrar`} className="mt-3 inline-block text-xs text-muted hover:text-ambar">
-              Trocar de personagem ou entrar de outro jeito →
+              Trocar de personagem ou entrar de outro jeito <Icone nome="arrowRight" />
             </Link>
           </div>
         </div>

@@ -221,7 +221,7 @@ function brutosDaFicha(m: Mensagem, d: Record<string, unknown>, estado: Map<stri
   for (const r of lista(d.recursos)) {
     const x = /^(.+?)\s+(-?\d+)\s*\/\s*(\d+)$/.exec(r.trim());
     if (!x) {
-      saida.push({ tipo: "chip", quem, grupo: "personagem", chip: { icone: "✎", rotulo: curto(r), detalhe: `${r} — ${detalhe}`, tom: "neutro" } });
+      saida.push({ tipo: "chip", quem, grupo: "personagem", chip: { icone: "✎", rotulo: curto(r), detalhe: `${r}: ${detalhe}`, tom: "neutro" } });
       continue;
     }
     const k = chaveValor(x[1]);
@@ -241,12 +241,12 @@ function brutosDaFicha(m: Mensagem, d: Record<string, unknown>, estado: Map<stri
     const norm = (c: string) => chaveValor(curto(c, 200));
     if (antes) {
       for (const c of atuais)
-        if (!antes.some((a) => norm(a) === norm(c))) saida.push({ tipo: "chip", quem, grupo: "personagem", chip: { icone: "◆", rotulo: curto(c), detalhe: `${c} — ${detalhe}`, tom: "ruim" } });
+        if (!antes.some((a) => norm(a) === norm(c))) saida.push({ tipo: "chip", quem, grupo: "personagem", chip: { icone: "◆", rotulo: curto(c), detalhe: `${c}: ${detalhe}`, tom: "ruim" } });
       for (const c of antes)
         if (!atuais.some((a) => norm(a) === norm(c)))
-          saida.push({ tipo: "chip", quem, grupo: "personagem", chip: { icone: "✓", rotulo: curto(c), detalhe: `Passou: ${c} — ${detalhe}`, tom: "bom", riscado: true } });
+          saida.push({ tipo: "chip", quem, grupo: "personagem", chip: { icone: "✓", rotulo: curto(c), detalhe: `Passou: ${c} (${detalhe})`, tom: "bom", riscado: true } });
     } else
-      for (const c of atuais) saida.push({ tipo: "chip", quem, grupo: "personagem", chip: { icone: "◆", rotulo: curto(c), detalhe: `${c} — ${detalhe}`, tom: "ruim" } });
+      for (const c of atuais) saida.push({ tipo: "chip", quem, grupo: "personagem", chip: { icone: "◆", rotulo: curto(c), detalhe: `${c}: ${detalhe}`, tom: "ruim" } });
     st.condicoes = atuais;
   }
   // nada mensurável: o motivo vira o chip ("Crueldade satisfeita")
@@ -263,7 +263,7 @@ function brutosDe(m: Mensagem, estado: Map<string, EstadoPersonagem>): Bruto[] {
     case "xp": {
       const ganho = num(d.ganho);
       const subiu = num(d.subiuPara);
-      const detalhe = [typeof d.motivo === "string" ? d.motivo : "", typeof d.resumo === "string" ? d.resumo : ""].filter(Boolean).join(" — ") || m.texto;
+      const detalhe = [typeof d.motivo === "string" ? d.motivo : "", typeof d.resumo === "string" ? d.resumo : ""].filter(Boolean).join(" · ") || m.texto;
       const saida: Bruto[] = [];
       if (ganho !== null) saida.push({ tipo: "chip", quem: quem ?? "Grupo", grupo: "personagem", chip: { icone: "✦", rotulo: `+${ganho} XP`, detalhe, tom: "bom" } });
       if (subiu !== null) saida.push({ tipo: "chip", quem: quem ?? "Grupo", grupo: "personagem", chip: { icone: "▲", rotulo: `Nível ${subiu}!`, detalhe, tom: "bom" } });
@@ -278,7 +278,7 @@ function brutosDe(m: Mensagem, estado: Map<string, EstadoPersonagem>): Bruto[] {
       // missão: concluída é boa notícia, fracassada é ruim; pessoa, lugar, item e pista são só novidade (tom neutro)
       const tom: TomChip = sub !== "missao" ? "neutro" : /conclu/i.test(rot) ? "bom" : /fracass|falh/i.test(rot) ? "ruim" : "neutro";
       const rotulo = pista ? `Pista: ${pista}` : sub === "pessoa" && rot === "Pessoa" && e.status ? `${titulo}: ${e.status}` : `${rot}: ${titulo}`;
-      const detalhe = pista ? (e.titulo ? `${rotulo} (${e.titulo})` : rotulo) : e.texto ? `${rotulo} — ${e.texto}` : rotulo;
+      const detalhe = pista ? (e.titulo ? `${rotulo} (${e.titulo})` : rotulo) : e.texto ? `${rotulo}: ${e.texto}` : rotulo;
       const retrato = sub === "pessoa" && e.titulo ? retratoDaEntrada({ titulo: e.titulo, texto: e.texto, dados: e.dados }) : undefined;
       return [
         {

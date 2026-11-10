@@ -73,6 +73,10 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .pd-rolando, .pd-assentar, .pd-assentar .pd-face, .pd-pulso, .pd-depois, .pd-rerrolar, .pd-rerrolar .pd-face { animation: none } }
 `;
 
+/** Classe de entrada do texto do resultado (grau e conta), com o atraso em `--atraso`. O cartão do d20 em pedido-teste.tsx
+ * reaproveita a mesma classe; quem usa precisa de <EstiloParada /> na página (a folha é içada e deduplicada pelo href). */
+export const CLASSE_DEPOIS = "pd-depois";
+
 export function EstiloParada() {
   return (
     <style href="taverna-parada-dados" precedence="default">
@@ -183,7 +187,8 @@ function D10Vtm({ valor, fome, bestial, i, v, antes }: { valor: number | null; f
   const sucesso = assentado && valor >= 6;
   const um = assentado && fome && valor === 1;
   // cor do contorno/número: Fome é sempre vermelho-sangue; o 10 normal usa o crítico do tema (no Vampiro, dourado)
-  const cor = fome ? (dez ? "text-[var(--critico)]" : "text-sangue") : dez ? "text-[var(--critico)]" : sucesso || !assentado ? "text-pergaminho" : "text-muted";
+  // dado normal sem sucesso: texto do tema a 70% (legível sobre o fundo; nada de muted com opacidade por cima)
+  const cor = fome ? (dez ? "text-[var(--critico)]" : "text-sangue") : dez ? "text-[var(--critico)]" : sucesso || !assentado ? "text-pergaminho" : "text-foreground/70";
   const traco = fome ? "var(--sangue)" : "currentColor";
   const opacidade = fome ? (!assentado ? 0.28 : dez || sucesso ? 0.55 : um ? 0.3 : 0.18) : !assentado ? 0.05 : dez ? 0.2 : sucesso ? 0.16 : 0.03;
   const corNumero = fome ? (dez ? "var(--critico)" : sucesso ? "var(--pergaminho)" : um ? "color-mix(in srgb, var(--sangue) 35%, var(--pergaminho))" : "color-mix(in srgb, var(--sangue) 80%, var(--pergaminho))") : "currentColor";
@@ -195,8 +200,8 @@ function D10Vtm({ valor, fome, bestial, i, v, antes }: { valor: number | null; f
       ? `dado de Fome: ${valor}${dez ? " (10 da Besta)" : um ? " (1 de Fome)" : ""}`
       : `${valor}${dez ? " (crítico)" : sucesso ? " (sucesso)" : ""}${rerrolado ? `, rerrolado com Força de Vontade (era ${antes})` : ""}`;
   return (
-    <Casca i={i} v={v} rotulo={rotulo} rerrolado={rerrolado} classe={`${cor} ${assentado && !sucesso && !fome && !rerrolado ? "opacity-70" : ""}`}>
-      <SvgD10 preenchimento={fome ? "var(--sangue)" : "currentColor"} opacidade={opacidade} traco={traco} grossura={dez ? 7 : 5} brilho={dez} pulso={um && bestial && v.novo}>
+    <Casca i={i} v={v} rotulo={rotulo} rerrolado={rerrolado} classe={cor}>
+      <SvgD10 preenchimento={fome ? "var(--sangue)" : "currentColor"} opacidade={opacidade} traco={traco} grossura={dez ? 7 : sucesso && !fome ? 6 : 5} brilho={dez} pulso={um && bestial && v.novo}>
         {!assentado && fome && v.fase === "espera" && <Gota />}
         {rerrolado && (
           <polygon points="50,-8 105,32 105,66 50,108 -5,66 -5,32" fill="none" stroke="var(--ambar)" strokeWidth="4" strokeDasharray="9 6" strokeLinejoin="round" />

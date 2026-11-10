@@ -3,6 +3,8 @@
 import { useActionState, useEffect, useRef, useState, useTransition, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { previaFicha, sugerirAtributos, type PreviaFicha } from "@/app/acoes-ficha";
 import { apelido as apelidoSalvo, salvarApelido } from "@/lib/cliente/identidade";
+import { comportamentoDeRolagem } from "@/lib/cliente/movimento";
+import { haQuanto } from "@/lib/ha-quanto";
 import type { AventuraPublica } from "@/lib/aventuras/tipos";
 import type { SistemaPublico } from "@/lib/sistemas/tipos";
 import { temaDoSistema } from "@/lib/temas";
@@ -160,16 +162,6 @@ function gravarRascunho(destino: string, sistemaId: string, r: Rascunho | null) 
   } catch {
     // cheio ou bloqueado: perde só a conveniência
   }
-}
-
-function haQuanto(ms: number): string {
-  const min = Math.round((Date.now() - ms) / 60000);
-  if (min < 2) return "agora há pouco";
-  if (min < 60) return `há ${min} min`;
-  const h = Math.round(min / 60);
-  if (h < 24) return `há ${h} h`;
-  const d = Math.round(h / 24);
-  return d === 1 ? "ontem" : `há ${d} dias`;
 }
 
 /** Tem algo que valha guardar? (abrir a página e não mexer em nada não vira rascunho) */
@@ -500,7 +492,7 @@ export function FormularioPersonagem({
     }
     setPasso(p);
     setAlcance((a) => Math.max(a, passos.indexOf(p)));
-    topoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    topoRef.current?.scrollIntoView({ behavior: comportamentoDeRolagem(), block: "start" });
   }
 
   function avancar() {
@@ -561,7 +553,7 @@ export function FormularioPersonagem({
       travaEnvio.current = true;
       setTimeout(() => (travaEnvio.current = false), 800);
     }
-    topoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    topoRef.current?.scrollIntoView({ behavior: comportamentoDeRolagem(), block: "start" });
   }
 
   /** Desistir da cópia: volta a montar a ficha do zero, no primeiro passo de regra, com o nome e os passos já visitados de antes do "Trazer". */
@@ -571,7 +563,7 @@ export function FormularioPersonagem({
     const primeiro = sistema?.ancestralidades.length ? "ancestralidade" : sistema?.classes.length ? "classe" : "identidade";
     setPasso(primeiro);
     setAviso(null);
-    topoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    topoRef.current?.scrollIntoView({ behavior: comportamentoDeRolagem(), block: "start" });
   }
 
   function aoEnviar(ev: FormEvent<HTMLFormElement>) {
@@ -613,14 +605,15 @@ export function FormularioPersonagem({
   // a prévia só faz sentido entre o sistema e o resumo (o resumo já mostra a ficha inteira)
   const mostrarPrevia = Boolean(sistema) && atual !== "sistema" && atual !== "resumo";
   const proximo = passos[indice + 1];
-  // "Sem nome · Gato de Beco · —": o que falta aparece como travessão, para o rodapé do celular mostrar o que vem pela frente
+  // "Sem nome · Gato de Beco · …": o que falta aparece como reticências, para o rodapé do celular mostrar o que vem pela frente
+  // (hífen solto entre os pontos lia como "· - · -", um risco sem sentido)
   const resumoCurto = sistema
     ? copia
       ? `${copia.nome} · ${copia.linha || "de outra mesa"}`
       : [
           e.nome.trim() || "Sem nome",
-          sistema.ancestralidades.length ? (sistema.ancestralidades.find((a) => a.id === e.ancestralidade)?.nome ?? "—") : null,
-          sistema.classes.length ? (sistema.classes.find((c) => c.id === e.classe)?.nome ?? "—") : null,
+          sistema.ancestralidades.length ? (sistema.ancestralidades.find((a) => a.id === e.ancestralidade)?.nome ?? "…") : null,
+          sistema.classes.length ? (sistema.classes.find((c) => c.id === e.classe)?.nome ?? "…") : null,
         ]
           .filter((x): x is string => x !== null)
           .join(" · ")
@@ -865,7 +858,7 @@ export function FormularioPersonagem({
 
           {/* navegação grudada no rodapé (celular e desktop): listas longas não escondem o Avançar, nem o aviso de pendência */}
           <div className="sticky bottom-0 z-20 -mx-4 border-t border-border bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border sm:bg-surface/95">
-            {/* celular: a prévia é uma linha no rodapé ("Sem nome · Gato de Beco · —") que abre o painel por cima */}
+            {/* celular: a prévia é uma linha no rodapé ("Sem nome · Gato de Beco · -") que abre o painel por cima */}
             {sistema && mostrarPrevia && (
               <div className="lg:hidden">
                 {previaAberta && (

@@ -1,19 +1,21 @@
 // Tipografia de livro das duas mesas (leitor cena a cena e rolagem): tamanho de leitura com a escala escolhida no menu
-// (--leitor-escala), medida de ~65 caracteres, capitular no primeiro parágrafo da cena, falas entre aspas destacadas,
+// (--leitor-escala), entrelinha (--leitor-entrelinha) e medida de ~65 caracteres (vezes --leitor-coluna), capitular no
+// primeiro parágrafo da cena, falas entre aspas destacadas,
 // separador com o enfeite do tema e a abertura de capítulo (cabeçalho de cena). As cores vêm dos tokens do tema.
 
 import type { ReactNode } from "react";
+import { Icone } from "@/components/icones";
 
 const CSS = `
-.leitor-prosa{font-size:calc(var(--leitor-escala,1)*1.125rem);line-height:1.74;text-wrap:pretty;hyphens:auto;-webkit-hyphens:auto;font-kerning:normal;font-variant-ligatures:common-ligatures}
-@media (min-width:640px){.leitor-prosa{font-size:calc(var(--leitor-escala,1)*1.2rem);line-height:1.76}}
+.leitor-prosa{font-size:calc(var(--leitor-escala,1)*1.125rem);line-height:var(--leitor-entrelinha,1.74);text-wrap:pretty;hyphens:auto;-webkit-hyphens:auto;font-kerning:normal;font-variant-ligatures:common-ligatures}
+@media (min-width:640px){.leitor-prosa{font-size:calc(var(--leitor-escala,1)*1.2rem);line-height:var(--leitor-entrelinha,1.76)}}
 .leitor-prosa p{margin:0 0 .9em}
 .leitor-prosa p:last-child{margin-bottom:0}
 .leitor-prosa strong{font-weight:600;color:var(--pergaminho)}
-.leitor-medida{max-width:calc(var(--leitor-escala,1)*37rem)}
+.leitor-medida{max-width:calc(var(--leitor-escala,1)*var(--leitor-coluna,1)*37rem)}
 .leitor-fala{font-style:italic;color:color-mix(in srgb,var(--pergaminho) 84%,var(--ambar))}
 .leitor-capitular::first-letter{float:left;font-family:var(--fonte-capitular,var(--font-titulo));font-style:normal;font-weight:400;font-size:4.05em;line-height:.78;
-  padding:.07em .1em 0 0;color:var(--ambar);text-shadow:0 0 22px color-mix(in srgb,var(--ambar) 30%,transparent);transition:color .5s ease}
+  padding:.07em .1em 0 0;color:var(--ambar);text-shadow:0 0 22px color-mix(in srgb,var(--ambar) 30%,transparent);transition:color .25s ease}
 .leitor-capitular[data-oculta]::first-letter{color:transparent;text-shadow:none}
 .leitor-separador{display:flex;align-items:center;justify-content:center;gap:.85em;margin:1.5em auto;max-width:15em;font-size:.8em;line-height:1;
   color:color-mix(in srgb,var(--ambar) 65%,transparent)}
@@ -44,7 +46,7 @@ const CSS = `
 .leitor-mudancas-quem{margin-right:.15rem;font-size:13px;font-weight:600;letter-spacing:.06em;font-variant-caps:all-small-caps;color:var(--ambar)}
 .leitor-mudancas-quem-outro{color:var(--muted)}
 .leitor-mudancas-faixa{margin:0;min-width:0;flex:1}
-.leitor-mudancas-faixa .leitor-mudancas-grupos{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:.3rem .9rem;transition:opacity .45s ease}
+.leitor-mudancas-faixa .leitor-mudancas-grupos{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:.3rem .9rem;transition:opacity .22s ease}
 .leitor-mudancas-faixa .leitor-mudancas-grupo{justify-content:flex-start;gap:.3rem}
 .leitor-mudancas-faixa .leitor-chip{min-height:1.6rem;font-size:12px}
 .leitor-mudancas-oculta .leitor-mudancas-grupos{visibility:hidden;opacity:0}
@@ -52,22 +54,26 @@ const CSS = `
 .leitor-chip{display:inline-flex;align-items:center;gap:.38em;min-height:1.75rem;max-width:100%;padding:.15rem .62rem;border-radius:999px;font-size:12.5px;line-height:1.2;
   border:1px solid color-mix(in srgb,var(--ambar) 24%,transparent);background:color-mix(in srgb,var(--ambar) 6%,transparent);
   color:color-mix(in srgb,var(--foreground) 86%,transparent);transition:border-color .2s,background-color .2s,color .2s;cursor:help}
+@keyframes leitor-chip-entrar{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.leitor-mudancas:not(.leitor-mudancas-oculta) .leitor-chip{animation:leitor-chip-entrar .22s ease-out both;animation-delay:calc(min(var(--i,0),6)*40ms)}
+@media (prefers-reduced-motion:reduce){.leitor-mudancas:not(.leitor-mudancas-oculta) .leitor-chip{animation:none}}
 .leitor-chip>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .leitor-chip:hover,.leitor-chip[aria-expanded=true]{border-color:color-mix(in srgb,var(--ambar) 60%,transparent);background:color-mix(in srgb,var(--ambar) 12%,transparent);color:var(--foreground)}
-.leitor-chip-icone{font-size:.85em;line-height:1;color:var(--ambar)}
-.leitor-chip-ruim{border-color:color-mix(in srgb,var(--sangue) 38%,transparent);background:color-mix(in srgb,var(--sangue) 8%,transparent)}
+.leitor-chip-icone{font-size:1em;line-height:1;color:var(--ambar)}
+.leitor-chip-ruim{border-color:color-mix(in srgb,var(--sangue) 55%,transparent);background:color-mix(in srgb,var(--sangue) 8%,transparent)}
 .leitor-chip-ruim .leitor-chip-icone{color:color-mix(in srgb,var(--sangue) 80%,var(--foreground))}
 .leitor-chip-ruim:hover,.leitor-chip-ruim[aria-expanded=true]{border-color:color-mix(in srgb,var(--sangue) 70%,transparent);background:color-mix(in srgb,var(--sangue) 14%,transparent)}
-.leitor-chip-bom{border-color:color-mix(in srgb,var(--musgo) 40%,transparent);background:color-mix(in srgb,var(--musgo) 8%,transparent)}
-.leitor-chip-bom .leitor-chip-icone{color:color-mix(in srgb,var(--musgo) 85%,var(--foreground))}
-.leitor-chip-bom:hover,.leitor-chip-bom[aria-expanded=true]{border-color:color-mix(in srgb,var(--musgo) 75%,transparent);background:color-mix(in srgb,var(--musgo) 14%,transparent)}
+.leitor-chip-bom{border-color:color-mix(in srgb,var(--musgo) 40%,transparent);background:color-mix(in srgb,var(--musgo) 14%,transparent)}
+.leitor-chip-bom .leitor-chip-icone{color:var(--musgo)}
+.leitor-chip-bom .leitor-chip-icone[data-icone=sparkle],.leitor-chip-bom .leitor-chip-icone[data-icone=scroll]{color:var(--critico,var(--ambar))}
+.leitor-chip-bom:hover,.leitor-chip-bom[aria-expanded=true]{border-color:color-mix(in srgb,var(--musgo) 75%,transparent);background:color-mix(in srgb,var(--musgo) 20%,transparent)}
 .leitor-chip-balao{position:fixed;z-index:80;padding:.55rem .75rem;border-radius:.6rem;border:1px solid color-mix(in srgb,var(--ambar) 35%,var(--border));
   background:var(--surface);box-shadow:0 12px 32px -12px color-mix(in srgb,var(--background) 70%,transparent);font-size:12.5px;line-height:1.5;color:var(--foreground);pointer-events:none}
 .leitor-escrevendo{display:flex;flex-direction:column;align-items:center;gap:.6rem;margin:2.5rem 0;color:var(--muted);text-align:center}
 .leitor-escrevendo-pena{width:4.5rem;height:2rem;color:color-mix(in srgb,var(--ambar) 85%,transparent)}
 .leitor-escrevendo-tinta{stroke-dasharray:70;stroke-dashoffset:70;animation:leitor-tinta 2.6s ease-in-out infinite}
 .leitor-escrevendo-mao{animation:leitor-mao 2.6s ease-in-out infinite}
-.leitor-escrevendo-frase{font-size:.95rem;font-style:italic;animation:surgir .5s ease-out both}
+.leitor-escrevendo-frase{font-size:.95rem;font-style:italic;animation:surgir var(--mov-padrao,.22s) ease-out both}
 .leitor-escrevendo-pontos i{display:inline-block;width:.3em;height:.3em;margin-left:.22em;border-radius:999px;background:var(--ambar);animation:leitor-ponto 1.4s ease-in-out infinite;vertical-align:.1em}
 .leitor-escrevendo-pontos i:nth-child(2){animation-delay:.2s}.leitor-escrevendo-pontos i:nth-child(3){animation-delay:.4s}
 @keyframes leitor-tinta{0%{stroke-dashoffset:70;opacity:1}70%{stroke-dashoffset:0;opacity:1}100%{stroke-dashoffset:0;opacity:0}}
@@ -124,12 +130,19 @@ export function AberturaCapitulo({
     <header className="surgir mx-auto max-w-[34rem] pb-4 pt-5 text-center first:pt-1 sm:pt-7" data-abertura>
       {/* local e momento cada um no seu bloco: quando não cabe numa linha, a quebra cai no separador, nunca no meio de um nome */}
       {partes.length > 0 && (
-        <p className="text-balance text-[11px] font-semibold uppercase tracking-[0.22em] text-muted sm:tracking-[0.34em]">
-          <span className="inline-block">{partes[0]}</span>
+        <p className="text-balance text-[12px] font-semibold uppercase tracking-[0.2em] sm:tracking-[0.26em] text-[color:color-mix(in_srgb,var(--pergaminho)_70%,var(--muted))]">
+          <span className="inline-block">
+            {/* o ícone diz o que a parte é: lugar ou hora (quando só veio o momento, o relógio abre a linha) */}
+            <Icone nome={local ? "place" : "clock"} className="mr-[0.5em]" />
+            {partes[0]}
+          </span>
           {partes[1] && (
             <>
               {" "}
-              <span className="inline-block">· {partes[1]}</span>
+              <span className="inline-block">
+                · <Icone nome="clock" className="mx-[0.35em]" />
+                {partes[1]}
+              </span>
             </>
           )}
         </p>

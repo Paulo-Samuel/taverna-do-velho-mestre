@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { aventurasPublicas } from "@/lib/aventuras";
 import { linkDaAventura } from "@/lib/aventuras/link";
+import { rotuloDuracao } from "@/lib/aventuras/rotulo-duracao";
 import { agruparPorSistema, contarNativas, separarPorFiltro } from "@/lib/aventuras/ordem-vitrine";
 import { SISTEMAS } from "@/lib/sistemas";
 import { dadosDoTema, temaDoSistema } from "@/lib/temas";
@@ -55,11 +56,11 @@ function CartaoDaAventura({
           <p className="mt-1 text-sm leading-snug text-muted">{a.chamada}</p>
           <p className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted">
             <span className="etiqueta">
-              <Icone nome="candle" /> {a.duracao}
+              <Icone nome="candle" /> {rotuloDuracao(a.duracao)}
             </span>
             {a.soloOk && (
               <span className="etiqueta-matiz matiz-2" title="Roda com um personagem só: um aliado do mestre divide as cenas">
-                solo ok
+                dá para jogar só
               </span>
             )}
             {a.recomendado && !a.tutorial && (
@@ -79,8 +80,8 @@ function CartaoDaAventura({
             {sistema === "historia" && (
               <form action={jogarAgoraAcao} className="mt-2" title="Atalho: senta um herói pronto e já abre a mesa">
                 <input type="hidden" name="aventura" value={a.id} />
-                <BotaoJogarAgora className={`btn-borda min-h-11 w-full ${foco}`} rotulo={`Jogar já com herói pronto: ${a.titulo}`}>
-                  Jogar já com herói pronto
+                <BotaoJogarAgora className={`btn-borda min-h-11 w-full ${foco}`} rotulo={`Jogar agora com herói pronto: ${a.titulo}`}>
+                  Jogar agora com herói pronto
                 </BotaoJogarAgora>
               </form>
             )}

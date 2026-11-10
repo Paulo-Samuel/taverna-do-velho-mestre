@@ -454,7 +454,7 @@ export function FormularioExcluir({ acao, nome, bloqueado }: { acao: Acao; nome:
           className="btn-perigo-cheio"
           disabled={enviando || texto.trim().toLowerCase() !== nome.trim().toLowerCase()}
         >
-          {enviando ? "Apagando…" : "Excluir campanha"}
+          {enviando ? "Levando para a lixeira…" : "Excluir campanha"}
         </button>
         <button type="button" className="btn-borda" onClick={() => setAberto(false)}>
           Melhor não

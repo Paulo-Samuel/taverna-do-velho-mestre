@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { BotaoFixar } from "@/components/fatos/fixar-selecao";
 import { PainelFatos } from "@/components/fatos/painel-fatos";
 import { resumoDaEntrada, type ControleFatos } from "@/components/fatos/use-fatos";
@@ -16,6 +16,8 @@ import { corDoNome } from "./cores";
 import { fonteGotica } from "./fonte-gotica";
 import { Retrato, RetratoSVG } from "./retrato";
 import { retratoDaEntrada } from "./retrato/dados";
+import { EstadoVazio } from "@/components/estado-vazio";
+import { useFocoPreso } from "@/lib/cliente/use-foco-preso";
 import { Icone, type NomeIcone } from "@/components/icones";
 
 // Códex do modo história: gaveta recolhível à esquerda (tela cheia no celular) com o personagem, as missões,
@@ -67,7 +69,7 @@ function Barra({ rotulo, atual: lido, max: maxLido, cor, ajuste }: { rotulo: str
               : "bg-sangue"
           : "bg-ambar";
   return (
-    <div className="group/marcador" aria-label={`${rotulo}: ${atual} de ${max}`}>
+    <div className="group/marcador" role="group" aria-label={`${rotulo}: ${atual} de ${max}`}>
       <div className="mb-1 flex items-center justify-between text-xs">
         <span className="text-muted">{rotulo}</span>
         {alvo && ajuste ? (
@@ -85,7 +87,7 @@ function Barra({ rotulo, atual: lido, max: maxLido, cor, ajuste }: { rotulo: str
         )}
       </div>
       <div className="h-2.5 overflow-hidden rounded-full bg-background/70 ring-1 ring-border">
-        <div className={`h-full rounded-full transition-[width] duration-700 motion-reduce:transition-none ${fundo}`} style={{ width: `${pct}%` }} />
+        <div className={`h-full rounded-full transition-[width] duration-[var(--mov-barra)] ease-out motion-reduce:transition-none ${fundo}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -251,28 +253,13 @@ function Campo({ rotulo, valor }: { rotulo: string; valor: unknown }) {
   );
 }
 
-/** Aba sem nada: ícone (opcional), a frase e, se houver, uma segunda linha dizendo como aquilo se enche. */
-function Vazio({ children, icone, dica }: { children: ReactNode; icone?: NomeIcone; dica?: ReactNode }) {
-  return (
-    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted">
-      {icone && (
-        <p className="mb-2 text-2xl leading-none text-ambar/70" aria-hidden>
-          <Icone nome={icone} />
-        </p>
-      )}
-      <p className="italic">{children}</p>
-      {dica && <p className="mt-1 text-xs">{dica}</p>}
-    </div>
-  );
-}
-
 function AbaMissoes({ entradas, fatos }: { entradas: EntradaDiario[]; fatos: ControleFatos }) {
   const missoes = entradas.filter((e) => e.tipo === "missao").sort((a, b) => Number(a.status !== "aberta") - Number(b.status !== "aberta"));
   if (!missoes.length)
     return (
-      <Vazio icone="scroll" dica="O mestre anota aqui quando alguém pedir um favor.">
+      <EstadoVazio icone="scroll" dica="O mestre anota aqui quando alguém pedir um favor.">
         Nenhuma missão ainda. O mundo está esperando.
-      </Vazio>
+      </EstadoVazio>
     );
   return (
     <ul className="space-y-3">
@@ -320,7 +307,12 @@ function AbaPessoas({ entradas, fatos, foco }: { entradas: EntradaDiario[]; fato
     if (foco != null) document.getElementById(`codex-pessoa-${foco}`)?.scrollIntoView({ block: "center" });
   }, [foco]);
   const npcs = entradas.filter((e) => e.tipo === "npc").sort((a, b) => Number(a.status === "morto") - Number(b.status === "morto"));
-  if (!npcs.length) return <Vazio icone="person">Ninguém conhecido por enquanto.</Vazio>;
+  if (!npcs.length)
+    return (
+      <EstadoVazio icone="person" dica="O mestre anota aqui quem vocês conhecerem, com o humor de cada um.">
+        Ninguém conhecido por enquanto.
+      </EstadoVazio>
+    );
   return (
     <ul className="space-y-3">
       {npcs.map((n) => {
@@ -410,7 +402,7 @@ function AbaLugares({ mesa, fatos }: { mesa: Mesa; fatos: ControleFatos }) {
           {mesa.cena.situacao && <p className="mt-1 text-sm text-foreground/85">{mesa.cena.situacao}</p>}
         </div>
       )}
-      {lugares.length ? <ListaSimples entradas={lugares} icone="place" fatos={fatos} /> : !mesa.cena.local && <Vazio icone="place">Nenhum lugar anotado ainda.</Vazio>}
+      {lugares.length ? <ListaSimples entradas={lugares} icone="place" fatos={fatos} /> : !mesa.cena.local && <EstadoVazio icone="place" dica="Cada lugar visitado entra na lista.">Nenhum lugar anotado ainda.</EstadoVazio>}
       {itens.length > 0 && (
         <Secao titulo="Objetos notáveis">
           <ListaSimples entradas={itens} icone="key" fatos={fatos} />
@@ -452,7 +444,7 @@ function AbaGrupo({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
                   {presente && " · na mesa"}
                 </p>
                 <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-background/70">
-                  <div className={`h-full ${pct > 50 ? "bg-musgo" : pct > 20 ? "bg-ambar" : "bg-sangue"}`} style={{ width: `${pct}%` }} />
+                  <div className={`h-full transition-[width] duration-[var(--mov-barra)] motion-reduce:transition-none ${pct > 50 ? "bg-musgo" : pct > 20 ? "bg-ambar" : "bg-sangue"}`} style={{ width: `${pct}%` }} />
                 </div>
               </div>
               {ativo ? (
@@ -466,7 +458,16 @@ function AbaGrupo({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
           );
         })}
       </ul>
-      {mesa.personagens.length === 0 && <Vazio>Ninguém sentado à mesa.</Vazio>}
+      {mesa.personagens.length === 0 && (
+        <EstadoVazio icone="person" dica="Crie um personagem para começar.">
+          Ninguém sentado à mesa.
+        </EstadoVazio>
+      )}
+      {mesa.personagens.length === 1 && (
+        <p className="mt-3 text-center text-xs text-muted">
+          Aventura solo por enquanto. Dá para sentar mais gente neste computador ou chamar pela rede com o convite, no menu do cabeçalho.
+        </p>
+      )}
       <div className="mt-4 flex flex-wrap gap-2">
         <Link href={link} className="btn-borda min-h-10 px-3 py-1.5 text-sm">
           + Adicionar personagem
@@ -526,11 +527,34 @@ export function Codex({
   }
   const temNovidade = (id: AbaCodex) => (novidades?.[id] ?? 0) > (vistas[id] ?? 0) && !(aberto && aba === id);
 
+  // Tab fica preso na gaveta enquanto ela está aberta; ao fechar, o foco volta para quem abriu (ou para o botão do códex)
+  useFocoPreso(painel, aberto, { reserva: () => document.querySelector<HTMLElement>('[data-ordem="codex"]') });
+
+  // abas pelo teclado: setas andam (com volta), Home e End vão às pontas; a aba escolhida recebe o foco
+  function teclaNasAbas(e: KeyboardEvent<HTMLDivElement>) {
+    const ids = ABAS.map(([id]) => id);
+    const onde = Math.max(0, ids.indexOf(aba));
+    let novo: AbaCodex;
+    if (e.key === "ArrowRight") novo = ids[(onde + 1) % ids.length];
+    else if (e.key === "ArrowLeft") novo = ids[(onde - 1 + ids.length) % ids.length];
+    else if (e.key === "Home") novo = ids[0];
+    else if (e.key === "End") novo = ids[ids.length - 1];
+    else return;
+    e.preventDefault();
+    aoMudarAba(novo);
+    document.getElementById(`codex-aba-${novo}`)?.focus();
+  }
+
   // Esc fecha; o foco vai para dentro da gaveta ao abrir (teclado e leitor de tela)
   useEffect(() => {
     if (!aberto) return;
     painel.current?.focus();
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && aoFechar();
+    const esc = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // um diálogo ou popover aberto aqui dentro (convite, modo de leitura) fecha primeiro; o códex só no Esc seguinte
+      if (painel.current?.querySelector('[role="dialog"]')) return;
+      aoFechar();
+    };
     document.addEventListener("keydown", esc);
     return () => document.removeEventListener("keydown", esc);
   }, [aberto, aoFechar]);
@@ -539,7 +563,7 @@ export function Codex({
     <>
       {/* fundo escurecido (só no desktop; no celular a gaveta ocupa a tela toda) */}
       <div
-        className={`fixed inset-0 z-40 hidden bg-black/50 transition-opacity duration-300 motion-reduce:transition-none sm:block ${aberto ? "opacity-100" : "pointer-events-none opacity-0"}`}
+        className={`fixed inset-0 z-40 hidden bg-black/50 transition-opacity duration-150 motion-reduce:transition-none sm:block ${aberto ? "opacity-100" : "pointer-events-none opacity-0"}`}
         onClick={aoFechar}
         aria-hidden
       />
@@ -551,7 +575,7 @@ export function Codex({
         aria-label="Códex"
         aria-hidden={!aberto}
         inert={!aberto}
-        className={`fixed inset-0 z-50 flex flex-col bg-background shadow-[20px_0_60px_-30px_black] outline-none transition-transform duration-300 ease-out motion-reduce:transition-none sm:right-auto sm:w-[400px] sm:border-r sm:border-border ${aberto ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed inset-0 z-50 flex flex-col bg-background shadow-[20px_0_60px_-30px_black] outline-none transition-transform duration-200 ease-[cubic-bezier(.2,.8,.3,1)] motion-reduce:transition-none sm:right-auto sm:w-[400px] sm:border-r sm:border-border ${aberto ? "translate-x-0" : "-translate-x-full"}`}
       >
         <div className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-3">
           <h2 className={`${fonteGotica.className} text-2xl text-ambar`}>Códex</h2>
@@ -584,7 +608,7 @@ export function Codex({
           </button>
         </div>
         {/* as cinco abas cabem na largura (celular e gaveta de 400px) sem rolar de lado */}
-        <nav className="flex border-b border-border/70 px-1 text-sm" role="tablist" aria-label="Seções do códex">
+        <div className="flex border-b border-border/70 px-1 text-sm" role="tablist" aria-label="Seções do códex" onKeyDown={teclaNasAbas}>
           {ABAS.map(([id, rotulo]) => (
             <button
               key={id}
@@ -593,28 +617,35 @@ export function Codex({
               role="tab"
               aria-selected={aba === id}
               aria-controls="codex-painel"
+              tabIndex={aba === id || (aba === "fatos" && id === ABAS[0][0]) ? 0 : -1}
               onClick={() => aoMudarAba(id)}
-              className={`-mb-px flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1 border-b-2 px-1 transition-colors ${
+              className={`relative -mb-px flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1 border-b-2 px-1 transition-colors ${
                 aba === id ? "border-ambar text-ambar" : "border-transparent text-muted hover:text-foreground"
               }`}
             >
               <span className="truncate">{rotulo}</span>
               {id === "missoes" && missoesAbertas > 0 && (
-                <span className="grid min-w-4 shrink-0 place-items-center rounded-full bg-ambar/20 px-1 text-[11px] leading-4 text-ambar" aria-label={`${missoesAbertas} em andamento`}>
+                <span className="grid min-w-4 shrink-0 place-items-center rounded-full bg-ambar/20 px-1 text-[11px] leading-4 text-ambar">
                   {missoesAbertas}
+                  <span className="sr-only"> em andamento</span>
                 </span>
               )}
               {id === "grupo" && mesa.personagens.length > 1 && <span className="shrink-0 text-[11px] text-muted">{mesa.personagens.length}</span>}
               {temNovidade(id) && (
-                <span className="size-1.5 shrink-0 rounded-full bg-ambar" data-novidade-aba={id} title="Anotação nova do mestre" aria-label="novidade" />
+                <>
+                  <span className="size-1.5 shrink-0 rounded-full bg-ambar" data-novidade-aba={id} title="Anotação nova do mestre" aria-hidden />
+                  <span className="sr-only">, novidade</span>
+                </>
               )}
             </button>
           ))}
-        </nav>
+        </div>
+        {/* animationFillMode backwards: sem transform depois da entrada; senão o diálogo do convite (position: fixed) fica preso a este painel em vez da tela */}
         <div
           key={aba}
           id="codex-painel"
           className="surgir flex-1 overflow-y-auto overscroll-contain px-4 py-4"
+          style={{ animationFillMode: "backwards" }}
           role="tabpanel"
           aria-labelledby={`codex-aba-${aba}`}
         >

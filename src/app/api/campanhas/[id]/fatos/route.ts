@@ -36,7 +36,7 @@ export async function PUT(request: Request, ctx: Contexto) {
   const r = campanhaDaRota(request, id);
   if (r.erro) return r.erro;
   const lido = z.object({ ordem: z.array(z.number().int()).max(MAX_FATOS_GUARDADOS * 2) }).safeParse(await request.json().catch(() => null));
-  if (!lido.success) return Response.json({ erro: "Ordem inválida." }, { status: 400 });
+  if (!lido.success) return Response.json({ erro: "Não deu para reordenar os fatos. Recarregue a página e tente de novo." }, { status: 400 });
   reordenarFatos(r.campanha.id, lido.data.ordem);
   return publicarFatos(r.campanha.id);
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useState, type ReactNode } from "react";
 import type { AventuraPublica } from "@/lib/aventuras/tipos";
 import { apelido as apelidoSalvo } from "@/lib/cliente/identidade";
+import { comportamentoDeRolagem } from "@/lib/cliente/movimento";
 import { DIFICULDADES, FOCOS, MAX_FOCO_LIVRE, MAX_INSTRUCOES, TAMANHOS, type Dificuldade, type TamanhoNarracao } from "@/lib/mestre/estilo";
 import { exemploDoCampo, sementesDe, type ParSemente } from "@/lib/sistemas/sementes";
 import { atributosIniciaisPf2, periciasCriacaoPf2 } from "@/lib/sistemas/pf2e/criacao";
@@ -27,6 +28,7 @@ import {
   type GrupoOpcao,
 } from "./sugestoes";
 import { agrupar, capitalizar, casaBusca, sinal } from "./utilidades";
+import { EstadoVazio } from "@/components/estado-vazio";
 import { Icone, TextoComIcones } from "@/components/icones";
 
 // Passos do assistente de criação. São componentes controlados: o estado mora no formulário,
@@ -103,7 +105,7 @@ function BotaoDado({ onClick, rotulo }: { onClick: () => void; rotulo: string })
       onClick={onClick}
       title={rotulo}
       aria-label={rotulo}
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border text-base transition hover:border-ambar/60 hover:bg-ambar/10 active:scale-95"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border text-base transition hover:border-ambar/60 hover:bg-ambar/10 active:scale-95 motion-reduce:active:scale-100"
     >
       <Icone nome="dice" />
     </button>
@@ -112,16 +114,16 @@ function BotaoDado({ onClick, rotulo }: { onClick: () => void; rotulo: string })
 
 /** Depois de sortear, leva o cartão escolhido para o meio da tela (listas longas escondem a escolha). */
 function mostrarCartao(id: string) {
-  requestAnimationFrame(() => document.getElementById(`cartao-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  requestAnimationFrame(() => document.getElementById(`cartao-${id}`)?.scrollIntoView({ behavior: comportamentoDeRolagem(), block: "center" }));
 }
 
 function Busca({ valor, mudar, placeholder }: { valor: string; mudar: (v: string) => void; placeholder: string }) {
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden>
-        ⌕
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-muted" aria-hidden>
+        <Icone nome="search" />
       </span>
-      <input type="search" value={valor} onChange={(ev) => mudar(ev.target.value)} placeholder={placeholder} className="campo pl-8" aria-label={placeholder} />
+      <input type="search" value={valor} onChange={(ev) => mudar(ev.target.value)} placeholder={placeholder} className="campo pl-9" aria-label={placeholder} />
     </div>
   );
 }
@@ -225,8 +227,23 @@ function Tracos({ tracos }: { tracos: string[] }) {
   );
 }
 
-function Nada({ children }: { children: ReactNode }) {
-  return <p className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted">{children}</p>;
+/** Lista que a busca (ou o filtro) esvaziou: diz isso e oferece a saída num clique. */
+function Nada({ children, aoLimpar }: { children: ReactNode; aoLimpar?: () => void }) {
+  return (
+    <EstadoVazio
+      compacto
+      icone="search"
+      acao={
+        aoLimpar && (
+          <button type="button" className="btn-borda min-h-10 px-3 text-sm" onClick={aoLimpar}>
+            Limpar a busca
+          </button>
+        )
+      }
+    >
+      {children}
+    </EstadoVazio>
+  );
 }
 
 /** Primeira frase de uma descrição (o cartão compacto mostra só ela; o resto fica para o cartão escolhido). */
@@ -354,7 +371,7 @@ export function PassoAncestralidade({ sistema, e, atualizar }: PropsPasso) {
           <Busca valor={busca} mudar={setBusca} placeholder={`Buscar ${rotulo.toLowerCase()} ou traço…`} />
         </div>
       )}
-      {lista.length === 0 && <Nada>Ninguém com esse nome entrou na taverna hoje.</Nada>}
+      {lista.length === 0 && <Nada aoLimpar={() => setBusca("")}>Ninguém com esse nome entrou na taverna hoje.</Nada>}
       <div className={`grid gap-3 sm:grid-cols-2 ${compacto ? "lg:grid-cols-3" : ""}`}>
         {lista.map((a) => {
           const ajustes = ajustesTexto(sistema, a);
@@ -476,7 +493,17 @@ export function PassoClasse({ sistema, e, atualizar }: PropsPasso) {
           </div>
         )}
       </div>
-      {lista.length === 0 && <Nada>Nenhuma opção com esse filtro. Talvez o mestre tenha expulsado todos.</Nada>}
+      {lista.length === 0 && (
+        <Nada
+          aoLimpar={() => {
+            setBusca("");
+            setPapel("");
+            setFonte("");
+          }}
+        >
+          Nenhuma opção com esse filtro. Talvez o mestre tenha expulsado todos.
+        </Nada>
+      )}
       <div className="space-y-5">
         {grupos.map(([grupo, classes]) => (
           <section key={grupo || "todas"}>
@@ -558,7 +585,7 @@ export function PassoAntecedente({ sistema, e, atualizar }: PropsPasso) {
           <Busca valor={busca} mudar={setBusca} placeholder={`Buscar ${rotulo.toLowerCase()}…`} />
         </div>
       )}
-      {lista.length === 0 && <Nada>Nenhum passado com esse nome. Talvez seja melhor assim.</Nada>}
+      {lista.length === 0 && <Nada aoLimpar={() => setBusca("")}>Nenhum passado com esse nome. Talvez seja melhor assim.</Nada>}
       <div className="grid gap-2 sm:grid-cols-2">
         {lista.map((a) => (
           <Cartao key={a.id} id={a.id} ativo={e.antecedente === a.id} onClick={() => atualizar({ antecedente: a.id })}>
@@ -707,7 +734,7 @@ export function PassoAtributos({ sistema, e, carregando, sugerir, editar, sugest
                   min={min}
                   max={max}
                   value={valor}
-                  placeholder="—"
+                  placeholder="0"
                   onChange={(ev) => editar(a.id, ev.target.value)}
                   className="campo h-10 min-w-0 px-1 sm:h-9 text-center text-lg tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
                 />
@@ -838,7 +865,7 @@ export function PassoPericias({ sistema, e, atualizar }: PropsPasso) {
                         : ativa
                           ? "border-ambar bg-ambar/15 text-ambar"
                           : cheio
-                            ? "border-border text-muted/50"
+                            ? "border-border text-muted"
                             : "border-border text-foreground hover:border-ambar/60"
                     }`}
                   >
@@ -993,7 +1020,7 @@ function CampoOpcao({ opcao, valores, mudar, destaque, bloqueados, exemplo, suge
             })}
           </div>
         )}
-        {lista.length === 0 && <Nada>Nada com esse nome.</Nada>}
+        {lista.length === 0 && <Nada aoLimpar={() => setBusca("")}>Nada com esse nome.</Nada>}
       </div>
     );
   }
@@ -1025,7 +1052,7 @@ function CampoOpcao({ opcao, valores, mudar, destaque, bloqueados, exemplo, suge
               />
             )}
             {linhas.length > 1 && (
-              <button type="button" onClick={() => mudar(linhas.filter((_, j) => j !== i))} className="btn-borda px-3" aria-label="Remover">
+              <button type="button" onClick={() => mudar(linhas.filter((_, j) => j !== i))} className="btn-borda px-3" aria-label={`Remover a linha ${i + 1}`}>
                 <Icone nome="close" aria-hidden />
               </button>
             )}
@@ -1196,7 +1223,7 @@ function GradePericiasNiveis({ sistema, e, atualizar, niveis, legendaOculta }: P
           );
         })}
       </div>
-      {lista.length === 0 && <Nada>Nada com esse nome.</Nada>}
+      {lista.length === 0 && <Nada aoLimpar={() => setBusca("")}>Nada com esse nome.</Nada>}
     </fieldset>
   );
 }
@@ -1297,7 +1324,7 @@ function CampoPoderes({ e, opcoes, valores, mudar }: { e: Escolhas; opcoes: Opca
                     value={v.linha.parada}
                     onChange={(ev) => trocar(i, { parada: ev.target.value })}
                     maxLength={80}
-                    placeholder="parada (opcional)"
+                    placeholder="Parada (opcional)"
                     aria-label={`Parada do poder ${v.k + 1} de ${d.nome} (opcional)`}
                     className="campo min-w-0 basis-36 px-2 py-1.5 text-sm"
                   />
@@ -1453,7 +1480,7 @@ export function BlocoTrazer({ sistema, lista, escolher }: { sistema: SistemaPubl
               </Cartao>
             ))}
           </div>
-          {visiveis.length === 0 && <Nada>Ninguém com esse nome em outra mesa.</Nada>}
+          {visiveis.length === 0 && <Nada aoLimpar={() => setBusca("")}>Ninguém com esse nome em outra mesa.</Nada>}
         </div>
       )}
     </div>
@@ -1945,7 +1972,7 @@ export function EdicaoFicha({ sistema, opcoes, inicial, acao, voltar, ocupado }:
             {voltar.texto}
           </Link>
           <button type="submit" className="btn-ambar min-h-11 flex-1" disabled={enviando}>
-            {enviando ? "Guardando…" : "Salvar a ficha"}
+            {enviando ? "Salvando…" : "Salvar a ficha"}
           </button>
         </div>
         <p className="mt-2 text-xs text-muted">O mestre recebe um aviso no chat com o que mudou.</p>

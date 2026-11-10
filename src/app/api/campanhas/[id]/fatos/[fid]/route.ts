@@ -21,7 +21,7 @@ export async function PATCH(request: Request, ctx: Contexto) {
   if (r.erro) return r.erro;
   const lido = z.object({ texto: z.string().max(MAX_TEXTO_FATO * 4) }).safeParse(await request.json().catch(() => null));
   const texto = lido.success ? limparFato(lido.data.texto) : "";
-  if (!texto) return Response.json({ erro: "Fato vazio não é fato. Para tirar, use o ✕." }, { status: 400 });
+  if (!texto) return Response.json({ erro: "Fato vazio não é fato. Para tirar, use o botão de apagar ao lado." }, { status: 400 });
   editarFato(r.fato.id, texto);
   return publicarFatos(r.campanha.id);
 }

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { COLUNAS, ENTRELINHAS } from "./conforto";
 import { ESCALAS_FONTE, salvarPreferenciasLeitor, useMenosMovimento, usePreferenciasLeitor, type ModoLeitura } from "./preferencias";
 import { suportaRevelar } from "./use-revelar";
 
 // Botão do cabeçalho das mesas: escolhe como ler a história ("📖 Cena a cena" ou "📜 Rolagem") e liga/desliga o texto se
-// revelando aos poucos e o tamanho da letra (A− / A+). Preferência deste navegador (localStorage).
+// revelando aos poucos, o tamanho da letra (A− / A+), a largura da coluna e a entrelinha. Preferência deste navegador (localStorage).
 // Com a tela baixa (palco com menos de ~180 px, ver altura.ts) a mesa lê em rolagem sozinha e avisa aqui, com a opção de
 // insistir nas páginas mesmo assim.
 // Só leitura: o "🌙 Encerrar a noite" saiu daqui e mora no cabeçalho da mesa (src/components/sessao/encerrar-noite.tsx).
@@ -31,6 +32,12 @@ const OPCOES: [ModoLeitura, string, string][] = [
   ["rolagem", "Rolagem", "A história inteira numa coluna só, para reler o que passou."],
 ];
 
+// conforto de leitura: três passos cada (conforto.ts); o do meio é o de sempre
+const CONFORTO = [
+  { chave: "coluna", titulo: "Coluna", dica: "A largura do texto na tela.", opcoes: COLUNAS },
+  { chave: "entrelinha", titulo: "Entrelinha", dica: "O respiro entre uma linha e outra.", opcoes: ENTRELINHAS },
+] as const;
+
 const DICAS_FONTE = ["Miúda, para quem tem olho de águia.", "A de sempre.", "Mais folgada.", "Grande, para ler de longe da tela."];
 
 /**
@@ -51,17 +58,24 @@ export function MenuLeitura({
   telaBaixa?: boolean;
   linha?: boolean;
 }) {
-  const { modo, animar, fonte, paginasEmTelaBaixa } = usePreferenciasLeitor();
+  const { modo, animar, fonte, coluna, entrelinha, paginasEmTelaBaixa } = usePreferenciasLeitor();
+  const passos = { coluna, entrelinha };
   const menos = useMenosMovimento();
   const [aberto, setAberto] = useState(false);
   const caixa = useRef<HTMLDivElement>(null);
+  const botao = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!aberto) return;
     const fora = (e: PointerEvent) => {
       if (caixa.current && !caixa.current.contains(e.target as Node)) setAberto(false);
     };
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setAberto(false);
+    // Esc fecha e devolve o foco a quem abriu (senão o teclado cai no começo da página)
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setAberto(false);
+      botao.current?.focus();
+    };
     document.addEventListener("pointerdown", fora);
     document.addEventListener("keydown", esc);
     return () => {
@@ -74,6 +88,7 @@ export function MenuLeitura({
   return (
     <div ref={caixa} className={`relative shrink-0 ${className}`} data-menu-leitura>
       <button
+        ref={botao}
         type="button"
         onClick={() => setAberto((v) => !v)}
         aria-expanded={aberto}
@@ -90,7 +105,7 @@ export function MenuLeitura({
         {linha && <span>Como ler · {atual[1]}</span>}
       </button>
       {aberto && (
-        <div role="dialog" aria-label="Modo de leitura" className={`cartao surgir bg-surface! absolute z-50 max-h-[calc(100dvh-5rem)] w-72 max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain p-3 text-foreground ${acima ? "bottom-full mb-2" : "top-full mt-2"} ${esquerda ? "left-0" : "right-0"}`}>
+        <div role="dialog" aria-label="Modo de leitura" className={`cartao surgir-menu bg-surface! absolute z-50 max-h-[calc(100dvh-5rem)] w-72 max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain p-3 text-foreground ${acima ? "bottom-full mb-2" : "top-full mt-2"} ${esquerda ? "left-0" : "right-0"}`}>
           <p className="titulo mb-2 text-sm text-ambar">Como ler a história</p>
           <div role="radiogroup" aria-label="Modo de leitura" className="space-y-1.5">
             {OPCOES.map(([id, nome, dica]) => (
@@ -150,7 +165,7 @@ export function MenuLeitura({
                 disabled={fonte <= 0}
                 aria-label="Diminuir a letra"
                 title="Diminuir a letra"
-                className="grid size-9 place-items-center rounded-md border border-border text-xs hover:border-ambar/60 hover:text-ambar disabled:opacity-35"
+                className="grid size-10 place-items-center rounded-md border border-border text-xs hover:border-ambar/60 hover:text-ambar disabled:opacity-35"
                 data-letra="menor"
               >
                 A−
@@ -166,13 +181,38 @@ export function MenuLeitura({
                 disabled={fonte >= ESCALAS_FONTE.length - 1}
                 aria-label="Aumentar a letra"
                 title="Aumentar a letra"
-                className="grid size-9 place-items-center rounded-md border border-border text-base hover:border-ambar/60 hover:text-ambar disabled:opacity-35"
+                className="grid size-10 place-items-center rounded-md border border-border text-base hover:border-ambar/60 hover:text-ambar disabled:opacity-35"
                 data-letra="maior"
               >
                 A+
               </button>
             </div>
           </div>
+          {/* largura da coluna e entrelinha: valem para os dois modos; o leitor refaz as páginas ao trocar */}
+          {CONFORTO.map((c) => (
+            <div key={c.chave} className="mt-3 border-t border-border pt-2.5 text-xs" data-conforto={c.chave}>
+              <p>
+                {c.titulo}
+                <span className="block text-xs leading-snug text-muted">{c.dica}</span>
+              </p>
+              <div className="mt-1.5 grid grid-cols-3 gap-1" role="group" aria-label={c.titulo}>
+                {c.opcoes.map((o, i) => (
+                  <button
+                    key={o.rotulo}
+                    type="button"
+                    aria-pressed={passos[c.chave] === i}
+                    onClick={() => salvarPreferenciasLeitor(c.chave === "coluna" ? { coluna: i } : { entrelinha: i })}
+                    className={`min-h-10 rounded-md border px-1 text-xs focus-visible:outline-2 focus-visible:outline-ambar ${
+                      passos[c.chave] === i ? "border-ambar/70 bg-ambar/10 text-ambar" : "border-border hover:border-ambar/60 hover:text-ambar"
+                    }`}
+                    data-passo={i}
+                  >
+                    {o.rotulo}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
           <label className={`mt-3 flex items-start gap-2 border-t border-border pt-2.5 text-xs ${modo !== "cenas" ? "opacity-50" : ""}`}>
             <input
               type="checkbox"

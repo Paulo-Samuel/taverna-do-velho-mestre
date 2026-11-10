@@ -1,13 +1,24 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { decisaoAberta, DecisaoDoTeste, EfeitosVtm, FaixaDespertar, listaDespertares, type DecisaoNoCartao } from "@/components/chat/cartao-dado";
+import {
+  ANEL_CRITICO,
+  ANEL_FALHA,
+  decisaoAberta,
+  DecisaoDoTeste,
+  EfeitosVtm,
+  FaixaDespertar,
+  IconeD20,
+  listaDespertares,
+  type DecisaoNoCartao,
+} from "@/components/chat/cartao-dado";
 import type { Mensagem } from "@/lib/db";
 import type { PersonagemVisivel } from "@/lib/mesa";
 import { COR_GRAU, corDoNome, sinal } from "./cores";
 import { Dado3D } from "./dado-3d";
-import { lerParada, ParadaDados, PASSO_MS, qtdDados, type Parada, type ResultadoParada } from "./parada-dados";
+import { CLASSE_DEPOIS, EstiloParada, lerParada, ParadaDados, PASSO_MS, qtdDados, type Parada, type ResultadoParada } from "./parada-dados";
 import { Retrato } from "./retrato";
+import { seloDoDesfecho, type SeloDesfecho } from "./selo-desfecho";
 import { usaD20 } from "./usa-d20";
 import { Icone } from "@/components/icones";
 
@@ -189,6 +200,34 @@ function contaParada(p: Parada, r: ResultadoParada, alvoPedido: number | null) {
   return typeof alvo === "number" ? `${total} vs ${alvo}` : String(total);
 }
 
+// ---------- o momento do resultado (d20) ----------
+
+/** Crítico ou falha crítica do d20: pelo grau ou pelo dado natural (o selo natural vem de selo-desfecho.ts, a regra é de lá). */
+function marcaDoD20(grau: string, selo: SeloDesfecho): "critico" | "falha" | null {
+  if (grau === "sucesso_critico") return "critico";
+  if (grau === "falha_critica") return "falha";
+  return selo.natural?.valor === 20 ? "critico" : selo.natural?.valor === 1 ? "falha" : null;
+}
+
+const COR_MARCA = { critico: COR_GRAU.sucesso_critico, falha: COR_GRAU.falha_critica } as const;
+
+/** O desfecho dito uma vez ao leitor de tela ("Sucesso: 17 contra CD 15"). O número do dado sozinho quem anuncia é o dado 3D. */
+function Anuncio({ texto, vivo = true }: { texto: string; vivo?: boolean }) {
+  // histórico já resolvido é texto comum: uma região viva por cartão antigo viraria anúncio em lote ao remontar a lista
+  return (
+    <p className="sr-only" role={vivo ? "status" : undefined}>
+      {texto}
+    </p>
+  );
+}
+
+/** "Sucesso: 17 contra CD 15" (ou "Sucesso: total 17" sem alvo; em teste oposto a disputa já tem linha própria). */
+function fraseD20(r: { rotuloGrau?: string; grau?: string; total?: number; oposicao?: unknown }, alvo: number | null) {
+  const grau = rotulo(r).replace(/[!.]+$/, "");
+  const total = r.total ?? 0;
+  return typeof alvo === "number" && !textoOposicaoResultado(r) ? `${grau}: ${total} contra CD ${alvo}` : `${grau}: total ${total}`;
+}
+
 // ---------- cabeçalho comum (d20 e parada) ----------
 
 /** Pílula do cabeçalho do teste: `etiqueta` neutra por padrão; custo e perigo passam `etiqueta-matiz matiz-4`. */
@@ -340,6 +379,8 @@ export function PedidoTeste({
 }) {
   const d = dadosDoPedido(mensagem);
   const [rolagem, setRolagem] = useState<Rolagem | null>(null);
+  // o cartão estava na tela esperando o dado: só nesse caso o desfecho que chega de outro aparelho é anunciado
+  const [nasceuAberto] = useState(() => d.status === "pendente" || d.status === "decidir");
   // desfazer o turno devolve o teste para "pendente": o dado já rolado aqui volta a esperar (ajuste durante a renderização)
   const [statusVisto, setStatusVisto] = useState(d.status);
   if (d.status !== statusVisto) {
@@ -443,12 +484,14 @@ export function PedidoTeste({
       return (
         <div
           id={`pedido-${mensagem.id}`}
-          className={`surgir mx-auto my-5 max-w-xl scroll-mt-24 rounded-lg border px-3 py-2.5 text-sm ${
+          className={`surgir relative mx-auto my-5 max-w-xl scroll-mt-24 rounded-lg border px-3 py-2.5 text-sm ${
             forte ? "border-sangue/55 bg-sangue/5" : decidindo ? "border-ambar/60 bg-surface/60" : "border-border/70 bg-surface/50"
           }`}
+          role="group"
           aria-label={`Teste de ${tituloDoTeste(teste)} de ${nome}: ${rotuloParada(r)}`}
-          aria-live="polite"
         >
+          {/* recolhido aqui mesmo: o cartão grande já anunciou */}
+          {!rolagem && r.grau && <Anuncio vivo={nasceuAberto} texto={`${rotuloParada(r)}: ${contaParada(parada, r, alvo)}`} />}
           <div className="flex items-start justify-between gap-3">
             <p className="min-w-0 truncate pt-0.5 text-xs text-muted">
               <span className="font-semibold" style={{ color: cor }}>
@@ -477,26 +520,53 @@ export function PedidoTeste({
     }
     const grau = r.grau ?? "";
     const gastou = Boolean((r as Record<string, unknown>).heroi || (r as Record<string, unknown>).inspiracao);
+    // crítico e falha crítica continuam marcados depois do reload: moldura, dado e o selo do dado natural
+    const selo = seloDoDesfecho({ teste, grau: r.grau ?? null, natural: r.natural ?? null, d20: true });
+    const marca = marcaDoD20(grau, selo);
+    const corDado = marca ? COR_MARCA[marca] : COR_GRAU[grau];
     return (
       <div
         id={`pedido-${mensagem.id}`}
-        className={`surgir mx-auto my-5 max-w-xl scroll-mt-24 rounded-lg border px-3 py-2 text-sm ${decidindo ? "border-ambar/60 bg-surface/60" : "border-border/70 bg-surface/50"}`}
+        className={`surgir relative mx-auto my-5 max-w-xl scroll-mt-24 rounded-lg border px-3 py-2 text-sm ${
+          marca === "critico"
+            ? `${ANEL_CRITICO} bg-surface/60`
+            : marca === "falha"
+              ? ANEL_FALHA
+              : decidindo
+                ? "border-ambar/60 bg-surface/60"
+                : "border-border/70 bg-surface/50"
+        }`}
+        style={marca === "falha" ? { background: `color-mix(in srgb, ${COR_MARCA.falha} 5%, var(--surface))` } : undefined}
+        role="group"
+        aria-label={`Teste de ${tituloDoTeste(teste)} de ${nome}: ${rotulo(r).replace(/[!.]+$/, "")}`}
       >
+      {/* recolhido aqui mesmo: o cartão grande já anunciou */}
+      {!rolagem && r.grau && <Anuncio vivo={nasceuAberto} texto={fraseD20(r, alvo)} />}
       <div className="flex items-center gap-3">
-        <span
-          className="grid size-9 shrink-0 place-items-center rounded-md border text-base font-semibold tabular-nums"
-          style={{ borderColor: COR_GRAU[grau] ?? "var(--border)", color: COR_GRAU[grau] }}
-          aria-hidden
-        >
-          {r.natural ?? r.total ?? "?"}
-        </span>
+        {/* -my-0.5: o hexágono (size-10) ocupa a mesma altura do quadradinho de antes, sem crescer o cartão */}
+        <IconeD20
+          tamanho="sm"
+          valor={r.natural ?? r.total ?? "?"}
+          cor="-my-0.5 text-foreground/85"
+          style={corDado ? { color: corDado } : undefined}
+          preenchimento={marca ? 0.12 : 0.04}
+          novo={false}
+        />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs text-muted">
-            <span className="font-semibold" style={{ color: cor }}>
-              {nome}
-            </span>{" "}
-            · Teste de {tituloDoTeste(teste)}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="min-w-0 flex-1 truncate text-xs text-muted">
+              <span className="font-semibold" style={{ color: cor }}>
+                {nome}
+              </span>{" "}
+              · Teste de {tituloDoTeste(teste)}
+            </p>
+            {selo.natural && (
+              <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold uppercase leading-4 tracking-wide" style={{ color: selo.natural.cor }} aria-hidden>
+                <Icone nome={selo.natural.icone} />
+                {selo.natural.texto}
+              </span>
+            )}
+          </div>
           <p className="tabular-nums">
             <span className="text-foreground/80">{conta(r.natural, bonus, r.total ?? 0, textoOposicaoResultado(r) ? null : alvo)}</span>
             <span className="text-muted"> · </span>
@@ -521,6 +591,14 @@ export function PedidoTeste({
   const natural = resultado?.natural ?? null;
   const destaque = natural === 20 ? "critico" : natural === 1 ? "falha" : null;
   const corGrau = resultado ? COR_GRAU[resultado.grau] : undefined;
+  // o momento do resultado: a moldura pega a cor do grau; crítico e falha crítica (pelo grau ou pelo dado natural) pulsam
+  const seloD20 = d20 && resultado ? seloDoDesfecho({ teste, grau: resultado.grau ?? null, natural, d20: true }) : null;
+  const marca = seloD20 && resultado ? marcaDoD20(resultado.grau, seloD20) : null;
+  const corMoldura = !pronto ? null : !d20 ? corParada(resultado) : marca ? COR_MARCA[marca] : (corGrau ?? null);
+  const pulsa =
+    Boolean(pronto) &&
+    (marca !== null ||
+      (!d20 && (resultado?.grau === "sucesso_critico" || resultado?.grau === "falha_critica" || resultado?.rotuloGrau === "Crítico Sujo" || resultado?.rotuloGrau === "Falha Bestial")));
   // esperando o clique deste aparelho: o cartão respira (brilho em ceu-estrelado.tsx) para chamar o olho
   const esperando = !rolagem && podeRolar;
   // o texto do resultado espera o último dado da parada assentar
@@ -528,12 +606,22 @@ export function PedidoTeste({
   return (
     <section
       id={`pedido-${mensagem.id}`}
-      className={`surgir pedido-teste relative mx-auto my-8 max-w-xl scroll-mt-24 overflow-hidden rounded-2xl border bg-surface/85 px-4 pb-5 pt-4 text-center shadow-[0_0_60px_-24px_var(--ambar)] sm:px-6 ${
+      // halo-pulso e surgir disputam a mesma propriedade (animation): no resultado crítico fica só o halo
+      className={`${pulsa ? "halo-pulso" : "surgir"} pedido-teste relative mx-auto my-8 max-w-xl scroll-mt-24 overflow-hidden rounded-2xl border bg-surface/85 px-4 pb-5 pt-4 text-center shadow-[0_0_60px_-24px_var(--ambar)] sm:px-6 ${
         esperando ? "pedido-pendente border-ambar/70" : "border-ambar/50"
       }`}
-      aria-live="polite"
+      // `color` é só para o currentColor do halo; o texto do cartão volta à cor do tema no invólucro logo abaixo
+      style={
+        corMoldura
+          ? { color: corMoldura, borderColor: `color-mix(in srgb, ${corMoldura} 60%, transparent)`, boxShadow: `0 0 60px -24px ${corMoldura}` }
+          : undefined
+      }
+      role="group"
       aria-label={`Teste de ${tituloDoTeste(teste)} de ${nome}`}
     >
+      <div className="text-foreground">
+      {/* a região já existe vazia antes do dado: leitor de tela só anuncia com segurança o texto que chega a uma região montada */}
+      <Anuncio texto={!pronto ? "" : d20 ? fraseD20(resultado, alvo) : `${rotuloParada(resultado)}: ${contaParada(parada, resultado, alvo)}`} />
       {/* os data-pd-* são os pontos que a versão compacta do leitor cena a cena mexe (sem retrato, motivo numa linha, menos respiro) */}
       <div className="flex items-center justify-center gap-2 text-xs text-muted">
         {personagem && (
@@ -597,7 +685,7 @@ export function PedidoTeste({
       )}
 
       {pronto && !d20 ? (
-        <div className="pd-depois mt-4" style={atraso}>
+        <div className={`${CLASSE_DEPOIS} mt-4`} style={atraso}>
           <p className="titulo text-2xl font-semibold leading-tight sm:text-3xl" style={{ color: corParada(resultado) }}>
             {partesDoRotulo(resultado).nome}
           </p>
@@ -614,13 +702,14 @@ export function PedidoTeste({
           {decisao(resultado)}
         </div>
       ) : pronto ? (
-        <div className="surgir mt-4">
-          <p className="text-lg tabular-nums sm:text-xl">
-            <span className="text-foreground/90">{conta(resultado.natural, bonus, resultado.total, textoOposicaoResultado(resultado) ? null : alvo)}</span>
-            <span className="text-muted"> · </span>
-            <span className="titulo font-semibold" style={{ color: corGrau }}>
-              {rotulo(resultado)}
-            </span>
+        <div className={`${CLASSE_DEPOIS} mt-4`}>
+          {/* a folha do pd-depois é a da parada; no d20 ela não está na página sem isto */}
+          <EstiloParada />
+          <p className="titulo text-2xl font-semibold leading-none sm:text-3xl" style={{ color: marca ? COR_MARCA[marca] : corGrau }} data-pd-grau>
+            {rotulo(resultado)}
+          </p>
+          <p className="mt-1 text-sm tabular-nums text-foreground/85 sm:text-base" data-pd-conta>
+            {conta(resultado.natural, bonus, resultado.total, textoOposicaoResultado(resultado) ? null : alvo)}
           </p>
           <LinhaDisputa r={resultado} centro />
           <LinhaRecursoD20 r={resultado as unknown as Record<string, unknown>} />
@@ -654,10 +743,26 @@ export function PedidoTeste({
           )}
         </>
       ) : (
-        <p className="mt-4 text-sm italic text-muted" data-pd-rodape>
-          Esperando {personagem?.jogador || nome} rolar {d20 ? "o dado" : "os dados"}…
+        <p className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm text-foreground/85" data-pd-rodape>
+          {personagem && (
+            <span className="contents" data-pd-retrato>
+              <Retrato ficha={personagem.ficha} tamanho={24} />
+            </span>
+          )}
+          <span>
+            {d20 ? "O dado está com" : "Os dados estão com"}{" "}
+            <span className="font-semibold" style={{ color: cor }}>
+              {personagem?.jogador || nome}
+            </span>
+          </span>
+          <span className="pensando text-ambar" aria-hidden>
+            <i />
+            <i />
+            <i />
+          </span>
         </p>
       )}
+      </div>
     </section>
   );
 }

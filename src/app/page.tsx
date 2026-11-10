@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { aventuraTutorial, aventurasPublicas } from "@/lib/aventuras";
 import { listarCampanhas, listarDiario, listarMensagens, listarPersonagens, type Campanha, type Personagem } from "@/lib/db";
@@ -11,6 +12,10 @@ import { BotaoExcluir } from "./botao-excluir";
 import { Icone } from "@/components/icones";
 import { CapaAventura } from "@/components/aventuras/capa-aventura";
 import { linkDaAventura } from "@/lib/aventuras/link";
+import { rotuloDuracao } from "@/lib/aventuras/rotulo-duracao";
+import { atrasoEscada } from "@/lib/cliente/movimento";
+import { haQuanto } from "@/lib/ha-quanto";
+import { SinalDeIda } from "@/components/sinal-de-ida";
 import { matizDaCampanha, matizDaPosicao } from "@/lib/inicio/matiz-campanha";
 import { BotaoJogarAgora } from "@/components/inicio/botao-jogar-agora";
 import { FaixaHerois } from "@/components/inicio/faixa-herois";
@@ -21,28 +26,14 @@ import { jogarAgoraAcao } from "./nova/jogar-agora-acoes";
 
 export const dynamic = "force-dynamic";
 
-const relativo = new Intl.RelativeTimeFormat("pt-BR", { numeric: "auto" });
+// o template do layout não vale no segmento raiz: o título vai inteiro
+export const metadata: Metadata = { title: { absolute: "Campanhas · Taverna do Velho Mestre" } };
 
 /** O SQLite grava em UTC sem fuso ("2026-10-25 14:03:00"). */
 const dataDoBanco = (dataSqlite: string) => new Date(dataSqlite.replace(" ", "T") + "Z");
 
-/** "há 3 horas", "ontem"... */
-function haQuanto(dataSqlite: string): string {
-  const seg = Math.round((dataDoBanco(dataSqlite).getTime() - Date.now()) / 1000);
-  const passos: [Intl.RelativeTimeFormatUnit, number][] = [
-    ["second", 60],
-    ["minute", 60],
-    ["hour", 24],
-    ["day", 30],
-    ["month", 12],
-  ];
-  let valor = seg;
-  for (const [unidade, tamanho] of passos) {
-    if (Math.abs(valor) < tamanho) return unidade === "second" ? "agora há pouco" : relativo.format(valor, unidade);
-    valor = Math.round(valor / tamanho);
-  }
-  return relativo.format(valor, "year");
-}
+/** A entrada em escada dos cartões: o preenchimento "backwards" solta o transform no fim, e o cartão volta a subir no hover. */
+const escada = (i: number) => ({ animationDelay: atrasoEscada(i), animationFillMode: "backwards" as const });
 
 /** Último parágrafo do mestre, sem a marcação de ênfase: é "onde a história parou". */
 function ondeParou(campanhaId: number): string | null {
@@ -118,7 +109,10 @@ function LinhaPersonagem({ p, nomeClasse }: { p: Personagem; nomeClasse: string 
               {pv}/{pvMax}
             </>
           ) : (
-            "—"
+            <>
+              <span aria-hidden>-</span>
+              <span className="sr-only">sem vida</span>
+            </>
           )}
         </span>
       </div>
@@ -149,7 +143,7 @@ function Continuar({ c }: { c: CampanhaListada }) {
     >
       {/* brilho de vela atrás do cartão */}
       <div aria-hidden className="pointer-events-none absolute -top-16 -right-16 size-48 rounded-full bg-ambar/10 blur-3xl" />
-      <p className="text-xs uppercase tracking-[0.18em] text-ambar-forte">Onde vocês pararam · {haQuanto(c.atualizadaEm)}</p>
+      <p className="text-xs uppercase tracking-[0.18em] text-ambar-forte">Onde vocês pararam · {haQuanto(dataDoBanco(c.atualizadaEm))}</p>
       <h2 id="continuar-titulo" className="titulo titulo-brilho mt-1 text-2xl leading-tight text-pergaminho sm:text-3xl">
         {c.nome}
       </h2>
@@ -190,6 +184,7 @@ function Continuar({ c }: { c: CampanhaListada }) {
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <Link href={`/mesa/${c.id}`} className="btn-palco min-h-11 basis-full whitespace-nowrap sm:basis-auto sm:px-8">
           Continuar a história
+          <SinalDeIda className="ml-1.5" />
         </Link>
         <Link href={`/mesa/${c.id}/ajustes`} className="btn-borda min-h-11 px-4">
           Ajustes
@@ -207,9 +202,13 @@ function Continuar({ c }: { c: CampanhaListada }) {
 }
 
 /** Cartão da grade: o título estica o link sobre o cartão inteiro; os botões ficam por cima dele (relative z-10). */
-function CartaoCampanha({ c }: { c: CampanhaListada }) {
+function CartaoCampanha({ c, indice }: { c: CampanhaListada; indice: number }) {
   return (
-    <li data-tema={temaDoSistema(c.sistema.id)} className={`cartao cartao-tema cartao-matiz cartao-clicavel relative flex flex-col p-5 ${matizDaCampanha(c.id, c.sistema.id)}`}>
+    <li
+      data-tema={temaDoSistema(c.sistema.id)}
+      className={`cartao cartao-tema cartao-matiz cartao-clicavel surgir relative flex flex-col p-5 ${matizDaCampanha(c.id, c.sistema.id)}`}
+      style={escada(indice)}
+    >
       {/* as plaquinhas ficam por cima do link esticado para a dica (title) continuar aparecendo */}
       <div className="relative z-10 w-fit">
         <Etiquetas c={c} />
@@ -217,6 +216,7 @@ function CartaoCampanha({ c }: { c: CampanhaListada }) {
       <h3 className="titulo mt-2 text-xl text-pergaminho">
         <Link href={`/mesa/${c.id}`} className="rounded-sm after:absolute after:inset-0 after:rounded-xl hover:text-ambar focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ambar">
           {c.nome}
+          <SinalDeIda className="ml-1.5" />
         </Link>
       </h3>
       {c.cenario ? (
@@ -240,6 +240,7 @@ function CartaoCampanha({ c }: { c: CampanhaListada }) {
       <div className="relative z-10 mt-auto flex flex-wrap gap-2 pt-4">
         <Link href={`/mesa/${c.id}`} className="btn-borda min-h-10 flex-1 gap-1.5 px-3 py-2" aria-label={`Entrar em ${c.nome}`}>
           Entrar <Icone nome="arrowRight" />
+          <SinalDeIda className="ml-1.5" />
         </Link>
         <Link href={`/mesa/${c.id}/ajustes`} className="btn-borda min-h-10 px-3 py-2">
           Ajustes
@@ -248,10 +249,10 @@ function CartaoCampanha({ c }: { c: CampanhaListada }) {
       <div className="relative z-10 mt-3 flex flex-wrap items-center justify-between gap-x-2 border-t border-border pt-2 text-xs text-muted">
         {c.noites.quantas && c.noites.ultima ? (
           <span title={`Última jogada: ${dataDoBanco(c.noites.ultima.fim).toLocaleString("pt-BR")}`}>
-            {c.noites.quantas} {c.noites.quantas === 1 ? "noite" : "noites"} · última jogada {haQuanto(c.noites.ultima.fim)}
+            {c.noites.quantas} {c.noites.quantas === 1 ? "noite" : "noites"} · última jogada {haQuanto(dataDoBanco(c.noites.ultima.fim))}
           </span>
         ) : (
-          <span title={dataDoBanco(c.atualizadaEm).toLocaleString("pt-BR")}>Última jogada: {haQuanto(c.atualizadaEm)}</span>
+          <span title={dataDoBanco(c.atualizadaEm).toLocaleString("pt-BR")}>Última jogada: {haQuanto(dataDoBanco(c.atualizadaEm))}</span>
         )}
         <Link
           href={`/mesa/${c.id}/livro`}
@@ -271,7 +272,7 @@ function CartaoCampanha({ c }: { c: CampanhaListada }) {
 
 /** Quantas campanhas a grade mostra antes de guardar o resto no "Ver as outras". */
 const CAMPANHAS_A_VISTA = 6;
-/** Com resto guardado, uma vaga da grade fica para o "Abrir outra mesa": seis células fecham as linhas (2 ou 3 colunas). */
+/** Com resto guardado, uma vaga da grade fica para o "Abrir outra campanha": seis células fecham as linhas (2 ou 3 colunas). */
 const campanhasAVista = (total: number) => (total > CAMPANHAS_A_VISTA ? CAMPANHAS_A_VISTA - 1 : CAMPANHAS_A_VISTA);
 
 /** "Quem está mestrando" em uma linha: cabe embaixo dos botões sem empurrar as campanhas no celular. */
@@ -301,7 +302,7 @@ function AventurasProntas() {
         <h2 id="aventuras-titulo" className="titulo text-2xl text-pergaminho">
           Aventuras prontas
         </h2>
-        <Link href="/aventuras" className="inline-flex min-h-11 items-center text-sm text-ambar hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ambar">
+        <Link href="/aventuras" className="inline-flex min-h-11 items-center text-sm max-sm:hidden text-ambar hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ambar">
           Ver todas as {lista.length} aventuras <Icone nome="arrowRight" className="ml-1" />
         </Link>
         <p className="basis-full text-sm text-muted">Sem ideia? Escolha uma: o mestre já chega com o roteiro decorado (e com os segredos que você não vai ler).</p>
@@ -315,7 +316,7 @@ function AventurasProntas() {
           const sistema = a.sistemas[0];
           const tema = dadosDoTema(sistema);
           return (
-            <li key={a.id} className={`w-60 shrink-0 snap-start sm:w-auto ${i >= 4 ? "sm:hidden" : ""}`}>
+            <li key={a.id} className={`surgir w-60 shrink-0 snap-start sm:w-auto ${i >= 4 ? "sm:hidden" : ""}`} style={escada(i)}>
               <Link
                 href={linkDaAventura(a)}
                 data-tema={temaDoSistema(sistema)}
@@ -331,10 +332,10 @@ function AventurasProntas() {
                 <span className="titulo mt-2 text-lg leading-tight text-pergaminho group-hover:text-ambar">{a.titulo}</span>
                 <span className="mt-1 line-clamp-3 text-xs leading-snug text-muted">{a.chamada}</span>
                 <span className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-2 text-xs text-muted/80">
-                  <span>{a.duracao}</span>
+                  <span>{rotuloDuracao(a.duracao)}</span>
                   {a.soloOk && (
                     <span className="etiqueta-matiz matiz-2" title="Roda com um personagem só: um aliado do mestre divide as cenas">
-                      solo ok
+                      dá para jogar só
                     </span>
                   )}
                 </span>
@@ -346,7 +347,7 @@ function AventurasProntas() {
           );
         })}
       </ul>
-      <p className="mt-3">
+      <p className="mt-3 sm:hidden">
         <Link href="/aventuras" className="btn-borda min-h-11 w-full gap-1.5 sm:w-auto">
           Ver todas as {lista.length} aventuras <Icone nome="arrowRight" />
         </Link>
@@ -416,7 +417,7 @@ export default async function Inicio(props: PageProps<"/">) {
           {recente ? (
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link href="/nova" className="btn-borda min-h-11 gap-1.5">
-                <Icone nome="pencil" /> Nova história
+                <Icone nome="pencil" /> Nova campanha
               </Link>
               <form action={jogarAgoraAcao}>
                 <BotaoJogarAgora className="btn-borda min-h-11 gap-1.5">
@@ -501,16 +502,16 @@ export default async function Inicio(props: PageProps<"/">) {
       ) : (
         <>
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {outras.slice(0, aVista).map((c) => (
-              <CartaoCampanha key={c.id} c={c} />
+            {outras.slice(0, aVista).map((c, i) => (
+              <CartaoCampanha key={c.id} c={c} indice={i} />
             ))}
-            <li className="flex">
+            <li className="surgir flex" style={escada(Math.min(outras.length, aVista))}>
               <Link
                 href="/nova"
                 className="cartao-clicavel flex min-h-24 flex-1 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border p-5 text-center text-muted hover:text-ambar"
               >
                 <Icone nome="plus" className="text-2xl" />
-                <span className="titulo text-lg">Abrir outra mesa</span>
+                <span className="titulo text-lg">Abrir outra campanha</span>
                 <span className="text-xs">Tem banco sobrando.</span>
               </Link>
             </li>
@@ -523,8 +524,8 @@ export default async function Inicio(props: PageProps<"/">) {
                 <Icone nome="chevronDown" className="transition-transform group-open:rotate-180" />
               </summary>
               <ul className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {outras.slice(aVista).map((c) => (
-                  <CartaoCampanha key={c.id} c={c} />
+                {outras.slice(aVista).map((c, i) => (
+                  <CartaoCampanha key={c.id} c={c} indice={i} />
                 ))}
               </ul>
             </details>

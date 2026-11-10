@@ -5,11 +5,12 @@ import type { Paragrafo } from "./cena";
 import { capitularCabe, Ornamento } from "./prosa";
 import { SEPARADOR } from "./turnos";
 import { Icone } from "@/components/icones";
+import { esperaDemorada } from "@/components/historia/frases-espera";
 
-// Peças de desenho da cena, comuns ao leitor cena a cena e ao modo 📜 Rolagem das duas mesas: o aparte ((fora do jogo)), o
+// Peças de desenho da cena, comuns ao leitor cena a cena e ao modo Rolagem das duas mesas: o aparte ((fora do jogo)), o
 // divisor de fim de sessão ("Fim da noite 3", entre dois fios), o mestre escrevendo no palco e a prosa corrida com os apartes no meio.
 
-/** Caixa do aparte: "💬 Mestre, fora do jogo" e o texto sem o itálico da narração. */
+/** Caixa do aparte: "Mestre, fora do jogo" e o texto sem o itálico da narração. */
 export function Aparte({ quem = "Mestre", children, className = "" }: { quem?: string; children: ReactNode; className?: string }) {
   return (
     <aside className={`leitor-aparte ${className}`} aria-label={`${quem}, fora do jogo`} data-aparte>
@@ -26,7 +27,7 @@ export function linhasDoAparte(texto: string, inline: (t: string, k: string) => 
   return texto.split("\n").map((l, i) => <p key={i}>{inline(l, `${chave}-${i}`)}</p>);
 }
 
-/** Alternância "💬 Perguntar" do campo de ação: ligada, o que se escreve vai ao mestre entre (( )), fora do jogo. */
+/** Alternância "Perguntar" do campo de ação: ligada, o que se escreve vai ao mestre entre (( )), fora do jogo. */
 export function BotaoPerguntar({ ligado, aoAlternar, className = "" }: { ligado: boolean; aoAlternar: () => void; className?: string }) {
   return (
     <button
@@ -76,16 +77,19 @@ const FRASES = [
   "O mestre rabisca, apaga e rabisca de novo",
   "O mestre procura o dado que caiu debaixo da mesa",
 ];
+const INTERVALO_FRASE_MS = 4200;
+const FRASE_DEMORA = "O mestre está demorando mais que o costume";
 
 /** O mestre escrevendo, no meio do palco: a pena riscando e uma frase que troca de vez em quando. */
 export function MestreEscrevendo({ frase }: { frase?: string }) {
+  // o relógio corre sempre (mesmo com a frase fixa): é ele que diz quando a espera passou do costume
   const [i, setI] = useState(0);
   useEffect(() => {
-    if (frase) return;
-    const t = setInterval(() => setI((n) => n + 1), 4200);
+    const t = setInterval(() => setI((n) => n + 1), INTERVALO_FRASE_MS);
     return () => clearInterval(t);
-  }, [frase]);
-  const texto = frase ?? FRASES[i % FRASES.length];
+  }, []);
+  // o leitor pagina por altura: a demora troca a frase, sem ganhar linha
+  const texto = esperaDemorada(i, INTERVALO_FRASE_MS) ? FRASE_DEMORA : (frase ?? FRASES[i % FRASES.length]);
   return (
     <div className="leitor-escrevendo" role="status" aria-live="polite" data-escrevendo>
       <svg viewBox="0 0 64 28" className="leitor-escrevendo-pena" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden>

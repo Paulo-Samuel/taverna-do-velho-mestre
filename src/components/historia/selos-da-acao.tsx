@@ -41,11 +41,22 @@ export function SelosDaAcao({
   const carimbar = nasceuRolando && !grau.rolando ? " selo-carimbar" : "";
 
   return (
-    <span className="inline-flex flex-wrap items-center gap-1.5" data-compacto={compacto || undefined}>
+    <span className="relative inline-flex flex-wrap items-center gap-1.5" data-compacto={compacto || undefined}>
       <style href="taverna-selos" precedence="default">
         {CSS}
       </style>
-      <span className="sr-only">{leitor}</span>
+      {/* nasceu "rolando…": a região viva já existe (calada, sem repetir o que o chip mostra) e a chegada do grau é dita uma vez;
+          histórico já resolvido é texto comum, não anúncio */}
+      {nasceuRolando ? (
+        <>
+          {grau.rolando && <span className="sr-only">{leitor}</span>}
+          <span className="sr-only" role="status">
+            {grau.rolando ? "" : leitor}
+          </span>
+        </>
+      ) : (
+        <span className="sr-only">{leitor}</span>
+      )}
       <span aria-hidden title={chip.titulo ?? undefined} className={`${FORMA} font-medium ${chip.classe ?? "border-border/70 text-muted"}`}>
         {chip.texto}
       </span>

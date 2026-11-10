@@ -177,6 +177,14 @@ for (const id of TEMAS) {
       }
     });
 
+    it("o texto do botão de perigo apertado (:active) se lê sobre o fundo tingido de 20% de sangue", () => {
+      const sangue = cor("--sangue");
+      const texto = misturar(sangue, cor("--pergaminho"), 0.7);
+      for (const fundo of ["--background", "--surface", "--surface-2"]) {
+        exigir(texto, misturar(sangue, cor(fundo), 0.2), `${id} btn-perigo apertado sobre ${fundo}`);
+      }
+    });
+
     it("o âmbar se lê sobre a própria etiqueta tingida (12% de âmbar sobre --surface-2)", () => {
       const ambar = cor("--ambar");
       exigir(ambar, misturar(ambar, cor("--surface-2"), 0.12), `${id} --ambar sobre etiqueta-matiz`);

@@ -107,15 +107,15 @@ function dadoPadrao(sistema: SistemaPublico): { lados: Lados; qtd: number } {
 
 function Contador({ rotulo, valor, mudar, min, max, sinal }: { rotulo: string; valor: number; mudar: (v: number) => void; min: number; max: number; sinal?: boolean }) {
   return (
-    <div className="flex items-center gap-1">
-      <span className="mr-1 text-xs text-muted">{rotulo}</span>
-      <button type="button" className="size-8 rounded-md border border-border text-lg leading-none hover:border-ambar hover:text-ambar disabled:opacity-40" onClick={() => mudar(Math.max(min, valor - 1))} disabled={valor <= min} aria-label={`menos ${rotulo}`}>
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-muted">{rotulo}</span>
+      <button type="button" className="size-10 rounded-md border border-border text-lg sm:size-8 leading-none hover:border-ambar hover:text-ambar disabled:opacity-40" onClick={() => mudar(Math.max(min, valor - 1))} disabled={valor <= min} aria-label={`menos ${rotulo}`}>
         −
       </button>
       <span className="w-9 text-center tabular-nums" aria-live="polite">
         {sinal && valor > 0 ? `+${valor}` : valor}
       </span>
-      <button type="button" className="size-8 rounded-md border border-border text-lg leading-none hover:border-ambar hover:text-ambar disabled:opacity-40" onClick={() => mudar(Math.min(max, valor + 1))} disabled={valor >= max} aria-label={`mais ${rotulo}`}>
+      <button type="button" className="size-10 rounded-md border border-border text-lg sm:size-8 leading-none hover:border-ambar hover:text-ambar disabled:opacity-40" onClick={() => mudar(Math.min(max, valor + 1))} disabled={valor >= max} aria-label={`mais ${rotulo}`}>
         +
       </button>
     </div>
@@ -408,8 +408,9 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar, 
         aria-label="Rolador de dados"
         tabIndex={-1}
         onKeyDown={aoTeclarPainel}
-        style={desktop && pos ? { left: pos.left, bottom: pos.bottom } : undefined}
-        className="surgir fixed inset-x-0 bottom-0 z-50 flex max-h-[88dvh] flex-col rounded-t-2xl border border-border bg-surface text-sm text-foreground shadow-[0_-10px_50px_-10px_black] outline-none sm:inset-x-auto sm:max-h-[min(80dvh,42rem)] sm:w-[23rem] sm:rounded-xl sm:shadow-[0_20px_60px_-15px_black]"
+        // nasce de onde está preso: do botão (embaixo, à esquerda) no desktop e da borda de baixo na folha do celular
+        style={desktop && pos ? { left: pos.left, bottom: pos.bottom, transformOrigin: "bottom left" } : { transformOrigin: "bottom center" }}
+        className="surgir-menu fixed inset-x-0 bottom-0 z-50 flex max-h-[88dvh] flex-col rounded-t-2xl border border-border bg-surface text-sm text-foreground shadow-[0_-10px_50px_-10px_black] outline-none sm:inset-x-auto sm:max-h-[min(80dvh,42rem)] sm:w-[23rem] sm:rounded-xl sm:shadow-[0_20px_60px_-15px_black]"
       >
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-border sm:hidden" aria-hidden />
         <div className="flex items-center gap-2 border-b border-border px-4 pb-2 pt-2 sm:pt-3">
@@ -586,7 +587,7 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar, 
                 <div className="flex flex-wrap items-end gap-3">
                   {rotuloAlvo && (
                     <Campo rotulo={rotuloAlvo}>
-                      <input value={alvo} onChange={(e) => setAlvo(e.target.value.replace(/[^\d-]/g, ""))} inputMode="numeric" placeholder="nenhum" className="campo w-24" />
+                      <input value={alvo} onChange={(e) => setAlvo(e.target.value.replace(/[^\d-]/g, ""))} inputMode="numeric" placeholder="Nenhum" className="campo w-24" />
                     </Campo>
                   )}
                   <Contador rotulo="Mod." valor={modTeste} mudar={setModTeste} min={-20} max={20} sinal />
@@ -619,7 +620,7 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar, 
                   <input value={manualFaces} onChange={(e) => setManualFaces(e.target.value)} placeholder="14  ou  + − 0 +" spellCheck={false} maxLength={200} className="campo" />
                 </Campo>
                 <Campo rotulo="Total">
-                  <input value={manualTotal} onChange={(e) => setManualTotal(e.target.value.replace(/[^\d-]/g, ""))} inputMode="numeric" placeholder="soma" className="campo" />
+                  <input value={manualTotal} onChange={(e) => setManualTotal(e.target.value.replace(/[^\d-]/g, ""))} inputMode="numeric" placeholder="Soma" className="campo" />
                 </Campo>
               </div>
             </>

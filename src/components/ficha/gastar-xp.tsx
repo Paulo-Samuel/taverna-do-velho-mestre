@@ -6,6 +6,7 @@ import * as identidade from "@/lib/cliente/identidade";
 import type { PersonagemVisivel } from "@/lib/mesa";
 import type { CompraXp, ItemXp, NovoXp, OfertaXp, SecaoXp } from "@/lib/sistemas/vtm5/xp";
 import { temaDoSistema } from "@/lib/temas";
+import { useFocoPreso } from "@/lib/cliente/use-foco-preso";
 import { Icone } from "@/components/icones";
 
 // Gastar XP do Vampiro V5 na ficha da mesa: vitrine por seção (atributos, perícias, disciplinas...), custo do próximo ponto,
@@ -28,7 +29,7 @@ function poderesDaFicha(extras: Record<string, unknown>, disciplina?: string): s
 }
 
 const bolinhas = (atual: number, max: number) => `${"●".repeat(Math.max(0, atual))}${"○".repeat(Math.max(0, max - atual))}`;
-const pontos = (n: number) => (n > 0 ? "●".repeat(n) : "—");
+const pontos = (n: number) => (n > 0 ? "●".repeat(n) : "-");
 
 /** Botão "Gastar XP (N)" + o painel. Só para o Vampiro (quem chama decide). */
 export function BotaoGastarXp({ personagem }: { personagem: PersonagemVisivel }) {
@@ -58,6 +59,9 @@ function PainelGastarXp({ personagem, aoFechar }: { personagem: PersonagemVisive
   const [ocupado, setOcupado] = useState(false);
   const [poder, setPoder] = useState<PoderEscolhido>({ nome: "", nivel: 1, custo: 1, parada: "" });
   const fechar = useRef<HTMLButtonElement>(null);
+  const caixa = useRef<HTMLDivElement>(null);
+  // o painel só existe aberto: o Tab fica preso nele e o foco volta ao botão "Gastar XP" ao fechar
+  useFocoPreso(caixa, true);
   const url = `/api/campanhas/${personagem.campanhaId}/personagens/${personagem.id}/xp`;
   const ficha = personagem.ficha;
 
@@ -88,8 +92,12 @@ function PainelGastarXp({ personagem, aoFechar }: { personagem: PersonagemVisive
     return () => clearInterval(t);
   }, [ocupado, buscar]);
 
+  // só ao abrir: se rodasse a cada confirmação, roubava o foco do "Comprar" (autoFocus) e o Enter fechava o painel
   useEffect(() => {
     fechar.current?.focus();
+  }, []);
+
+  useEffect(() => {
     const tecla = (e: KeyboardEvent) => e.key === "Escape" && (confirmacao ? setConfirmacao(null) : aoFechar());
     window.addEventListener("keydown", tecla);
     const overflow = document.body.style.overflow;
@@ -150,6 +158,7 @@ function PainelGastarXp({ personagem, aoFechar }: { personagem: PersonagemVisive
       onMouseDown={(e) => e.target === e.currentTarget && aoFechar()}
     >
       <div
+        ref={caixa}
         role="dialog"
         aria-modal="true"
         aria-labelledby="gastar-xp-titulo"
@@ -163,7 +172,7 @@ function PainelGastarXp({ personagem, aoFechar }: { personagem: PersonagemVisive
             </h2>
             <p className="truncate text-xs text-muted">{ficha.nome} · a eternidade é longa, o XP nem tanto</p>
           </div>
-          <button ref={fechar} type="button" onClick={aoFechar} aria-label="Fechar" className="grid size-9 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ambar">
+          <button ref={fechar} type="button" onClick={aoFechar} aria-label="Fechar a compra de XP" className="botao-cabecalho">
             <Icone nome="close" />
           </button>
         </header>
@@ -179,7 +188,7 @@ function PainelGastarXp({ personagem, aoFechar }: { personagem: PersonagemVisive
                 setAba(s.id);
                 setConfirmacao(null);
               }}
-              className={`-mb-px min-h-10 shrink-0 whitespace-nowrap border-b-2 px-2 text-sm focus-visible:text-ambar focus-visible:outline-none ${secao?.id === s.id ? "border-ambar text-ambar" : "border-transparent text-muted hover:text-foreground"}`}
+              className={`-mb-px min-h-10 shrink-0 whitespace-nowrap border-b-2 px-2 text-sm focus-visible:text-ambar focus-visible:outline-2 focus-visible:outline-ambar focus-visible:-outline-offset-2 ${secao?.id === s.id ? "border-ambar text-ambar" : "border-transparent text-muted hover:text-foreground"}`}
             >
               {s.id === "potencia" ? "Potência" : s.titulo}
               {s.itens.some((i) => i.cabe) && <span className="ml-1 inline-block size-1.5 rounded-full bg-ambar align-middle" aria-hidden />}
@@ -229,7 +238,7 @@ function PainelGastarXp({ personagem, aoFechar }: { personagem: PersonagemVisive
                   value={poder.nome}
                   onChange={(e) => setPoder((p) => ({ ...p, nome: e.target.value }))}
                   maxLength={60}
-                  placeholder="nome do poder (ex.: Nublar Memória)"
+                  placeholder="Nome do poder (ex.: Nublar Memória)"
                   aria-label="Nome do poder"
                   className="campo w-full px-2 py-1.5 text-sm"
                 />
@@ -257,7 +266,7 @@ function PainelGastarXp({ personagem, aoFechar }: { personagem: PersonagemVisive
                     value={poder.parada}
                     onChange={(e) => setPoder((p) => ({ ...p, parada: e.target.value }))}
                     maxLength={80}
-                    placeholder="parada (opcional): Carisma + Presença"
+                    placeholder="Parada (opcional): Carisma + Presença"
                     aria-label="Parada do poder (opcional)"
                     className="campo min-w-0 flex-1 px-2 py-1 text-sm"
                   />
@@ -299,9 +308,9 @@ function PainelGastarXp({ personagem, aoFechar }: { personagem: PersonagemVisive
                   setAviso(null);
                   setConfirmacao({ corpo: { desfazer: true }, pergunta: `Desfazer “${ultima.item}” e recuperar ${ultima.custo} XP?` });
                 }}
-                className="max-w-[16rem] truncate text-xs text-muted underline-offset-2 hover:text-ambar hover:underline focus-visible:text-ambar focus-visible:outline-none disabled:cursor-not-allowed disabled:text-muted/40 disabled:no-underline"
+                className="max-w-[16rem] truncate text-xs text-muted underline-offset-2 hover:text-ambar hover:underline rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ambar focus-visible:text-ambar disabled:cursor-not-allowed disabled:text-muted/40 disabled:no-underline"
               >
-                <Icone nome="undo" /> desfazer última compra
+                <Icone nome="undo" /> Desfazer a última compra
               </button>
             </span>
           )}
@@ -367,8 +376,8 @@ function LinhaItem({ item: i, xp, desligado, aoComprar }: { item: ItemXp; xp: nu
         <span className="shrink-0 text-sm tracking-wider text-ambar" aria-label={`${i.atual} de ${i.max}`}>
           {bolinhas(i.atual, i.max)}
         </span>
-        <span className={`w-14 shrink-0 text-right text-xs tabular-nums ${falta ? "text-muted/60" : maximo ? "text-muted" : "text-pergaminho"}`}>
-          {maximo ? "máx." : i.custo !== null ? `${i.custo} XP` : "—"}
+        <span className={`w-14 shrink-0 text-right text-xs tabular-nums ${falta || maximo ? "text-muted" : "text-pergaminho"}`}>
+          {maximo ? "máx." : i.custo !== null ? `${i.custo} XP` : "-"}
         </span>
         <span title={motivo ?? `Comprar ${proximo} por ${i.custo} XP`} className="shrink-0">
           <button
@@ -376,7 +385,7 @@ function LinhaItem({ item: i, xp, desligado, aoComprar }: { item: ItemXp; xp: nu
             aria-label={i.cabe && !desligado ? `Comprar ${proximo} por ${i.custo} XP` : `Não dá para comprar ${i.nome}: ${motivo ?? ""}`}
             disabled={!i.cabe || desligado}
             onClick={() => i.custo !== null && aoComprar({ tipo: i.tipo, alvo: i.alvo, de: i.atual }, proximo, i.custo, i.aviso)}
-            className="grid size-8 place-items-center rounded-full border border-ambar/60 text-base leading-none text-ambar transition hover:bg-ambar/15 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ambar disabled:cursor-not-allowed disabled:border-border/50 disabled:text-muted/30 disabled:hover:bg-transparent"
+            className="relative grid size-8 place-items-center rounded-full border border-ambar/60 text-base leading-none text-ambar transition before:absolute before:-inset-1.5 hover:bg-ambar/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ambar sm:before:hidden disabled:cursor-not-allowed disabled:border-border/50 disabled:text-muted/30 disabled:hover:bg-transparent"
           >
             +
           </button>

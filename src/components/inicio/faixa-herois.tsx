@@ -6,14 +6,17 @@ import { matizDaPosicao } from "@/lib/inicio/matiz-campanha";
 import { BotaoJogarAgora } from "./botao-jogar-agora";
 
 // G15: os oito heróis prontos. Cada retrato é um botão de enviar: um toque abre a mesa com aquele arquétipo.
+// Um formulário só para os oito (o arquétipo vai no name/value do botão): com um por herói, dois toques rápidos em
+// rostos diferentes abriam duas campanhas.
 // A cor da borda é só enfeite; quem é quem está escrito embaixo (e no aria-label).
 export function FaixaHerois({ compacta = false }: { compacta?: boolean }) {
   return (
     <section className={compacta ? "mt-12" : "mb-12"} aria-labelledby="herois-titulo">
       <h2 id="herois-titulo" className="titulo text-2xl text-pergaminho">
-        {compacta ? "Mesa nova com herói pronto" : "Escolha um rosto e jogue"}
+        {compacta ? "Campanha nova com herói pronto" : "Escolha um rosto e jogue"}
       </h2>
       {!compacta && <p className="mt-1 text-sm text-muted">Oito heróis já vestidos e armados. O nome o mestre inventa; a culpa é sua.</p>}
+      <form action={jogarAgoraAcao}>
       <ul
         aria-label="Heróis prontos"
         // celular: a borda direita some em degradê para avisar que a fila continua (igual à faixa de aventuras)
@@ -21,9 +24,9 @@ export function FaixaHerois({ compacta = false }: { compacta?: boolean }) {
       >
         {ARQUETIPOS.map((a, i) => (
           <li key={a.id} className={`shrink-0 snap-start sm:shrink ${matizDaPosicao(i)}`}>
-            <form action={jogarAgoraAcao}>
-              <input type="hidden" name="arquetipo" value={a.id} />
               <BotaoJogarAgora
+                nome="arquetipo"
+                valor={a.id}
                 className="group flex w-24 shrink-0 snap-start flex-col items-center gap-1 rounded-xl p-1 text-center disabled:cursor-wait sm:w-full"
                 espera={null}
                 rotulo={`Jogar agora com ${a.nome}: ${a.resumo}`}
@@ -36,10 +39,10 @@ export function FaixaHerois({ compacta = false }: { compacta?: boolean }) {
                 <span className="text-xs font-semibold texto-matiz group-aria-busy:hidden">{a.nome}</span>
                 {!compacta && <span className="text-[11px] leading-tight text-muted">{a.resumo}</span>}
               </BotaoJogarAgora>
-            </form>
           </li>
         ))}
       </ul>
+      </form>
       <p className="mt-2 text-sm text-muted">
         <Link href="/nova" className="inline-flex min-h-11 items-center text-ambar underline-offset-4 hover:underline">
           ou monte o seu do zero

@@ -107,28 +107,35 @@ function LinhaFicha({ r, m }: { r: Dados; m: Mensagem }) {
   );
 }
 
-function LinhaXp({ r }: { r: Dados }) {
+function LinhaXp({ r, novo }: { r: Dados; novo: boolean }) {
   const subiu = num(r.subiuPara);
   const ganho = num(r.ganho);
+  // subir de nível é evento, não nota de rodapé: bloco próprio, inteiro numa página do leitor (data-inteiro = break-inside: avoid).
+  // O surgir fica no invólucro: no mesmo elemento ele e o halo-pulso disputariam a propriedade animation.
+  // O halo só pulsa quando o evento chega com a mesa aberta; no histórico (e a cada página virada do leitor) o cartão fica parado.
+  if (subiu !== null)
+    return (
+      <div data-inteiro className="surgir my-4" title={typeof r.resumo === "string" ? r.resumo : undefined}>
+        <div className={`cartao cartao-matiz ${novo ? "halo-pulso " : ""}mx-auto max-w-xl px-4 py-3 text-center text-ambar`}>
+          <p className="text-sm">
+            <Icone nome="sparkle" /> <Nome nome={r.personagem} />
+          </p>
+          <p className="titulo text-xl text-pergaminho">Nível {subiu}</p>
+          <p className="text-xs text-muted">
+            {ganho !== null ? `Ganhou ${ganho} de experiência e subiu de nível` : typeof r.resumo === "string" && r.resumo ? r.resumo : "Subiu de nível"}
+          </p>
+        </div>
+      </div>
+    );
   return (
-    <Linha icone="sparkle" tom={subiu ? "text-ambar" : "text-muted"} titulo={r.resumo}>
-      {ganho !== null && (
+    <Linha icone="sparkle" titulo={r.resumo}>
+      {ganho !== null ? (
         <>
           <Nome nome={r.personagem} /> ganhou {ganho} de experiência
         </>
+      ) : (
+        r.resumo || "Experiência anotada"
       )}
-      {ganho !== null && subiu !== null && " · "}
-      {subiu !== null && (
-        <span className="not-italic font-semibold">
-          {ganho === null && (
-            <>
-              <Nome nome={r.personagem} />{" "}
-            </>
-          )}
-          chegou ao nível {subiu}!
-        </span>
-      )}
-      {ganho === null && subiu === null && (r.resumo || "Experiência anotada")}
     </Linha>
   );
 }
@@ -282,7 +289,7 @@ export function LinhaDado({ mensagem, novo }: { mensagem: Mensagem; novo: boolea
     case "ficha":
       return <LinhaFicha r={r} m={mensagem} />;
     case "xp":
-      return <LinhaXp r={r} />;
+      return <LinhaXp r={r} novo={novo} />;
     case "descanso":
     case "curto":
     case "longo":

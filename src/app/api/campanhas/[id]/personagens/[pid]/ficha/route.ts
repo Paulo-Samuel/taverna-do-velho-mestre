@@ -32,7 +32,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/campanhas/
   if (mesaOcupada(campanha.id)) return Response.json({ erro: "O mestre está narrando. Ajuste quando ele terminar." }, { status: 409 });
 
   const lido = ESQUEMA.safeParse(await request.json().catch(() => null));
-  if (!lido.success) return Response.json({ erro: "Ajuste em formato estranho." }, { status: 400 });
+  if (!lido.success) return Response.json({ erro: "Não entendi esse ajuste. Recarregue a página e tente de novo." }, { status: 400 });
   const { autor, ...pedido } = lido.data;
 
   const sistema = obterSistema(campanha.sistema);
