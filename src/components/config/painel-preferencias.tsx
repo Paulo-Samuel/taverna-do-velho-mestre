@@ -26,7 +26,7 @@ export function PainelPreferencias() {
   const percentual = Math.round(musica.volume * 100);
 
   return (
-    <section aria-labelledby="titulo-preferencias" className="mt-8">
+    <section id="preferencias" aria-labelledby="titulo-preferencias" className="mt-10 scroll-mt-20">
       <h2 id="titulo-preferencias" className="titulo text-2xl text-pergaminho">
         Preferências
       </h2>
@@ -41,7 +41,7 @@ export function PainelPreferencias() {
             id={idDado}
             value={aparencia}
             onChange={(e) => escolherAparencia(e.target.value)}
-            className="mt-2 min-h-11 w-full max-w-full rounded-md border border-borda bg-surface px-3 text-pergaminho sm:w-64"
+            className="campo mt-2 min-h-11 sm:w-64"
           >
             {APARENCIAS.map((a) => (
               <option key={a.id} value={a.id}>

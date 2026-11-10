@@ -1,5 +1,5 @@
-// Contagem de missões do diário (função pura, sem banco). A regra de "encerrada" é a mesma do "Anteriormente"
-// (components/historia/anteriormente.tsx): status com conclu / falh / cancel.
+// Contagem de missões do diário (função pura, sem banco). A regra de "encerrada" mora aqui: status com conclu / falh /
+// cancel. O "Anteriormente" (components/historia/anteriormente.tsx) consome missaoEmAberto em vez de repetir a regex.
 
 export const MISSAO_ENCERRADA = /conclu|falh|cancel/i;
 const MISSAO_CONCLUIDA = /conclu/i;

@@ -93,6 +93,32 @@ describe("matizes e graus", () => {
       assert.ok(new RegExp(`\\[data-tema="${id}"\\]\\s*\\{[^}]*--estrelas:\\s*none;`).test(CSS), id);
     }
   });
+
+  it("--estrelas-2 é a segunda camada (613px, mais rala) e os temas de papel a desligam", () => {
+    const m = /--estrelas-2:\s*([^;]+);/.exec(CORPO_RAIZ);
+    assert.ok(m, "--estrelas-2");
+    assert.equal(m[1].match(/url\(/g)?.length, 1);
+    assert.ok(m[1].includes("width='613' height='613'"));
+    const pontos = [...m[1].matchAll(/fill-opacity='([.\d]+)'/g)].map((p) => Number(p[1]));
+    assert.ok(pontos.length >= 8 && pontos.length <= 9, `${pontos.length} pontos`);
+    assert.ok(Math.max(...pontos) <= 0.35, "opacidade máxima .35");
+    for (const id of ["pf2e", "osr", "d100"]) {
+      assert.ok(new RegExp(`\\[data-tema="${id}"\\]\\s*\\{[^}]*--estrelas-2:\\s*none;`).test(CSS), id);
+    }
+  });
+
+  it("os pontos de --estrelas não passam de .45 de opacidade", () => {
+    const m = /--estrelas:\s*([^;]+);/.exec(CORPO_RAIZ);
+    assert.ok(m, "--estrelas");
+    const pontos = [...m[1].matchAll(/fill-opacity='([.\d]+)'/g)].map((p) => Number(p[1]));
+    assert.ok(pontos.length > 0 && Math.max(...pontos) <= 0.45);
+  });
+
+  it("o valor inicial do @property --sangue é o do tema padrão", () => {
+    const inicial = /@property --sangue \{[^}]*initial-value:\s*(#[0-9a-fA-F]{6})/.exec(CSS);
+    assert.ok(inicial, "@property --sangue");
+    assert.equal(inicial[1].toLowerCase(), blocoDoTema("padrao")["--sangue"].toLowerCase());
+  });
 });
 
 for (const id of TEMAS) {
@@ -129,6 +155,31 @@ for (const id of TEMAS) {
 
     it("o texto do botão se lê sobre o botão aceso", () => {
       exigir(cor("--botao-texto"), cor("--botao-hover"), `${id} --botao-texto sobre --botao-hover`);
+    });
+
+    it("texto, muted, âmbar, âmbar-forte, sangue e musgo se leem sobre o fundo e as duas superfícies", () => {
+      for (const nome of ["--foreground", "--muted", "--ambar", "--ambar-forte", "--sangue", "--musgo"]) {
+        for (const fundo of ["--background", "--surface", "--surface-2"]) {
+          exigir(cor(nome), cor(fundo), `${id} ${nome} sobre ${fundo}`);
+        }
+      }
+    });
+
+    it("o texto do botão de perigo cheio (cor do fundo) se lê sobre o sangue", () => {
+      exigir(cor("--background"), cor("--sangue"), `${id} --background sobre --sangue`);
+    });
+
+    it("o texto do botão de perigo aceso (70% sangue + pergaminho) se lê sobre o fundo tingido de 12% de sangue", () => {
+      const sangue = cor("--sangue");
+      const texto = misturar(sangue, cor("--pergaminho"), 0.7);
+      for (const fundo of ["--background", "--surface", "--surface-2"]) {
+        exigir(texto, misturar(sangue, cor(fundo), 0.12), `${id} btn-perigo aceso sobre ${fundo}`);
+      }
+    });
+
+    it("o âmbar se lê sobre a própria etiqueta tingida (12% de âmbar sobre --surface-2)", () => {
+      const ambar = cor("--ambar");
+      exigir(ambar, misturar(ambar, cor("--surface-2"), 0.12), `${id} --ambar sobre etiqueta-matiz`);
     });
 
     it("o texto da fita (cor do fundo) se lê sobre o âmbar e sobre cada matiz", () => {

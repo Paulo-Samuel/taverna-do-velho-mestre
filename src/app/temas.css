@@ -2,7 +2,8 @@
    como variável CSS cascateia, qualquer elemento com o atributo (a mesa, um cartão, o <body>) muda tudo o que está dentro.
    Além das cores: --font-titulo (fontes em src/app/fontes-temas.ts), --textura (fundo da página), --textura-cartao (fundo
    discreto dos cartões com .cartao-tema), --ornamento (enfeite dos divisores) e --titulo-espaco (espaçamento dos títulos).
-   Contraste conferido: texto, muted, âmbar e âmbar-forte ficam acima de 4.5:1 sobre o fundo e as superfícies.
+   Contraste conferido: texto, muted, âmbar, âmbar-forte, sangue e musgo ficam acima de 4.5:1 sobre o fundo e as
+   superfícies; o fundo se lê sobre o sangue (botão cheio) e o âmbar sobre a própria etiqueta tingida.
    Matizes (--matiz-1..8, classes .matiz-N) e graus de resultado (--grau-*) são os mesmos em todos os temas: contraste
    conferido em cada bloco pelo tests/matizes.test.ts. */
 
@@ -15,7 +16,7 @@
 @property --border { syntax: "<color>"; inherits: true; initial-value: #3B2F25; }
 @property --ambar { syntax: "<color>"; inherits: true; initial-value: #D9A54E; }
 @property --ambar-forte { syntax: "<color>"; inherits: true; initial-value: #B8842F; }
-@property --sangue { syntax: "<color>"; inherits: true; initial-value: #D65C4D; }
+@property --sangue { syntax: "<color>"; inherits: true; initial-value: #DA6455; }
 @property --pergaminho { syntax: "<color>"; inherits: true; initial-value: #F1E4C4; }
 @property --botao { syntax: "<color>"; inherits: true; initial-value: #D9A54E; }
 @property --botao-texto { syntax: "<color>"; inherits: true; initial-value: #1A120C; }
@@ -59,7 +60,7 @@
   --border: #3B2F25;
   --ambar: #D9A54E;
   --ambar-forte: #B8842F;
-  --sangue: #D65C4D;
+  --sangue: #DA6455;
   --musgo: #8FAF72;
   --pergaminho: #F1E4C4;
   --botao: #D9A54E;
@@ -95,7 +96,9 @@
   --grau-parcial: #8fc1e3;
   --grau-falha: #f28b82;
   /* céu de estrelas esparsas atrás da textura do tema: um ladrilho só, que repete sozinho */
-  --estrelas: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420'%3E%3Cg fill='%23F1E4C4'%3E%3Ccircle cx='23' cy='31' r='.9' fill-opacity='.5'/%3E%3Ccircle cx='97' cy='18' r='1.2' fill-opacity='.35'/%3E%3Ccircle cx='171' cy='62' r='.7' fill-opacity='.55'/%3E%3Ccircle cx='248' cy='27' r='1.4' fill-opacity='.25'/%3E%3Ccircle cx='338' cy='49' r='.8' fill-opacity='.45'/%3E%3Ccircle cx='391' cy='118' r='1.1' fill-opacity='.3'/%3E%3Ccircle cx='62' cy='139' r='1.3' fill-opacity='.3'/%3E%3Ccircle cx='142' cy='176' r='.6' fill-opacity='.6'/%3E%3Ccircle cx='221' cy='151' r='1' fill-opacity='.4'/%3E%3Ccircle cx='301' cy='207' r='.7' fill-opacity='.5'/%3E%3Ccircle cx='37' cy='262' r='1.1' fill-opacity='.35'/%3E%3Ccircle cx='118' cy='318' r='.8' fill-opacity='.5'/%3E%3Ccircle cx='203' cy='291' r='1.4' fill-opacity='.25'/%3E%3Ccircle cx='289' cy='352' r='.9' fill-opacity='.45'/%3E%3C/g%3E%3C/svg%3E");
+  --estrelas: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420'%3E%3Cg fill='%23F1E4C4'%3E%3Ccircle cx='23' cy='31' r='.9' fill-opacity='.45'/%3E%3Ccircle cx='97' cy='18' r='1.2' fill-opacity='.35'/%3E%3Ccircle cx='171' cy='62' r='.7' fill-opacity='.45'/%3E%3Ccircle cx='248' cy='27' r='1.4' fill-opacity='.25'/%3E%3Ccircle cx='338' cy='49' r='.8' fill-opacity='.45'/%3E%3Ccircle cx='391' cy='118' r='1.1' fill-opacity='.3'/%3E%3Ccircle cx='62' cy='139' r='1.3' fill-opacity='.3'/%3E%3Ccircle cx='142' cy='176' r='.6' fill-opacity='.45'/%3E%3Ccircle cx='221' cy='151' r='1' fill-opacity='.4'/%3E%3Ccircle cx='301' cy='207' r='.7' fill-opacity='.45'/%3E%3Ccircle cx='37' cy='262' r='1.1' fill-opacity='.35'/%3E%3Ccircle cx='118' cy='318' r='.8' fill-opacity='.45'/%3E%3Ccircle cx='203' cy='291' r='1.4' fill-opacity='.25'/%3E%3Ccircle cx='289' cy='352' r='.9' fill-opacity='.45'/%3E%3C/g%3E%3C/svg%3E");
+  /* segunda camada, mais rala e de outro tamanho (613 e 420 não têm divisor comum): o desenho só se repete bem longe */
+  --estrelas-2: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='613' height='613'%3E%3Cg fill='%23F1E4C4'%3E%3Ccircle cx='41' cy='77' r='.8' fill-opacity='.3'/%3E%3Ccircle cx='163' cy='29' r='1.1' fill-opacity='.2'/%3E%3Ccircle cx='287' cy='113' r='.7' fill-opacity='.35'/%3E%3Ccircle cx='449' cy='58' r='1.2' fill-opacity='.2'/%3E%3Ccircle cx='571' cy='191' r='.8' fill-opacity='.3'/%3E%3Ccircle cx='97' cy='263' r='1.3' fill-opacity='.18'/%3E%3Ccircle cx='359' cy='311' r='.6' fill-opacity='.35'/%3E%3Ccircle cx='503' cy='427' r='1' fill-opacity='.25'/%3E%3Ccircle cx='211' cy='523' r='.9' fill-opacity='.3'/%3E%3C/g%3E%3C/svg%3E");
 }
 .matiz-1 { --matiz: var(--matiz-1); }
 .matiz-2 { --matiz: var(--matiz-2); }
@@ -116,7 +119,7 @@
   --border: #3a2c22;
   --ambar: #e0a24a;
   --ambar-forte: #b9792a;
-  --sangue: #b23a2c;
+  --sangue: #da6455;
   --musgo: #7fa35a;
   --pergaminho: #f1e4c4;
   --botao: #e0a24a;
@@ -145,7 +148,7 @@
   --border: #4d2a28;
   --ambar: #e2ae4c;
   --ambar-forte: #c98f3c;
-  --sangue: #dc5a4f;
+  --sangue: #e0655a;
   --musgo: #86a95f;
   --pergaminho: #f7e8c4;
   --botao: #d9a441;
@@ -168,6 +171,7 @@
 [data-tema="pf2e"] {
   /* a pirita já pontilha o fundo */
   --estrelas: none;
+  --estrelas-2: none;
   --background: #070c1c;
   --surface: #0d1631;
   --surface-2: #152044;
@@ -176,7 +180,7 @@
   --border: #283770;
   --ambar: #e6b955;
   --ambar-forte: #cfa043;
-  --sangue: #e0564d;
+  --sangue: #e56a61;
   --musgo: #74b48e;
   --pergaminho: #f6e7c0;
   --botao: #e2b450;
@@ -213,7 +217,7 @@
   --border: #4e3221;
   --ambar: #e0915a;
   --ambar-forte: #c57d4a;
-  --sangue: #dc5a44;
+  --sangue: #e16a55;
   --musgo: #7ea86a;
   --pergaminho: #f2dcb6;
   --botao: #c8743f;
@@ -236,6 +240,7 @@
 [data-tema="osr"] {
   /* papel quadriculado é papel, não céu */
   --estrelas: none;
+  --estrelas-2: none;
   --background: #0f1419;
   --surface: #151d25;
   --surface-2: #1c2732;
@@ -244,7 +249,7 @@
   --border: #2f3d4b;
   --ambar: #79b2e3;
   --ambar-forte: #5f9bcf;
-  --sangue: #e0604d;
+  --sangue: #e56f5d;
   --musgo: #8fb36a;
   --pergaminho: #f3f1e7;
   --botao: #6aa6db;
@@ -267,6 +272,7 @@
 [data-tema="d100"] {
   /* dossiê é papel, não céu */
   --estrelas: none;
+  --estrelas-2: none;
   --background: #12100b;
   --surface: #1d1a12;
   --surface-2: #28241a;
@@ -275,7 +281,7 @@
   --border: #423c2b;
   --ambar: #a3c95e;
   --ambar-forte: #8eb14e;
-  --sangue: #d4624a;
+  --sangue: #dc705a;
   --musgo: #7fa35a;
   --pergaminho: #f0e4c3;
   --botao: #93b955;
@@ -334,7 +340,7 @@
   --border: #35462d;
   --ambar: #d9b862;
   --ambar-forte: #c09d4b;
-  --sangue: #d8604a;
+  --sangue: #df6f5a;
   --musgo: #8fbf5f;
   --pergaminho: #f1eacf;
   --botao: #d2ad57;
@@ -363,7 +369,7 @@
   --foreground: #ede1e2;
   --muted: #ae999e;
   --border: #3d2329;
-  --ambar: #e5505f;
+  --ambar: #e95d6b;
   --ambar-forte: #d0636f;
   --sangue: #e04a58;
   --musgo: #7fa35a;
@@ -382,7 +388,7 @@
     radial-gradient(800px 500px at 100% 0%, rgba(120, 10, 30, 0.2), transparent 60%),
     linear-gradient(to bottom, rgba(0, 0, 0, 0.4), transparent 30%);
   --textura-cartao:
-    linear-gradient(to bottom, rgba(229, 80, 95, 0.55), rgba(229, 80, 95, 0) 1px),
+    linear-gradient(to bottom, rgba(233, 93, 107, 0.55), rgba(233, 93, 107, 0) 1px),
     radial-gradient(420px 220px at 100% 0%, rgba(170, 16, 40, 0.16), transparent 70%);
 }
 

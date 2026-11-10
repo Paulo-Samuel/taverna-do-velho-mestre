@@ -6,6 +6,7 @@ import * as identidade from "@/lib/cliente/identidade";
 import type { PersonagemVisivel } from "@/lib/mesa";
 import type { CompraXp, ItemXp, NovoXp, OfertaXp, SecaoXp } from "@/lib/sistemas/vtm5/xp";
 import { temaDoSistema } from "@/lib/temas";
+import { Icone } from "@/components/icones";
 
 // Gastar XP do Vampiro V5 na ficha da mesa: vitrine por seção (atributos, perícias, disciplinas...), custo do próximo ponto,
 // confirmação leve e "desfazer última compra". As regras moram no servidor (vtm5/xp.ts); aqui só desenha o que ele manda.
@@ -29,7 +30,7 @@ function poderesDaFicha(extras: Record<string, unknown>, disciplina?: string): s
 const bolinhas = (atual: number, max: number) => `${"●".repeat(Math.max(0, atual))}${"○".repeat(Math.max(0, max - atual))}`;
 const pontos = (n: number) => (n > 0 ? "●".repeat(n) : "—");
 
-/** Botão "✦ Gastar XP (N)" + o painel. Só para o Vampiro (quem chama decide). */
+/** Botão "Gastar XP (N)" + o painel. Só para o Vampiro (quem chama decide). */
 export function BotaoGastarXp({ personagem }: { personagem: PersonagemVisivel }) {
   const [aberto, setAberto] = useState(false);
   return (
@@ -38,9 +39,10 @@ export function BotaoGastarXp({ personagem }: { personagem: PersonagemVisivel })
         type="button"
         onClick={() => setAberto(true)}
         title="No V5 não há nível: o XP compra pontos de atributo, perícia, disciplina, vantagem e Potência de Sangue"
-        className="rounded-full border border-ambar/50 bg-ambar/10 px-2 py-0.5 text-[11px] text-ambar transition hover:bg-ambar/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ambar"
+        className="inline-flex min-h-10 shrink-0 items-center gap-1 rounded-full border border-ambar/50 bg-ambar/10 px-3 py-0.5 text-[11px] text-ambar sm:min-h-0 transition hover:bg-ambar/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ambar"
       >
-        ✦ Gastar XP ({personagem.ficha.xp.toLocaleString("pt-BR")})
+        <Icone nome="sparkle" />
+        Gastar XP ({personagem.ficha.xp.toLocaleString("pt-BR")})
       </button>
       {aberto && <PainelGastarXp personagem={personagem} aoFechar={() => setAberto(false)} />}
     </>
@@ -155,13 +157,14 @@ function PainelGastarXp({ personagem, aoFechar }: { personagem: PersonagemVisive
       >
         <header className="flex items-start gap-3 border-b border-border px-4 pb-2 pt-3">
           <div className="min-w-0 flex-1">
-            <h2 id="gastar-xp-titulo" className="titulo text-xl leading-tight text-pergaminho">
-              ✦ Gastar XP
+            <h2 id="gastar-xp-titulo" className="titulo flex items-center gap-1.5 text-xl leading-tight text-pergaminho">
+              <Icone nome="sparkle" className="text-ambar" />
+              Gastar XP
             </h2>
             <p className="truncate text-xs text-muted">{ficha.nome} · a eternidade é longa, o XP nem tanto</p>
           </div>
           <button ref={fechar} type="button" onClick={aoFechar} aria-label="Fechar" className="grid size-9 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ambar">
-            ✕
+            <Icone nome="close" />
           </button>
         </header>
 
@@ -218,7 +221,7 @@ function PainelGastarXp({ personagem, aoFechar }: { personagem: PersonagemVisive
         {confirmacao && (
           <div role="alertdialog" aria-label="Confirmar" className="shrink-0 border-t border-ambar/40 bg-ambar/10 px-4 py-2.5">
             <p className="text-sm text-pergaminho">{confirmacao.pergunta}</p>
-            {confirmacao.aviso && <p className="mt-0.5 text-xs leading-snug text-ambar">⚠ {confirmacao.aviso}</p>}
+            {confirmacao.aviso && <p className="mt-0.5 text-xs leading-snug text-ambar"><Icone nome="warning" /> {confirmacao.aviso}</p>}
             {confirmacao.poder && (
               <fieldset className="mt-2 space-y-1.5" aria-label="Qual poder o ponto novo traz">
                 <legend className="text-xs text-pergaminho">Qual poder? O mestre só usa os poderes anotados na ficha.</legend>
@@ -298,7 +301,7 @@ function PainelGastarXp({ personagem, aoFechar }: { personagem: PersonagemVisive
                 }}
                 className="max-w-[16rem] truncate text-xs text-muted underline-offset-2 hover:text-ambar hover:underline focus-visible:text-ambar focus-visible:outline-none disabled:cursor-not-allowed disabled:text-muted/40 disabled:no-underline"
               >
-                ↶ desfazer última compra
+                <Icone nome="undo" /> desfazer última compra
               </button>
             </span>
           )}
@@ -357,7 +360,7 @@ function LinhaItem({ item: i, xp, desligado, aoComprar }: { item: ItemXp; xp: nu
           {i.nome}
           {i.aviso && (
             <span className="ml-1 text-xs text-ambar" title={i.aviso} aria-label={`Atenção: ${i.aviso}`}>
-              ⚠
+              <Icone nome="warning" />
             </span>
           )}
         </span>

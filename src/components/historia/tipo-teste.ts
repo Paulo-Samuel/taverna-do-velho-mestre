@@ -6,14 +6,15 @@ export type TipoTeste = "semrolagem" | "social" | "fisico" | "mental" | "sorte";
 
 export type InfoTipoTeste = { tipo: TipoTeste; rotulo: string; classe: string };
 
-// Cores: texto claro sobre o fundo escuro de todos os temas (fundos de #070c1c a #221112; superfície das sugestões é translúcida).
-// Contraste calculado contra o pior caso (#221112 / #22140d), todos acima de 4,5:1.
+// Cores: as plaquinhas dos matizes do tema (etiqueta-matiz + matiz-N, em globals.css e temas.css). O contraste de cada matiz
+// sobre as superfícies de todos os temas é garantido por tests/matizes.test.ts; "sem rolagem" usa a etiqueta neutra.
+// Strings literais (sem montar o nome da classe): o Tailwind só enxerga a classe escrita por inteiro.
 const CLASSES: Record<TipoTeste, string> = {
-  semrolagem: "border-[#a8a29e]/45 bg-[#a8a29e]/10 text-[#d6d3d1]", // cinza
-  social: "border-[#f9a8d4]/50 bg-[#f9a8d4]/10 text-[#fbcfe8]", // rosa
-  fisico: "border-[#fb923c]/50 bg-[#fb923c]/10 text-[#fdba74]", // laranja
-  mental: "border-[#7dd3fc]/50 bg-[#7dd3fc]/10 text-[#bae6fd]", // azul
-  sorte: "border-[#86efac]/50 bg-[#86efac]/10 text-[#bbf7d0]", // verde
+  semrolagem: "etiqueta",
+  social: "etiqueta-matiz matiz-8",
+  fisico: "etiqueta-matiz matiz-3",
+  mental: "etiqueta-matiz matiz-1",
+  sorte: "etiqueta-matiz matiz-2",
 };
 
 const ROTULO_TIPO: Record<TipoTeste, string> = {

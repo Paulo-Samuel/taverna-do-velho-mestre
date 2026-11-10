@@ -175,7 +175,7 @@ function Gota() {
   return <path d="M50,30 C50,30 38,46 38,53 a12,12 0 0 0 24,0 C62,46 50,30 50,30 Z" fill="var(--sangue)" fillOpacity=".75" />;
 }
 
-/** `antes`: face antes da rerrolagem com Força de Vontade (o dado ganha contorno âmbar, "↻" e o antes→depois). */
+/** `antes`: face antes da rerrolagem com Força de Vontade (o dado ganha contorno âmbar, o ícone de rerrolar e o antes e depois). */
 function D10Vtm({ valor, fome, bestial, i, v, antes }: { valor: number | null; fome: boolean; bestial: boolean; i: number; v: Visual; antes?: number }) {
   const assentado = valor !== null && v.fase === "assentado";
   const rerrolado = antes !== undefined && assentado;
@@ -186,14 +186,14 @@ function D10Vtm({ valor, fome, bestial, i, v, antes }: { valor: number | null; f
   const cor = fome ? (dez ? "text-[var(--critico)]" : "text-sangue") : dez ? "text-[var(--critico)]" : sucesso || !assentado ? "text-pergaminho" : "text-muted";
   const traco = fome ? "var(--sangue)" : "currentColor";
   const opacidade = fome ? (!assentado ? 0.28 : dez || sucesso ? 0.55 : um ? 0.3 : 0.18) : !assentado ? 0.05 : dez ? 0.2 : sucesso ? 0.16 : 0.03;
-  const corNumero = fome ? (dez ? "var(--critico)" : sucesso ? "#fff1f2" : um ? "#ffd7da" : "color-mix(in srgb, var(--sangue) 80%, white)") : "currentColor";
+  const corNumero = fome ? (dez ? "var(--critico)" : sucesso ? "var(--pergaminho)" : um ? "color-mix(in srgb, var(--sangue) 35%, var(--pergaminho))" : "color-mix(in srgb, var(--sangue) 80%, var(--pergaminho))") : "currentColor";
   const rotulo = !assentado
     ? fome
       ? "dado de Fome"
       : "dado"
     : fome
       ? `dado de Fome: ${valor}${dez ? " (10 da Besta)" : um ? " (1 de Fome)" : ""}`
-      : `${valor}${dez ? " (crítico)" : sucesso ? " (sucesso)" : ""}${rerrolado ? ` — rerrolado com Força de Vontade (era ${antes})` : ""}`;
+      : `${valor}${dez ? " (crítico)" : sucesso ? " (sucesso)" : ""}${rerrolado ? `, rerrolado com Força de Vontade (era ${antes})` : ""}`;
   return (
     <Casca i={i} v={v} rotulo={rotulo} rerrolado={rerrolado} classe={`${cor} ${assentado && !sucesso && !fome && !rerrolado ? "opacity-70" : ""}`}>
       <SvgD10 preenchimento={fome ? "var(--sangue)" : "currentColor"} opacidade={opacidade} traco={traco} grossura={dez ? 7 : 5} brilho={dez} pulso={um && bestial && v.novo}>
@@ -203,13 +203,15 @@ function D10Vtm({ valor, fome, bestial, i, v, antes }: { valor: number | null; f
         )}
       </SvgD10>
       {rerrolado && (
-        <span className={`pd-face absolute -left-1.5 -top-2 font-bold text-ambar ${v.compacto ? "text-[10px]" : "text-sm"}`} aria-hidden>
-          ↻
+        <span className={`pd-face absolute -left-1.5 -top-2 leading-none text-ambar ${v.compacto ? "" : "text-sm"}`} aria-hidden>
+          <Icone nome="redo" className={v.compacto ? "size-3!" : ""} strokeWidth={2.4} />
         </span>
       )}
-      {rerrolado && !v.compacto && (
-        <span className="absolute -bottom-4 whitespace-nowrap text-[10px] font-semibold tabular-nums text-ambar" aria-hidden>
-          {antes}→{valor}
+      {rerrolado && (
+        <span className="absolute -bottom-4 inline-flex items-center gap-0.5 whitespace-nowrap text-[11px] font-semibold leading-none tabular-nums text-ambar" aria-hidden>
+          {antes}
+          <Icone nome="arrowRight" />
+          {valor}
         </span>
       )}
       {assentado && (
@@ -218,12 +220,13 @@ function D10Vtm({ valor, fome, bestial, i, v, antes }: { valor: number | null; f
         </span>
       )}
       {dez && fome && (
-        <span className={`pd-face absolute -right-1 -top-1.5 text-sangue ${v.compacto ? "text-[8px]" : "text-[10px]"}`} aria-hidden>
-          ᐯᐯ
+        <span className={`pd-face absolute -right-1.5 -top-2 leading-none text-sangue ${v.compacto ? "" : "text-sm"}`} aria-hidden>
+          <Icone nome="drop" className={v.compacto ? "size-3!" : ""} fill="currentColor" />
         </span>
       )}
       {um && (
-        <span className={`pd-face absolute -right-1.5 -top-2 ${v.compacto ? "text-[10px]" : "text-sm"}`} aria-hidden><Icone nome="skull" /> 
+        <span className={`pd-face absolute -right-1.5 -top-2 leading-none ${v.compacto ? "" : "text-sm"}`} aria-hidden>
+          <Icone nome="skull" className={v.compacto ? "size-3!" : ""} />
         </span>
       )}
     </Casca>
@@ -363,7 +366,8 @@ function Mod({ mod, v }: { mod: number; v: Visual }) {
 
 /** Fileira que quebra em linhas iguais no cartão grande e corre solta no compacto. */
 function Fileira({ n, v, children, folga = false }: { n: number; v: Visual; children: ReactNode; folga?: boolean }) {
-  if (v.compacto) return <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-2">{children}</span>;
+  // com dado rerrolado, o "antes e depois" fica embaixo do dado: a linha compacta abre espaço para ele (e entre as linhas)
+  if (v.compacto) return <span className={`inline-flex flex-wrap items-center gap-y-2 ${folga ? "mb-4 gap-x-3.5 gap-y-5!" : "gap-x-1"}`}>{children}</span>;
   // largura máxima = colunas × (dado + espaço): o flex-wrap faz o resto e as linhas saem do mesmo tamanho
   return (
     <span

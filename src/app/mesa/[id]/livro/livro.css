@@ -59,7 +59,7 @@
   margin: 0.4rem 0 1rem;
   font-size: 0.78rem;
   line-height: 1.45;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--foreground) 75%, transparent);
 }
 .livro-sistema {
   margin: 1.8rem 0;
@@ -89,13 +89,9 @@
   color: var(--muted);
   font-style: italic;
 }
-.livro-sumario a {
-  min-height: 2rem;
-  align-items: center;
-}
 
 /* tela larga: as rolagens vão para a margem esquerda, como nota de rodapé lateral */
-@media (min-width: 1180px) {
+@media (min-width: 1280px) {
   .livro-texto {
     position: relative;
   }
@@ -150,7 +146,10 @@
   }
   .livro-capa {
     min-height: auto;
+    margin: 0;
     padding: 30mm 0 10mm;
+    border: 0;
+    outline: 0;
     break-after: page;
   }
   .livro-sumario {
@@ -179,8 +178,8 @@
     padding: 0;
   }
   .livro-ficha {
-    border: 1px solid #cfc6b8 !important;
-    background: #fff !important;
+    border: 1px solid var(--border) !important;
+    background: var(--surface) !important;
   }
   .livro a {
     color: inherit;

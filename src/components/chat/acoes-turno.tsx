@@ -1,15 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Icone, type NomeIcone } from "@/components/icones";
 import type { Desfeito } from "@/components/sessao/noite";
 
-// "↶ Desfazer" e "↻ Outra resposta" embaixo da última narração do mestre (as duas mesas; no leitor cena a cena, compactos na barra).
+// "Desfazer" e "Outra resposta" embaixo da última narração do mestre (as duas mesas; no leitor cena a cena, compactos na barra).
 // Apagam coisa, então pedem um segundo clique ("Tem certeza? Clique de novo") antes de chamar /api/campanhas/[id]/desfazer.
 // O servidor publica "recarregar" para todos; aqui só devolvemos a resposta para a mesa pôr a ação de volta no campo.
 
 export type { Desfeito };
 
 type Qual = "desfazer" | "refazer";
+
+// Os três pontinhos (.pensando) do botão de enviar moram no CSS do CeuEstrelado, que só a mesa do modo história monta.
+// A mesa avançada também usa estes botões: as mesmas regras vão aqui (idênticas, então não brigam quando as duas existem).
+const CSS = `
+.pensando i { display: inline-block; width: .38em; height: .38em; margin: 0 .12em; border-radius: 9999px; background: currentColor; animation: pensar 1.4s ease-in-out infinite; }
+.pensando i:nth-child(2) { animation-delay: .2s } .pensando i:nth-child(3) { animation-delay: .4s }
+@keyframes pensar { 0%, 80%, 100% { opacity: .2; transform: translateY(0) } 40% { opacity: 1; transform: translateY(-3px) } }
+@media (prefers-reduced-motion: reduce) { .pensando i { animation: none; opacity: .7 } }
+`;
 
 /** Quanto tempo o "Tem certeza?" espera o segundo clique. */
 const ESPERA_MS = 4000;
@@ -66,7 +76,7 @@ export function AcoesTurno({
   }
 
   /** curto: o rótulo da barra do leitor, onde o espaço é pouco (o title e o aria-label levam o nome inteiro) */
-  const botao = (qual: Qual, icone: string, rotulo: string, dica: string, curto = rotulo) => {
+  const botao = (qual: Qual, icone: NomeIcone, rotulo: string, dica: string, curto = rotulo) => {
     const conf = armado === qual;
     return (
       <button
@@ -76,12 +86,20 @@ export function AcoesTurno({
         title={conf ? "Clique de novo para confirmar" : dica}
         aria-label={conf ? `${rotulo}: tem certeza? Clique de novo` : `${rotulo}. ${dica}`}
         data-turno={qual}
-        className={`inline-flex min-h-9 items-center gap-1.5 rounded-md border px-2.5 text-xs transition disabled:opacity-50 sm:min-h-8 ${
-          conf ? "border-sangue/70 bg-sangue/10 text-foreground" : "border-transparent text-muted hover:border-border hover:text-ambar"
+        className={`inline-flex min-h-10 min-w-10 items-center justify-center gap-1.5 rounded-md border px-2.5 text-xs transition disabled:opacity-50 sm:min-h-8 sm:min-w-0 ${
+          conf ? "border-sangue/70 bg-sangue/15 text-foreground" : "border-transparent text-muted hover:border-border hover:text-ambar"
         }`}
       >
         <span aria-hidden className="text-sm leading-none">
-          {indo === qual ? "…" : icone}
+          {indo === qual ? (
+            <span className="pensando">
+              <i />
+              <i />
+              <i />
+            </span>
+          ) : (
+            <Icone nome={conf ? "warning" : icone} />
+          )}
         </span>
         {compacto ? (
           conf ? (
@@ -100,10 +118,13 @@ export function AcoesTurno({
 
   return (
     <div className={`flex flex-wrap items-center gap-1 ${className}`} role="group" aria-label={fechamento ? "Reabrir a noite" : "Voltar o último turno do mestre"}>
+      <style href="taverna-pensando" precedence="default">
+        {CSS}
+      </style>
       {fechamento
-        ? botao("desfazer", "↶", "Reabrir a noite", "Desfaz o fechamento: some o marcador de fim, o XP e o Remorso da noite, e o jogo continua de onde parou", "Reabrir")
-        : botao("desfazer", "↶", "Desfazer", "Apaga a última resposta do mestre e devolve a sua ação ao campo, para reescrever")}
-      {!fechamento && botao("refazer", "↻", "Outra resposta", "O mestre responde de novo às mesmas ações (a resposta atual some)", "Outra")}
+        ? botao("desfazer", "undo", "Reabrir a noite", "Desfaz o fechamento: some o marcador de fim, o XP e o Remorso da noite, e o jogo continua de onde parou", "Reabrir")
+        : botao("desfazer", "undo", "Desfazer", "Apaga a última resposta do mestre e devolve a sua ação ao campo, para reescrever")}
+      {!fechamento && botao("refazer", "redo", "Outra resposta", "O mestre responde de novo às mesmas ações (a resposta atual some)", "Outra")}
     </div>
   );
 }

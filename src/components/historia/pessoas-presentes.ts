@@ -71,18 +71,18 @@ export function pessoasPresentes(diario: EntradaDiario[], textoCena: string): Pe
 }
 
 /**
- * Etiqueta de humor: fundo claro próprio + texto escuro próprio, então o contraste não depende do tema (claro ou escuro).
- * Todos os pares passam de 4,5:1 (conferido em tests/pessoas-aqui.test.ts).
+ * Etiqueta de humor: a classe de matiz (temas.css) que a tela junta com `etiqueta-matiz`; a cor vem dos tokens do tema.
+ * Classes escritas por extenso (o Tailwind só enxerga texto literal). Neutro não tem matiz: usa a `etiqueta` comum.
  */
-export const COR_ATITUDE: Record<Atitude, { fundo: string; texto: string }> = {
-  amistoso: { fundo: "#9ad4a0", texto: "#14210f" },
-  curioso: { fundo: "#8fc1e3", texto: "#0d1b27" },
-  desconfiado: { fundo: "#f2c75c", texto: "#2a1d00" },
-  hostil: { fundo: "#f28b82", texto: "#2e0b08" },
-  devoto: { fundo: "#c3a6ff", texto: "#1c0f3a" },
-  medo: { fundo: "#7fd1c7", texto: "#07241f" },
-  apaixonado: { fundo: "#f0a5c4", texto: "#33111f" },
-  neutro: { fundo: "#d6cdbb", texto: "#231d12" },
+export const MATIZ_ATITUDE: Record<Atitude, string> = {
+  amistoso: "matiz-2",
+  curioso: "matiz-1",
+  desconfiado: "matiz-7",
+  hostil: "matiz-4",
+  devoto: "matiz-5",
+  medo: "matiz-6",
+  apaixonado: "matiz-8",
+  neutro: "",
 };
 
 /** Razão de contraste WCAG entre duas cores #rrggbb. */

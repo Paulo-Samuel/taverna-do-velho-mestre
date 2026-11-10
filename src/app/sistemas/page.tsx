@@ -7,7 +7,7 @@ import { Catalogo, type ItemCatalogo } from "./catalogo";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Sistemas · Taverna do Velho Mestre" };
+export const metadata: Metadata = { title: "Sistemas" };
 
 // Texto de atribuição que cada licença pede. O resumo curto de cada sistema vem do próprio registro (Sistema.licenca);
 // aqui fica a forma longa, que algumas licenças exigem quase palavra por palavra (por isso parte está no original em inglês).
@@ -75,9 +75,16 @@ export default function PaginaSistemas() {
         }
       />
       <Catalogo itens={itens} />
-      <div className="mt-10 border-t border-border pt-6">
+      {/* o rodapé da casa aponta para cá ("Licenças e créditos"): o bloco precisa dizer o que é e onde está o resto */}
+      <section id="creditos" aria-labelledby="titulo-creditos" className="cartao cartao-matiz matiz-4 mt-10 scroll-mt-20 p-4 sm:p-5">
+        <h2 id="titulo-creditos" className="titulo text-lg text-pergaminho">
+          Licenças e créditos
+        </h2>
+        <p className="mt-1 mb-4 max-w-prose text-sm text-muted">
+          A licença de cada sistema, com o texto de atribuição que ela pede, está no cartão dele, na linha “Licença”.
+        </p>
         <AvisoDarkPack />
-      </div>
+      </section>
     </main>
   );
 }

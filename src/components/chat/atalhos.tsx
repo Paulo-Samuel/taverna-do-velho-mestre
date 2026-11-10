@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { Icone } from "@/components/icones";
 
 // Atalhos de teclado das mesas (só quando o foco NÃO está num campo de texto):
 // 1/2/3 escolhem a sugestão, R rola o teste pendente deste aparelho, / foca o campo de ação, Esc fecha, ? mostra a lista.
@@ -129,8 +130,8 @@ export function AjudaAtalhos({ aberta, aoFechar, extras = [] }: { aberta: boolea
     >
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="titulo text-base text-ambar">Atalhos de teclado</p>
-        <button type="button" onClick={aoFechar} className="grid size-8 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-foreground" aria-label="Fechar">
-          ✕
+        <button type="button" onClick={aoFechar} className="botao-cabecalho -mr-2 -mt-2" aria-label="Fechar">
+          <Icone nome="close" />
         </button>
       </div>
       <dl className="space-y-1.5 text-sm">

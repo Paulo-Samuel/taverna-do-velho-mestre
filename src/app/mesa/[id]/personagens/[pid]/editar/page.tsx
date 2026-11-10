@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { CabecalhoPagina } from "@/components/cabecalho-pagina";
+import { FaixaAviso } from "@/components/faixa-aviso";
 import { EdicaoFicha } from "@/components/ficha/passos";
+import { Icone } from "@/components/icones";
+import { LinkVoltar } from "@/components/link-voltar";
 import { TemaPagina } from "@/components/tema-pagina";
 import { EdicaoHistoria } from "@/components/historia/criacao/criacao-historia";
 import { normalizarRetrato } from "@/components/historia/retrato/dados";
@@ -24,7 +27,7 @@ export async function generateMetadata(props: PageProps<"/mesa/[id]/personagens/
   const { id, pid } = await props.params;
   const c = obterCampanha(Number(id));
   const p = obterPersonagem(Number(pid));
-  return { title: c && p && p.campanhaId === c.id ? `Editar ${p.ficha.nome} · ${c.nome}` : "Taverna do Velho Mestre" };
+  return { title: c && p && p.campanhaId === c.id ? `Editar ${p.ficha.nome} · ${c.nome}` : "Porta errada" };
 }
 
 export default async function EditarPersonagem(props: PageProps<"/mesa/[id]/personagens/[pid]/editar">) {
@@ -70,18 +73,21 @@ export default async function EditarPersonagem(props: PageProps<"/mesa/[id]/pers
   return (
     <main data-tema={temaDoSistema(campanha.sistema)} className="mx-auto max-w-3xl px-4 py-6 sm:py-8">
       <TemaPagina tema={temaDoSistema(campanha.sistema)} />
-      <Link href={`/mesa/${campanha.id}`} className="-my-2 inline-block py-2 text-xs text-muted hover:text-ambar">
-        ← voltar para {campanha.nome}
-      </Link>
-      <h1 className="titulo mt-1 text-3xl text-pergaminho">Editar {ficha.nome}</h1>
-      <p className="mb-5 mt-1 text-sm text-muted">
-        {sistema.nome}. Aqui muda o que o mestre lê para saber quem é o personagem; os números (atributos, perícias, poderes, vida e marcadores)
-        ficam como estão: crescem com XP ou se ajustam no “✎ ajustar” da ficha.
-      </p>
+      <LinkVoltar href={`/mesa/${campanha.id}`}>Voltar para {campanha.nome}</LinkVoltar>
+      <CabecalhoPagina
+        className="mt-1"
+        titulo={`Editar ${ficha.nome}`}
+        subtitulo={
+          <>
+            {sistema.nome}. Aqui muda o que o mestre lê para saber quem é o personagem; os números (atributos, perícias, poderes, vida e
+            marcadores) ficam como estão: crescem com XP ou se ajustam no “<Icone nome="pencil" aria-hidden /> ajustar” da ficha.
+          </>
+        }
+      />
       {!local && p.jogador && (
-        <p className="mb-4 rounded-md border border-ambar/40 bg-ambar/10 px-4 py-3 text-sm">
+        <FaixaAviso tom="alerta" icone="lock" className="mb-4">
           Você está pela rede: só {p.jogador} (o dono deste personagem, pelo apelido da mesa) ou a máquina da taverna salvam mudanças.
-        </p>
+        </FaixaAviso>
       )}
       <EdicaoFicha
         sistema={publico(sistema)}

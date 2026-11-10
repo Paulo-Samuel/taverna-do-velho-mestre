@@ -619,7 +619,7 @@ export const osr: Sistema = {
   nome: "Old-School (B/X)",
   nomeCurto: "Old-School",
   descricao: "Masmorra à moda antiga: 3d6 em ordem, salvaguardas, habilidades de ladrão em %, ouro vira XP e a morte mora no corredor ao lado.",
-  licenca: "OGL 1.0a — conteúdo old-school aberto (clones B/X); textos próprios",
+  licenca: "OGL 1.0a: conteúdo old-school aberto (clones B/X); textos próprios",
   dadoPrincipal: "d20",
   pronto: true,
   rotulos: { ancestralidade: "Raça", classe: "Classe", antecedente: "Ofício anterior", nivel: "Nível", defesa: "CA", dinheiro: "po", pv: "PV" },

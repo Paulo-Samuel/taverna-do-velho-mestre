@@ -127,14 +127,14 @@ export function Diario({ entradas, fatos }: { entradas: EntradaDiario[]; fatos?:
       </div>
 
       {!termo && (
-        <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none]" role="tablist" aria-label="Tipos de anotação">
+        <div className="flex flex-wrap gap-1 pb-1" role="tablist" aria-label="Tipos de anotação">
           {ABAS.map((a) => (
             <button
               key={a.tipo}
               role="tab"
               aria-selected={aba === a.tipo}
               onClick={() => setEscolhida(a.tipo)}
-              className={`shrink-0 rounded-full border px-2.5 py-1 text-xs transition ${
+              className={`inline-flex min-h-10 shrink-0 items-center rounded-full border px-3 py-1 text-xs transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ambar sm:min-h-9 ${
                 aba === a.tipo ? "border-ambar bg-ambar/10 text-ambar" : "border-border text-muted hover:text-foreground"
               }`}
             >

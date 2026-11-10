@@ -32,7 +32,7 @@ const RELER_MS = 15_000;
 /** gestos que concedem ativação do usuário: no toque é o pointerup/touchend/click, não o pointerdown */
 const GESTOS = ["pointerdown", "pointerup", "touchend", "click", "keydown"] as const;
 
-/** plaquinha de escolha (humor/energia): alvo de toque de 36px no celular, menor no desktop */
+/** plaquinha de escolha (humor/energia): alvo de toque de 40px no celular, menor no desktop */
 function Chip({ ativo, onClick, children, title }: { ativo: boolean; onClick: () => void; children: ReactNode; title?: string }) {
   return (
     <button
@@ -40,7 +40,7 @@ function Chip({ ativo, onClick, children, title }: { ativo: boolean; onClick: ()
       aria-pressed={ativo}
       onClick={onClick}
       title={title}
-      className={`inline-flex min-h-9 items-center rounded-full border px-2 text-[11px] leading-none transition sm:min-h-7 ${
+      className={`inline-flex min-h-10 items-center rounded-full border px-3 text-xs leading-none transition sm:min-h-7 sm:px-2 sm:text-[11px] ${
         ativo ? "border-ambar bg-ambar/15 text-ambar" : "border-border text-foreground/80 hover:border-ambar/60 hover:text-foreground"
       }`}
     >
@@ -215,7 +215,8 @@ export function Musica({
   }
 
   const rotuloHumor = `${ROTULO_HUMOR[estado.tocando ?? humor]}${ehManual ? " (manual)" : ""}`;
-  const rotulo = estado.faixa ? `♪ ${estado.faixa}` : `${ROTULO_ESTILO[estado.estilo ?? estilo]} · ${rotuloHumor}`;
+  // texto puro (vai no title); onde o rótulo é desenhado, a faixa própria ganha o ícone de nota na frente
+  const rotulo = estado.faixa || `${ROTULO_ESTILO[estado.estilo ?? estilo]} · ${rotuloHumor}`;
   const dica = !prefs.ligado
     ? "Música desligada (clique para ligar)"
     : estado.aguardandoGesto
@@ -223,7 +224,8 @@ export function Musica({
       : `Trilha: ${rotulo}`;
 
   return (
-    <div ref={caixa} className="relative inline-flex shrink-0 items-center">
+    // dentro do menu "Mais opções" a linha ocupa a largura toda, como as vizinhas (o estado fica encostado à direita)
+    <div ref={caixa} className={`relative items-center ${linha ? "flex w-full" : "inline-flex shrink-0"}`}>
       {linha ? (
         <button
           type="button"
@@ -279,7 +281,7 @@ export function Musica({
           aria-expanded={aberto}
           className={`${compacto ? "hidden sm:grid" : "grid"} h-10 min-w-7 place-items-center border-l border-border px-1.5 text-xs text-muted transition hover:text-ambar sm:h-9`}
         >
-          <span aria-hidden>▾</span>
+          <Icone nome="chevronDown" />
         </button>
       </div>
       )}
@@ -287,13 +289,13 @@ export function Musica({
       {aberto && (
         // no celular o popover fica preso às bordas da tela (o botão pode estar no meio do cabeçalho)
         <div
-          className="cartao surgir fixed inset-x-4 top-16 z-50 p-3 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72"
+          className="cartao surgir bg-surface! fixed inset-x-4 top-16 z-50 p-3 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72"
           role="dialog"
           aria-label="Trilha sonora"
         >
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="titulo text-sm text-ambar">Trilha sonora</span>
-            <button type="button" onClick={alternar} className="min-h-9 rounded-md border border-border px-2.5 text-xs text-muted hover:border-ambar/60 hover:text-ambar" data-som-alternar>
+            <button type="button" onClick={alternar} className="min-h-10 rounded-md border border-border px-3 text-xs text-muted hover:border-ambar/60 hover:text-ambar" data-som-alternar>
               {prefs.ligado ? "Desligar" : "Ligar"}
             </button>
           </div>
@@ -312,7 +314,15 @@ export function Musica({
             <span className="w-8 text-right tabular-nums">{Math.round(prefs.volume * 100)}</span>
           </label>
           <p className="mt-2 break-words text-xs text-muted" aria-live="polite">
-            {prefs.ligado ? (estado.aguardandoGesto ? "Começa no primeiro clique ou toque na página." : `Trilha: ${rotulo}`) : "Desligada."}
+            {!prefs.ligado ? (
+              "Desligada."
+            ) : estado.aguardandoGesto ? (
+              "Começa no primeiro clique ou toque na página."
+            ) : (
+              <>
+                Trilha: {estado.faixa && <Icone nome="note" />} {rotulo}
+              </>
+            )}
           </p>
           {estado.faixa && <p className="mt-1 text-xs text-muted">Música sua · {rotuloHumor}</p>}
 

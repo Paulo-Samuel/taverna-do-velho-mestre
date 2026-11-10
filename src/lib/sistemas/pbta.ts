@@ -544,7 +544,7 @@ export const pbta: Sistema = {
   nome: "Dungeon World (PbtA)",
   nomeCurto: "Dungeon World",
   descricao: "2d6 + atributo: 10+ sucesso, 7-9 sucesso com custo, 6- o mestre faz um movimento. Ficção primeiro, sem CD e sem turnos.",
-  licenca: "Dungeon World — Creative Commons BY 3.0 (Sage LaTorra e Adam Koebel)",
+  licenca: "Dungeon World: Creative Commons BY 3.0 (Sage LaTorra e Adam Koebel)",
   dadoPrincipal: "2d6",
   pronto: true,
   rotulos: { ancestralidade: "Raça", classe: "Classe", nivel: "Nível", defesa: "Armadura", dinheiro: "moedas", pv: "PV" },

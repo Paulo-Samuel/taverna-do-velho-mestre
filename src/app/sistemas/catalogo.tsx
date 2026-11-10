@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useDeferredValue, useEffect, useState } from "react";
+import { Icone } from "@/components/icones";
 import { dadosDoTema, temaDoSistema } from "@/lib/temas";
 
 export type Verbete = { id: string; nome: string; descricao: string; detalhe: string };
@@ -70,18 +71,20 @@ export function Catalogo({ itens }: { itens: ItemCatalogo[] }) {
 
   return (
     <>
-      <div className="sticky top-0 z-10 -mx-4 mt-6 border-b border-border bg-background/90 px-4 py-3 backdrop-blur">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      {/* No celular este invólucro é `contents`: busca e caixa ficam no fluxo e só a faixa de atalhos gruda no topo.
+          De sm para cima a barra inteira é uma laje grudada, alinhada aos cartões. */}
+      <div className="contents sm:sticky sm:top-0 sm:z-10 sm:block sm:rounded-xl sm:border sm:border-border sm:bg-surface/90 sm:px-4 sm:py-3 sm:backdrop-blur">
+        <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface/90 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
           <input
             type="search"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            placeholder="Procurar classe, ancestralidade, papel… (ex.: anão, conjurador)"
-            className="campo sm:max-w-md"
+            placeholder="Procurar classe, raça, papel…"
+            className="campo sm:max-w-lg"
             aria-label="Procurar no catálogo"
           />
           <label className="flex min-h-10 cursor-pointer items-center gap-2 text-sm text-muted hover:text-foreground">
-            <input type="checkbox" checked={soProntos} onChange={(e) => setSoProntos(e.target.checked)} className="size-4 accent-[var(--ambar)]" />
+            <input type="checkbox" checked={soProntos} onChange={(e) => setSoProntos(e.target.checked)} className="size-5 shrink-0 accent-[var(--ambar)]" />
             Só os prontos para jogar
           </label>
           {termo && (
@@ -91,15 +94,18 @@ export function Catalogo({ itens }: { itens: ItemCatalogo[] }) {
           )}
         </div>
         {/* atalhos: pulam para o cartão e acendem o sistema que está na tela */}
-        <nav aria-label="Ir para o sistema" className="-mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1 pt-0.5 pb-1">
+        <nav
+          aria-label="Ir para o sistema"
+          className="sticky top-0 z-10 mt-2 flex gap-1.5 overflow-x-auto rounded-xl border border-border bg-surface/90 px-2 py-2 backdrop-blur sm:static sm:z-auto sm:-mx-1 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-1 sm:backdrop-blur-none"
+        >
           {visiveis.map(({ s }) => (
             <a
               key={s.id}
               href={`#${s.id}`}
               data-tema={temaDoSistema(s.id)}
               aria-current={naTela === s.id ? "location" : undefined}
-              className={`inline-flex min-h-9 shrink-0 items-center rounded-full border px-3 text-xs transition ${
-                naTela === s.id ? "border-ambar bg-ambar/10 text-ambar" : "border-border bg-surface-2 text-muted hover:border-ambar hover:text-ambar"
+              className={`etiqueta-matiz min-h-10 shrink-0 px-3 transition ${
+                naTela === s.id ? "border-[var(--ambar)] text-pergaminho" : "hover:border-[var(--ambar)]"
               }`}
             >
               {s.nomeCurto}
@@ -111,7 +117,7 @@ export function Catalogo({ itens }: { itens: ItemCatalogo[] }) {
       {visiveis.length === 0 && (
         <div className="cartao mt-6 p-6 text-muted">
           <p>Nada com esse nome. Nem o bardo inventaria isso.</p>
-          <button type="button" className="btn-borda mt-4 min-h-10" 
+          <button type="button" className="btn-borda mt-4 min-h-10"
             onClick={() => {
               setBusca("");
               setSoProntos(false);
@@ -137,25 +143,27 @@ function CartaoSistema({ s, classes, ancestralidades, buscando }: { s: ItemCatal
   // no celular o botão desce para depois da descrição (no topo ele separava o nome do texto)
   const comecar = (classe: string) =>
     s.pronto ? (
-      <Link href={`/nova/avancada?sistema=${encodeURIComponent(s.id)}`} className={`btn-ambar min-h-10 ${classe}`}>
-        Começar campanha neste sistema
+      <Link href={`/nova/avancada?sistema=${encodeURIComponent(s.id)}`} className={`btn-borda min-h-11 gap-2 ${classe}`}>
+        <Icone nome="dice" />
+        Jogar neste sistema
       </Link>
     ) : (
-      <span className={`btn-borda min-h-10 cursor-not-allowed opacity-50 ${classe}`} aria-disabled>
+      <span className={`btn-borda min-h-11 cursor-not-allowed opacity-50 ${classe}`} aria-disabled>
         Ainda no forno
       </span>
     );
 
   const tema = dadosDoTema(s.id);
   return (
-    <section id={s.id} data-tema={tema.id} className="cartao cartao-tema scroll-mt-52 p-5 sm:scroll-mt-40">
+    <section id={s.id} data-tema={tema.id} className="cartao cartao-tema cartao-matiz scroll-mt-24 p-5 sm:scroll-mt-40">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className={`etiqueta ${s.pronto ? "border-musgo/60 text-musgo" : "border-ambar-forte/60 text-ambar-forte"}`}>
+            <span className={`etiqueta-matiz ${s.pronto ? "matiz-2" : "matiz-7"}`}>
+              {s.pronto && <Icone nome="check" />}
               {s.pronto ? "pronto" : "em construção"}
             </span>
-            <span className="etiqueta font-mono">{s.dadoPrincipal}</span>
+            <span className="etiqueta-matiz font-mono">{s.dadoPrincipal}</span>
           </div>
           <h2 className="titulo mt-2 text-2xl text-pergaminho">{s.nome}</h2>
           {/* o clima do tema: a mesa, a criação e o cartão no início ganham estas cores */}
@@ -182,8 +190,11 @@ function CartaoSistema({ s, classes, ancestralidades, buscando }: { s: ItemCatal
         </p>
       )}
 
-      <details className="mt-2 text-xs text-muted">
-        <summary className="cursor-pointer select-none py-1.5 hover:text-ambar">Licença: {s.licenca}</summary>
+      <details className="group mt-2 text-xs text-muted">
+        <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-1 select-none hover:text-ambar [&::-webkit-details-marker]:hidden">
+          <Icone nome="chevronDown" className="shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+          Licença: {s.licenca}
+        </summary>
         {s.atribuicao && <p className="mt-1 break-words leading-relaxed">{s.atribuicao}</p>}
       </details>
       <div className="mt-3 sm:hidden">{comecar("w-full")}</div>
@@ -198,9 +209,7 @@ function CartaoSistema({ s, classes, ancestralidades, buscando }: { s: ItemCatal
               aria-expanded={aberto}
               aria-controls={`lista-${s.id}`}
             >
-              <span aria-hidden className={`inline-block transition-transform ${aberto ? "rotate-90" : ""}`}>
-                ▸
-              </span>
+              <Icone nome="chevronDown" className={`shrink-0 transition-transform motion-reduce:transition-none ${aberto ? "rotate-180" : ""}`} />
               {aberto ? "Esconder a lista" : `Ver ${s.rotuloClasse.toLowerCase()} e ${s.rotuloAncestralidade.toLowerCase()}`}
             </button>
           )}
@@ -222,7 +231,7 @@ function Numero({ rotulo, valor }: { rotulo: string; valor: number }) {
   return (
     <div className="flex items-baseline gap-2 rounded-lg bg-surface-2 px-3 py-1.5">
       <dt className="text-xs uppercase tracking-wider text-muted">{rotulo}</dt>
-      <dd className="titulo text-lg leading-none text-ambar">{valor}</dd>
+      <dd className="titulo texto-matiz text-lg leading-none">{valor}</dd>
     </div>
   );
 }

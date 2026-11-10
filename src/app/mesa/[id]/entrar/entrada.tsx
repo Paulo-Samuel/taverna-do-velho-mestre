@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { FaixaAviso } from "@/components/faixa-aviso";
+import { Icone } from "@/components/icones";
 import * as identidade from "@/lib/cliente/identidade";
 
 // Tela de chegada: 1) apelido, 2) PIN (se a mesa tiver e este aparelho ainda não entrou), 3) personagem.
@@ -20,6 +22,13 @@ type Props = {
   presenca: Presente[];
 };
 
+/** Duas letras para o círculo do personagem (primeiro e último nome). */
+function iniciais(nome: string): string {
+  const partes = nome.trim().split(/\s+/).filter(Boolean);
+  if (partes.length >= 2) return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+  return (partes[0] ?? "?").slice(0, 2).toUpperCase();
+}
+
 const mesmoNome = (a: string, b: string) => a.trim().toLocaleLowerCase("pt-BR") === b.trim().toLocaleLowerCase("pt-BR");
 
 function Passo({ n, titulo, feito, children }: { n: number; titulo: string; feito?: boolean; children: React.ReactNode }) {
@@ -27,7 +36,14 @@ function Passo({ n, titulo, feito, children }: { n: number; titulo: string; feit
     <section className="cartao p-4 sm:p-5">
       <h2 className="mb-3 flex items-center gap-2 text-sm uppercase tracking-wider text-muted">
         <span className={`grid size-6 place-items-center rounded-full border text-xs ${feito ? "border-musgo text-musgo" : "border-ambar text-ambar"}`}>
-          {feito ? "✓" : n}
+          {feito ? (
+            <>
+              <Icone nome="check" />
+              <span className="sr-only">feito</span>
+            </>
+          ) : (
+            n
+          )}
         </span>
         {titulo}
       </h2>
@@ -44,6 +60,8 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
   const [ocupado, setOcupado] = useState<number | "pin" | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [meuAtivo, setMeuAtivo] = useState<number | null>(null);
+  // só depois de ler o apelido guardado dá para cobrar um: sem isto o aviso piscava para quem já tinha apelido
+  const [lido, setLido] = useState(false);
 
   // localStorage só existe depois da hidratação
   useEffect(() => {
@@ -52,6 +70,7 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
     setApelido(salvo);
     setConfirmado(Boolean(salvo));
     setMeuAtivo(identidade.personagemAtivo(campanha.id));
+    setLido(true);
   }, [campanha.id]);
 
   // a lista de quem está jogando muda enquanto a pessoa decide: atualiza de tempos em tempos
@@ -105,12 +124,12 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
   }
 
   return (
-    <div className="mx-auto max-w-xl space-y-4 px-4 py-6 [&_:focus-visible]:outline-2 [&_:focus-visible]:outline-offset-2 [&_:focus-visible]:outline-ambar">
+    <div className="mx-auto flex min-h-[calc(100dvh-8rem)] max-w-xl flex-col justify-center space-y-4 px-4 py-6 [&_:focus-visible]:outline-2 [&_:focus-visible]:outline-offset-2 [&_:focus-visible]:outline-ambar">
       <header className="text-center">
         <p className="text-xs uppercase tracking-widest text-muted">
           {sistema.nome} · {local ? "nesta máquina" : "pela rede local"}
         </p>
-        <h1 className="titulo mt-1 text-3xl text-pergaminho">{campanha.nome}</h1>
+        <h1 className="titulo titulo-brilho mt-1 text-3xl text-pergaminho sm:text-4xl">{campanha.nome}</h1>
         {campanha.cenario && <p className="mx-auto mt-2 line-clamp-3 max-w-md text-sm text-muted">{campanha.cenario}</p>}
       </header>
 
@@ -120,13 +139,13 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
             <span>
               Na taverna você é <strong className="text-ambar">{nomeLimpo}</strong>.
             </span>
-            <button type="button" className="-my-1 rounded px-2 py-2 text-xs text-muted hover:text-ambar" onClick={() => setConfirmado(false)}>
+            <button type="button" className="-my-2 inline-flex min-h-10 items-center rounded px-2 text-xs text-muted hover:text-ambar" onClick={() => setConfirmado(false)}>
               trocar
             </button>
           </p>
         ) : (
           <form
-            className="flex gap-2"
+            className="flex flex-wrap gap-2"
             onSubmit={(e) => {
               e.preventDefault();
               confirmarApelido();
@@ -142,8 +161,8 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
               autoComplete="nickname"
               autoFocus
             />
-            <button className="btn-ambar px-4" disabled={!nomeLimpo}>
-              Ok
+            <button className="btn-ambar min-h-10 px-4" disabled={!nomeLimpo}>
+              Entrar na taverna
             </button>
           </form>
         )}
@@ -169,7 +188,7 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
               autoComplete="off"
               autoCapitalize="none"
             />
-            <button className="btn-ambar px-4" disabled={!pin.trim() || ocupado === "pin"}>
+            <button className="btn-ambar min-h-10 px-4" disabled={!pin.trim() || ocupado === "pin"}>
               {ocupado === "pin" ? "Conferindo…" : "Entrar"}
             </button>
           </form>
@@ -177,14 +196,19 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
       )}
 
       {erro && (
-        <p role="alert" className="rounded-md border border-sangue/60 bg-sangue/10 px-4 py-3 text-sm">
-          {erro}
-        </p>
+        <FaixaAviso tom="erro">{erro}</FaixaAviso>
       )}
 
       {liberado && (
         <Passo n={2} titulo="Seu personagem">
-          {!confirmado && <p className="mb-3 text-sm text-muted">Primeiro diga seu apelido, para a mesa saber quem está segurando a ficha.</p>}
+          {lido && !confirmado && (
+            <FaixaAviso tom="info" className="mb-3">
+              Diga seu apelido primeiro.
+            </FaixaAviso>
+          )}
+
+          {/* sem apelido o bloco inteiro fica apagado de uma vez (os botões já vêm desabilitados) */}
+          <div className={confirmado || !lido ? "" : "opacity-75"}>
 
           {presenca.length > 0 && (
             <p className="mb-3 text-sm text-muted">
@@ -204,18 +228,36 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
             {personagens.map((p) => {
               const meu = Boolean(p.jogador) && confirmado && mesmoNome(p.jogador, nomeLimpo);
               const donoOnline = Boolean(p.jogador) && !meu && presenca.some((j) => mesmoNome(j.apelido, p.jogador));
-              const situacao = !p.jogador ? "livre" : meu ? "é seu" : donoOnline ? `com ${p.jogador}, jogando agora` : `de ${p.jogador} (ausente)`;
+              const ativo = meu || meuAtivo === p.id;
               return (
                 <li
                   key={p.id}
-                  className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${meu || meuAtivo === p.id ? "border-ambar/60 bg-ambar/5" : "border-border"}`}
+                  className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${ativo ? "border-ambar/60 bg-ambar/5" : "border-border"}`}
                 >
+                  <span
+                    aria-hidden
+                    className={`grid size-10 shrink-0 place-items-center rounded-full border text-sm font-semibold ${
+                      ativo ? "border-ambar/60 bg-ambar/15 text-ambar" : "border-border bg-surface-2 text-muted"
+                    }`}
+                  >
+                    {iniciais(p.nome)}
+                  </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-foreground">{p.nome}</p>
-                    <p className="truncate text-xs text-muted">
+                    <p className="truncate text-xs tabular-nums text-muted">
                       {p.resumo} · PV {p.pv}/{p.pvMax}
                     </p>
-                    <p className={`text-xs ${donoOnline ? "text-sangue" : !p.jogador || meu ? "text-musgo" : "text-muted"}`}>{situacao}</p>
+                    <p className="mt-1">
+                      {!p.jogador ? (
+                        <span className="etiqueta-matiz matiz-2">livre</span>
+                      ) : meu ? (
+                        <span className="etiqueta-matiz">é seu</span>
+                      ) : donoOnline ? (
+                        <span className="etiqueta-matiz matiz-7 max-w-full rounded-lg [overflow-wrap:anywhere]">com {p.jogador}, jogando agora</span>
+                      ) : (
+                        <span className="etiqueta max-w-full rounded-lg [overflow-wrap:anywhere]">de {p.jogador} (ausente)</span>
+                      )}
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -231,12 +273,23 @@ export function Entrada({ campanha, sistema, temPin, liberado, local, personagen
           </ul>
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3 text-sm">
-            <Link href={`/mesa/${campanha.id}/personagens/novo`} className={`btn-borda min-h-10 py-1.5 ${confirmado ? "" : "pointer-events-none opacity-50"}`}>
+            <Link
+              href={`/mesa/${campanha.id}/personagens/novo`}
+              aria-disabled={!confirmado || undefined}
+              tabIndex={confirmado ? undefined : -1}
+              className={`btn-borda min-h-10 py-1.5 ${confirmado ? "" : "pointer-events-none"}`}
+            >
               Criar personagem novo
             </Link>
-            <Link href={`/mesa/${campanha.id}`} className={`py-2 text-muted hover:text-ambar ${confirmado ? "" : "pointer-events-none opacity-50"}`}>
-              Só assistir por enquanto →
+            <Link
+              href={`/mesa/${campanha.id}`}
+              aria-disabled={!confirmado || undefined}
+              tabIndex={confirmado ? undefined : -1}
+              className={`inline-flex min-h-10 items-center gap-1 text-muted hover:text-ambar ${confirmado ? "" : "pointer-events-none"}`}
+            >
+              Só assistir por enquanto <Icone nome="arrowRight" />
             </Link>
+          </div>
           </div>
         </Passo>
       )}

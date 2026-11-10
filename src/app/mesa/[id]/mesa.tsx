@@ -137,7 +137,16 @@ function Lateral({
   const abas: [Aba, ReactNode][] = [
     ["ficha", "Ficha"],
     ["grupo", `Grupo (${mesa.personagens.length})`],
-    ["cena", mesa.cena.combate?.ativo ? "⚔ Cena" : "Cena"],
+    [
+      "cena",
+      mesa.cena.combate?.ativo ? (
+        <>
+          <Icone nome="swords" /> Cena
+        </>
+      ) : (
+        "Cena"
+      ),
+    ],
     ["anotacoes", "Anotações"],
   ];
   return (
@@ -156,7 +165,7 @@ function Lateral({
           </button>
         ))}
       </div>
-      <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-5 pt-4 sm:px-5">
+      <div role="tabpanel" className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pb-5 pt-4 sm:px-5 [&>*]:shrink-0 [scrollbar-width:thin]">
         {aba === "ficha" &&
           (ativo ? (
             <PainelFicha personagem={ativo} sistema={mesa.sistema} ocupado={mesa.ocupado} aoRemorso={aoRemorso} />
@@ -184,7 +193,9 @@ function Lateral({
             {anotacao === "diario" ? <Diario entradas={mesa.diario} fatos={fatos} /> : <PainelFatos controle={fatos} />}
           </div>
         )}
-        <div className="mt-5 border-t border-border pt-3 text-xs text-muted">
+        {/* o rodapé assenta no fundo do cartão nas abas curtas; o respiro de cima fica no espaçador */}
+        <div className="h-5" aria-hidden />
+        <div className="mt-auto border-t border-border pt-3 text-xs text-muted">
           <p>
             {mesa.sistema.nomeCurto} · Mestre: {mesa.provedor}
           </p>
@@ -194,7 +205,7 @@ function Lateral({
             </Link>
             {/* no celular a engrenagem sai do cabeçalho (o título precisa do espaço) e mora aqui */}
             <Link href={`/mesa/${mesa.campanha.id}/ajustes`} className="inline-flex min-h-9 items-center gap-1 underline-offset-4 hover:text-ambar hover:underline sm:hidden">
-              <span aria-hidden>⚙</span> Ajustes da mesa
+              <Icone nome="gear" /> Ajustes da mesa
             </Link>
             <button type="button" onClick={aoAtalhos} className="hidden min-h-9 items-center gap-1 hover:text-ambar [@media(pointer:fine)]:inline-flex">
               Atalhos <kbd className="rounded border border-border px-1">?</kbd>
@@ -667,7 +678,7 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
             <p key={a.id}>
               <span className="text-foreground">
                 {a.acao === INICIO ? "Mesa" : (nomeDe(a.personagemId) ?? a.autor) || "Alguém"}
-                {a.acao !== INICIO && a.personagemId !== null && " ✓"}:
+                {a.acao !== INICIO && a.personagemId !== null && <Icone nome="check" className="ml-1" />}:
               </span>{" "}
               {a.acao === INICIO ? "começar a aventura" : a.acao}
             </p>
@@ -703,7 +714,7 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
       no: (
         <div className="my-5 flex items-start gap-3 rounded-md border border-sangue/60 bg-sangue/10 py-2 pl-4 pr-1 text-sm" role="alert">
           <span className="mt-1.5 shrink-0 text-sangue" aria-hidden>
-            ⚠
+            <Icone nome="warning" />
           </span>
           <div className="min-w-0 flex-1">
             <p className="py-1">{mesa.erro}</p>
@@ -711,24 +722,24 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
               <div className="mb-1 mt-1 flex flex-wrap gap-2" data-erro-acoes>
                 {mesa.erroInfo?.refazer && (
                   <>
-                    <button type="button" data-tentar-de-novo className="btn-ambar min-h-9 px-3 text-xs" onClick={() => void aposErro(true)}>
-                      ↻ Tentar de novo
+                    <button type="button" data-tentar-de-novo className="btn-ambar min-h-10 px-3 text-xs sm:min-h-9" onClick={() => void aposErro(true)}>
+                      <Icone nome="redo" /> Tentar de novo
                     </button>
-                    <button type="button" className="btn-borda min-h-9 px-3 text-xs" onClick={() => void aposErro(false)}>
-                      ✎ Reescrever a ação
+                    <button type="button" className="btn-borda min-h-10 px-3 text-xs sm:min-h-9" onClick={() => void aposErro(false)}>
+                      <Icone nome="pencil" /> Reescrever a ação
                     </button>
                   </>
                 )}
                 {mesa.erroInfo?.acao === "config" && (
-                  <a href="/config" className="btn-borda min-h-9 px-3 text-xs">
+                  <a href="/config" className="btn-borda min-h-10 px-3 text-xs sm:min-h-9">
                     Abrir Configurações
                   </a>
                 )}
               </div>
             )}
           </div>
-          <button type="button" onClick={acoes.limparErro} className="grid size-9 shrink-0 place-items-center rounded-md text-muted hover:text-foreground" aria-label="Fechar o aviso">
-            ✕
+          <button type="button" onClick={acoes.limparErro} className="grid size-10 shrink-0 place-items-center rounded-md text-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ambar sm:size-9" aria-label="Fechar o aviso">
+            <Icone nome="close" />
           </button>
         </div>
       ),
@@ -799,7 +810,7 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
           >
             {lateralAberta ? (
               <span className="px-1" aria-hidden>
-                ✕
+                <Icone nome="close" />
               </span>
             ) : ativo ? (
               <>
@@ -809,7 +820,7 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
                 </span>
               </>
             ) : (
-              <span aria-hidden>☰</span>
+              <Icone nome="menu" />
             )}
           </button>
         }
@@ -826,8 +837,9 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
           {/* conexão caída há mais de 3 s: a faixa some sozinha quando o fluxo de eventos volta */}
           {mesa.semSinal && (
             <div role="alert" data-sem-sinal className="relative z-10 flex shrink-0 items-center justify-center gap-2 border-b border-sangue/50 bg-sangue/15 px-4 py-2 text-center text-sm text-foreground">
-              <span className="size-2 shrink-0 animate-pulse rounded-full bg-sangue" aria-hidden />
-              Sem sinal da taverna — tentando de novo…
+              <span className="size-2 shrink-0 animate-pulse rounded-full bg-sangue motion-reduce:animate-none" aria-hidden />
+              <Icone nome="warning" className="text-sangue" />
+              Sem sinal da taverna. Tentando de novo…
             </div>
           )}
           <Anteriormente
@@ -917,19 +929,24 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
           </div>
 
           <form
-            className="relative shrink-0 border-t border-border/50 bg-background/85 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur"
+            className="relative isolate shrink-0 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-[calc(0.375rem+1px)]"
             onSubmit={(e) => {
               e.preventDefault();
               void enviar();
             }}
           >
+            {/* sem laje: o fundo é um degradê do tema que some para cima e nas laterais; fica num irmão para a máscara não cortar o foco dos campos */}
+            <div
+              className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(to_top,color-mix(in_srgb,var(--background)_92%,transparent)_60%,transparent)] [mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)]"
+              aria-hidden
+            />
             {longeDoFim && !cenas && (
               <button
                 type="button"
                 onClick={() => irParaOFim(true)}
                 className="surgir absolute bottom-full left-1/2 mb-3 min-h-10 -translate-x-1/2 rounded-full border border-ambar/60 bg-surface/95 px-4 text-sm text-ambar shadow-lg backdrop-blur hover:bg-surface-2"
               >
-                {mesa.aoVivo || mesa.ocupado ? "O mestre está narrando ↓" : "Voltar ao fim ↓"}
+                {mesa.aoVivo || mesa.ocupado ? "O mestre está narrando" : "Voltar ao fim"} <Icone nome="arrowDown" />
               </button>
             )}
             {/* aviso curto (vez de quem, turno desfeito) flutua por cima do palco, sem empurrar nada */}
@@ -979,7 +996,7 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
                             onClick={() => acoes.controle("cancelar")}
                             title="Interromper o mestre"
                           >
-                            ■ interromper
+                            <Icone nome="stop" /> interromper
                           </button>
                         </>
                       ) : meuPendente ? (
@@ -1027,7 +1044,9 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
                     <Icone nome="dice" className="mr-1.5" />
                     Role o dado primeiro: o mestre não aceita fiado.
                   </span>
-                  <span className="shrink-0 rounded-md bg-ambar px-3 py-1.5 text-xs font-semibold text-[#1a120c] transition group-hover:bg-[#f0b762]">Ir para o dado ↑</span>
+                  <span className="shrink-0 rounded-md bg-botao px-3 py-1.5 text-xs font-semibold text-botao-texto transition group-hover:bg-botao-hover">
+                    Ir para o dado <Icone nome="arrowUp" />
+                  </span>
                 </button>
               ) : (
                 <div className="flex items-end gap-2">
@@ -1052,7 +1071,7 @@ export function Mesa({ estadoInicial, comecarSozinho }: { estadoInicial: EstadoM
                           : minhaNaFila
                             ? `${ativo.ficha.nome} já está na fila. Mande outra para complementar.`
                             : noiteNova
-                              ? `Noite ${noiteNova} — o que ${ativo.ficha.nome} faz?`
+                              ? `Noite ${noiteNova}: o que ${ativo.ficha.nome} faz?`
                               : `O que ${ativo.ficha.nome} faz?`
                     }
                     className={`campo field-sizing-content max-h-36 min-h-11 flex-1 resize-none py-2.5 leading-snug ${perguntar ? "border-dashed! border-ambar/60! bg-ambar/5!" : ""}`}

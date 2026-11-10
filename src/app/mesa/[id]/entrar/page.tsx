@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata(props: PageProps<"/mesa/[id]/entrar">): Promise<Metadata> {
   const { id } = await props.params;
   const c = obterCampanha(Number(id));
-  return { title: c ? `Entrar em ${c.nome} · Taverna do Velho Mestre` : "Taverna do Velho Mestre" };
+  return { title: c ? `Entrar em ${c.nome}` : "Porta errada" };
 }
 
 export default async function PaginaEntrar(props: PageProps<"/mesa/[id]/entrar">) {

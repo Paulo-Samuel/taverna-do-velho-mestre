@@ -45,9 +45,9 @@ html {
 }
 
 body {
-  /* céu de estrelas esparsas (os temas de papel desligam com --estrelas: none) por cima da textura do tema (na taverna: grão
+  /* céu de estrelas esparsas em duas camadas (os temas de papel desligam com --estrelas e --estrelas-2: none) por cima da textura do tema (na taverna: grão
      de madeira + brilho de lareira no canto); o <body> ganha data-tema nas páginas de um sistema */
-  background-image: var(--estrelas, none), var(--textura);
+  background-image: var(--estrelas, none), var(--estrelas-2, none), var(--textura);
   background-color: var(--background);
   background-attachment: fixed;
   color: var(--foreground);
@@ -116,8 +116,34 @@ body {
   }
 }
 
+/* perigo (apagar, encerrar, desfazer de vez): contorno para a ação que mora ao lado das outras */
+@utility btn-perigo {
+  @apply btn border text-sangue;
+  border-color: color-mix(in srgb, var(--sangue) 55%, transparent);
+  /* o fundo tingido come contraste do sangue puro: no hover o texto clareia (conferido no tests/matizes.test.ts) */
+  &:hover:not(:disabled) {
+    border-color: var(--sangue);
+    background-color: color-mix(in srgb, var(--sangue) 12%, transparent);
+    color: color-mix(in srgb, var(--sangue) 70%, var(--pergaminho));
+  }
+}
+
+/* perigo cheio: só na confirmação final (o texto usa a cor do fundo, conferida no tests/matizes.test.ts) */
+@utility btn-perigo-cheio {
+  @apply btn;
+  background-color: var(--sangue);
+  color: var(--background);
+  &:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--sangue) 85%, var(--pergaminho));
+  }
+}
+
 @utility campo {
-  @apply w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-foreground placeholder:text-muted/70 focus:border-ambar focus:outline-none;
+  @apply w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-foreground placeholder:text-muted focus:border-ambar focus:outline-none;
+  /* anel por sombra: marca o foco de teclado sem mudar o tamanho do campo */
+  &:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ambar) 25%, transparent);
+  }
 }
 
 @utility cartao {

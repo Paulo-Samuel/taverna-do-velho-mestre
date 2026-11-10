@@ -123,11 +123,10 @@ export function PainelAcao({
               <button
                 type="button"
                 onClick={aoIrParaBloqueio}
-                className="surgir group flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-ambar/60 bg-ambar/10 px-3 py-1.5 text-left text-sm shadow-[0_0_24px_-12px_var(--ambar)] transition hover:border-ambar hover:bg-ambar/15 focus-visible:border-ambar focus-visible:outline-none"
+                className="surgir group flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-ambar/60 bg-ambar/10 px-3 py-1.5 text-left text-sm shadow-[0_0_24px_-12px_var(--ambar)] transition hover:border-ambar hover:bg-ambar/15 focus-visible:border-ambar focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ambar"
               >
                 <span className="min-w-0 text-ambar">
-                  <Icone nome="dice" />
-                  {bloqueio}
+                  <Icone nome="dice" /> {bloqueio}
                 </span>
                 <span className="shrink-0 rounded-md bg-botao px-3 py-1.5 text-xs font-semibold text-botao-texto transition group-hover:bg-botao-hover">
                   Ir para o dado <Icone nome="arrowUp" />
@@ -150,6 +149,7 @@ export function PainelAcao({
           }}
         >
           {inicio}
+          {/* placeholder comprido (nome grande) não empurra o campo para duas linhas: vazio, ele fica numa linha só */}
           {/* o invólucro só existe para o contador ficar por cima da borda; é flex para o campo seguir sendo item flex (sem a
               folga de linha de um inline-block), então a altura da linha é a mesma de antes */}
           <div className="relative flex min-w-0 flex-1">
@@ -167,7 +167,7 @@ export function PainelAcao({
               maxLength={LIMITE_ACAO}
               aria-label={perguntar ? "Pergunta ao mestre, fora do jogo" : rotuloCampo}
               placeholder={perguntar ? "Pergunte ao mestre (regras, opções, chances)…" : placeholder}
-              className={`campo field-sizing-content max-h-36 min-h-11 min-w-0 flex-1 resize-none bg-surface-2/80 py-2.5 leading-snug ${convite ? "campo-convite" : ""} ${perguntar ? "border-dashed! border-ambar/60! bg-ambar/5!" : ""}`}
+              className={`campo field-sizing-content max-h-36 min-h-11 min-w-0 flex-1 resize-none bg-surface-2/80 py-2.5 leading-snug [&:placeholder-shown]:max-h-11 [&:placeholder-shown]:overflow-hidden [&:placeholder-shown]:whitespace-nowrap ${convite ? "campo-convite" : ""} ${perguntar ? "border-dashed! border-ambar/60! bg-ambar/5!" : ""}`}
               data-campo-acao
             />
             {resta !== null && (

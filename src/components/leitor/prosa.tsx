@@ -32,9 +32,9 @@ const CSS = `
 .leitor-aparte em,.leitor-aparte .leitor-fala{font-style:normal;color:inherit}
 .leitor-fim-noite{display:flex;flex-direction:column;align-items:center;gap:.45rem;margin:2rem auto .75rem;text-align:center}
 .leitor-fim-noite-titulo{font-family:var(--fonte-capitular,var(--font-titulo));font-size:1.35rem;line-height:1.1;letter-spacing:.04em;color:var(--pergaminho)}
-.leitor-fim-noite-data{font-size:10.5px;font-weight:600;letter-spacing:.3em;text-transform:uppercase;color:var(--muted)}
+.leitor-fim-noite-data{font-size:11px;font-weight:600;letter-spacing:.3em;text-transform:uppercase;color:var(--muted)}
 .leitor-mudancas{margin:2.25rem 0 .25rem}
-.leitor-mudancas-titulo{display:flex;align-items:center;gap:.8em;margin-bottom:.7rem;font-size:10.5px;font-weight:600;letter-spacing:.28em;text-transform:uppercase;
+.leitor-mudancas-titulo{display:flex;align-items:center;gap:.8em;margin-bottom:.7rem;font-size:11px;font-weight:600;letter-spacing:.28em;text-transform:uppercase;
   color:color-mix(in srgb,var(--muted) 92%,var(--foreground))}
 .leitor-mudancas-titulo::before,.leitor-mudancas-titulo::after{content:"";flex:1;height:1px}
 .leitor-mudancas-titulo::before{background:linear-gradient(to right,transparent,color-mix(in srgb,var(--ambar) 35%,transparent))}
@@ -62,7 +62,7 @@ const CSS = `
 .leitor-chip-bom .leitor-chip-icone{color:color-mix(in srgb,var(--musgo) 85%,var(--foreground))}
 .leitor-chip-bom:hover,.leitor-chip-bom[aria-expanded=true]{border-color:color-mix(in srgb,var(--musgo) 75%,transparent);background:color-mix(in srgb,var(--musgo) 14%,transparent)}
 .leitor-chip-balao{position:fixed;z-index:80;padding:.55rem .75rem;border-radius:.6rem;border:1px solid color-mix(in srgb,var(--ambar) 35%,var(--border));
-  background:var(--surface);box-shadow:0 12px 32px -12px rgba(0,0,0,.7);font-size:12.5px;line-height:1.5;color:var(--foreground);pointer-events:none}
+  background:var(--surface);box-shadow:0 12px 32px -12px color-mix(in srgb,var(--background) 70%,transparent);font-size:12.5px;line-height:1.5;color:var(--foreground);pointer-events:none}
 .leitor-escrevendo{display:flex;flex-direction:column;align-items:center;gap:.6rem;margin:2.5rem 0;color:var(--muted);text-align:center}
 .leitor-escrevendo-pena{width:4.5rem;height:2rem;color:color-mix(in srgb,var(--ambar) 85%,transparent)}
 .leitor-escrevendo-tinta{stroke-dasharray:70;stroke-dashoffset:70;animation:leitor-tinta 2.6s ease-in-out infinite}
@@ -118,11 +118,22 @@ export function AberturaCapitulo({
   classeTitulo?: string;
   simbolo?: string;
 }): ReactNode {
-  const linha = [local, momento].filter(Boolean).join(" · ");
-  if (!titulo && !linha) return null;
+  const partes = [local, momento].filter((p): p is string => Boolean(p));
+  if (!titulo && !partes.length) return null;
   return (
     <header className="surgir mx-auto max-w-[34rem] pb-4 pt-5 text-center first:pt-1 sm:pt-7" data-abertura>
-      {linha && <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-muted sm:text-[11px]">{linha}</p>}
+      {/* local e momento cada um no seu bloco: quando não cabe numa linha, a quebra cai no separador, nunca no meio de um nome */}
+      {partes.length > 0 && (
+        <p className="text-balance text-[11px] font-semibold uppercase tracking-[0.22em] text-muted sm:tracking-[0.34em]">
+          <span className="inline-block">{partes[0]}</span>
+          {partes[1] && (
+            <>
+              {" "}
+              <span className="inline-block">· {partes[1]}</span>
+            </>
+          )}
+        </p>
+      )}
       {titulo && <h2 className={`${classeTitulo} mt-2 text-balance text-[2rem] leading-[1.08] text-pergaminho sm:text-[2.6rem]`}>{titulo}</h2>}
       <Ornamento simbolo={simbolo} className="mb-0! mt-4! max-w-[11em]!" />
     </header>

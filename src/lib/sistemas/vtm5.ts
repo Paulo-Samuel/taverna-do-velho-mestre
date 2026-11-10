@@ -525,7 +525,7 @@ export const vtm5: Sistema = {
   nome: "Vampiro: A Máscara 5ª Edição",
   nomeCurto: "Vampiro V5",
   descricao: "Horror pessoal e intriga sob a Mascarada: parada de d10, sucessos em 6+, Fome que vira dados da Besta, Humanidade em risco. 16 clãs, 18 tipos de predador.",
-  licenca: "Fã-conteúdo não oficial sob a política Dark Pack — Vampire: The Masquerade © Paradox Interactive AB",
+  licenca: "Fã-conteúdo não oficial sob a política Dark Pack: Vampire: The Masquerade © Paradox Interactive AB",
   dadoPrincipal: "d10",
   pronto: true,
   rotulos: { ancestralidade: "Tipo de Predador", classe: "Clã", antecedente: "Idade", nivel: "Potência de Sangue", defesa: "Defesa", dinheiro: "Recursos", pv: "Saúde" },

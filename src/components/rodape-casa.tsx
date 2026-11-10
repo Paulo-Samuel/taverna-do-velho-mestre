@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Icone } from "./icones";
 
 // Rodapé da casa (src/app/layout.tsx): só aparece para quem está no computador da taverna, como a navegação.
 // As mesas são fixed e passam por cima dele; na impressão (livro da campanha) ele some.
@@ -25,6 +26,21 @@ export function RodapeCasa() {
             </Link>
           ))}
         </nav>
+        <p className="flex flex-wrap items-center justify-center gap-x-2 text-xs text-muted">
+          <Link href="/sistemas#creditos" className="inline-flex min-h-10 items-center gap-1 px-2 hover:text-ambar">
+            Licenças e créditos
+          </Link>
+          <a
+            href="https://github.com/Paulo-Samuel/taverna-do-velho-mestre"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-10 items-center gap-1 px-2 hover:text-ambar"
+          >
+            Código no GitHub
+            <Icone nome="external" />
+            <span className="sr-only">(abre em outra aba)</span>
+          </a>
+        </p>
       </div>
     </footer>
   );

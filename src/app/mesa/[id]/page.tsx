@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { obterCampanha } from "@/lib/db";
 import { estadoMesa } from "@/lib/mesa";
@@ -6,6 +7,15 @@ import { Mesa } from "./mesa";
 import { MesaHistoria } from "./mesa-historia";
 
 export const dynamic = "force-dynamic";
+
+// nome da campanha na aba; mesa com PIN vista pela rede não entrega o nome antes do PIN
+export async function generateMetadata(props: PageProps<"/mesa/[id]">): Promise<Metadata> {
+  const { id } = await props.params;
+  const campanha = obterCampanha(Number(id));
+  if (!campanha) return { title: "Porta errada" };
+  if (!(await acessoNaPagina(campanha))) return { title: "Mesa" };
+  return { title: campanha.nome };
+}
 
 export default async function PaginaMesa(props: PageProps<"/mesa/[id]">) {
   const { id } = await props.params;

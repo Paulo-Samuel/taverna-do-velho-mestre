@@ -8,6 +8,7 @@ import { DIFICULDADES, FOCOS, MAX_FOCO_LIVRE, MAX_INSTRUCOES, TAMANHOS, type Dif
 import { exemploDoCampo, sementesDe, type ParSemente } from "@/lib/sistemas/sementes";
 import { atributosIniciaisPf2, periciasCriacaoPf2 } from "@/lib/sistemas/pf2e/criacao";
 import type { AncestralidadeDef, ClasseDef, OpcaoCriacao, SistemaPublico } from "@/lib/sistemas/tipos";
+import { pluralDoRotulo } from "@/lib/plural-rotulo";
 import { temaDoSistema } from "@/lib/temas";
 import {
   bloqueadosPara,
@@ -26,7 +27,7 @@ import {
   type GrupoOpcao,
 } from "./sugestoes";
 import { agrupar, capitalizar, casaBusca, sinal } from "./utilidades";
-import { Icone } from "@/components/icones";
+import { Icone, TextoComIcones } from "@/components/icones";
 
 // Passos do assistente de criação. São componentes controlados: o estado mora no formulário,
 // que também escreve os <input type="hidden"> do contrato (lib/formulario-ficha.ts). Aqui nada tem `name`.
@@ -78,7 +79,7 @@ export function Titulo({ children, ajuda, acao }: { children: ReactNode; ajuda?:
     <div className="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
       <div className="min-w-0 flex-1 basis-64">
         <h2 className="titulo text-2xl text-pergaminho">{children}</h2>
-        {ajuda && <p className="mt-1 text-sm text-muted">{ajuda}</p>}
+        {ajuda && <p className="mt-1 text-sm text-muted">{typeof ajuda === "string" ? <TextoComIcones texto={ajuda} /> : ajuda}</p>}
       </div>
       {acao && <div className="flex shrink-0 flex-wrap gap-2">{acao}</div>}
     </div>
@@ -172,7 +173,7 @@ function Cartao({
     >
       {ativo && (
         <span className="absolute right-2.5 top-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-botao text-xs text-botao-texto" aria-hidden>
-          ✓
+          <Icone nome="check" aria-hidden />
         </span>
       )}
       {children}
@@ -241,7 +242,7 @@ function chipDeTraco(t: string): string {
   return cabeca;
 }
 
-/** "detalhes ▾" dentro do cartão compacto: abre a descrição completa e todos os traços sem escolher o cartão. */
+/** "detalhes" (com a setinha) dentro do cartão compacto: abre a descrição completa e todos os traços sem escolher o cartão. */
 function Detalhes({ aberto, alternar }: { aberto: boolean; alternar: () => void }) {
   if (aberto) return null;
   return (
@@ -259,9 +260,10 @@ function Detalhes({ aberto, alternar }: { aberto: boolean; alternar: () => void 
           alternar();
         }
       }}
-      className="inline-block rounded px-1 py-0.5 text-[11px] text-ambar hover:bg-ambar/10 hover:underline"
+      className="inline-flex min-h-10 items-center gap-1 rounded px-1 text-xs text-ambar hover:bg-ambar/10 hover:underline sm:min-h-0 sm:py-0.5"
     >
-      detalhes ▾
+      detalhes
+      <Icone nome="chevronDown" aria-hidden />
     </span>
   );
 }
@@ -280,7 +282,7 @@ export function PassoSistema({ sistemas, e, escolher }: { sistemas: SistemaPubli
   return (
     <>
       <Titulo ajuda="Cada sistema tem seu jeito de rolar e de matar personagens. Dá para ter campanhas em sistemas diferentes.">Que regras vamos usar?</Titulo>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {sistemas.map((s) => (
           <Cartao key={s.id} tema={temaDoSistema(s.id)} ativo={e.sistemaId === s.id} desativado={!s.pronto} onClick={() => escolher(s.id)}>
             <div className="flex items-start gap-3 pr-6">
@@ -293,14 +295,25 @@ export function PassoSistema({ sistemas, e, escolher }: { sistemas: SistemaPubli
               </div>
             </div>
             <p className="mt-2 text-sm text-foreground/90">{s.descricao}</p>
-            {s.pronto && (
-              <p className="mt-2 text-xs text-muted">
-                {s.classes.length} {s.rotulos.classe.toLowerCase()}
-                {s.classes.length === 1 ? "" : "s"} · {s.ancestralidades.length} {s.rotulos.ancestralidade.toLowerCase()}
-                {s.ancestralidades.length === 1 ? "" : "s"}
+            {s.pronto && (s.classes.length > 0 || s.ancestralidades.length > 0) && (
+              <p className="mt-2 flex flex-wrap gap-1.5">
+                {s.classes.length > 0 && (
+                  <span className="etiqueta">
+                    {s.classes.length} {pluralDoRotulo(s.rotulos.classe, s.classes.length)}
+                  </span>
+                )}
+                {s.ancestralidades.length > 0 && (
+                  <span className="etiqueta">
+                    {s.ancestralidades.length} {pluralDoRotulo(s.rotulos.ancestralidade, s.ancestralidades.length)}
+                  </span>
+                )}
               </p>
             )}
-            <p className="mt-auto pt-1.5 text-xs leading-snug text-muted">{s.licenca}</p>
+            <div className="mt-auto w-full pt-3">
+              <p className="truncate border-t border-border/50 pt-2 text-xs text-muted" title={s.licenca}>
+                {s.licenca}
+              </p>
+            </div>
           </Cartao>
         ))}
       </div>
@@ -644,7 +657,13 @@ export function PassoAtributos({ sistema, e, carregando, sugerir, editar, sugest
               </button>
             )}
             <button type="button" className="text-sm text-ambar hover:underline disabled:opacity-50" disabled={carregando} onClick={() => sugerir(e.metodo)}>
-              {carregando ? "Buscando…" : "↺ Voltar à sugestão"}
+              {carregando ? (
+                "Buscando…"
+              ) : (
+                <>
+                  <Icone nome="undo" aria-hidden /> Voltar à sugestão
+                </>
+              )}
             </button>
           </>
         )}
@@ -823,7 +842,7 @@ export function PassoPericias({ sistema, e, atualizar }: PropsPasso) {
                             : "border-border text-foreground hover:border-ambar/60"
                     }`}
                   >
-                    {fixa && "✓ "}
+                    {fixa && <Icone nome="check" className="mr-1" aria-hidden />}
                     {p.nome}
                   </button>
                 );
@@ -838,7 +857,10 @@ export function PassoPericias({ sistema, e, atualizar }: PropsPasso) {
           <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
             {fixas.map((f) => (
               <li key={f.id}>
-                <span className="text-musgo">✓ {sistema.pericias.find((p) => p.id === f.id)?.nome ?? f.id}</span> vem de {f.origem}
+                <span className="text-musgo">
+                  <Icone nome="check" aria-hidden /> {sistema.pericias.find((p) => p.id === f.id)?.nome ?? f.id}
+                </span>{" "}
+                vem de {f.origem}
               </li>
             ))}
           </ul>
@@ -927,9 +949,9 @@ function CampoOpcao({ opcao, valores, mudar, destaque, bloqueados, exemplo, suge
                   }`}
                 >
                   <span className="text-sm font-semibold leading-tight">
-                    {ativo && <span aria-hidden>✓ </span>}
+                    {ativo && <Icone nome="check" className="mr-1" aria-hidden />}
                     {o.nome}
-                    {parcial && combina(o) && <span className="ml-1.5 text-[11px] font-normal text-ambar">✦ {destaque}</span>}
+                    {parcial && combina(o) && <span className="ml-1.5 text-[11px] font-normal text-ambar"><Icone nome="sparkle" aria-hidden /> {destaque}</span>}
                   </span>
                   {ondeEsta ? (
                     <span className="mt-0.5 line-clamp-1 text-xs leading-snug text-muted">em {ondeEsta.toLowerCase()}</span>
@@ -1004,7 +1026,7 @@ function CampoOpcao({ opcao, valores, mudar, destaque, bloqueados, exemplo, suge
             )}
             {linhas.length > 1 && (
               <button type="button" onClick={() => mudar(linhas.filter((_, j) => j !== i))} className="btn-borda px-3" aria-label="Remover">
-                ✕
+                <Icone nome="close" aria-hidden />
               </button>
             )}
           </div>
@@ -1065,7 +1087,7 @@ function CampoPar({ par, a, b, e, atualizar }: { par: ParSemente; a: OpcaoCriaca
                 />
                 {n > 1 && (
                   <button type="button" onClick={() => gravar(linhas.filter((_, j) => j !== i))} className="btn-borda h-10 px-3" aria-label={`Remover o par ${i + 1}`}>
-                    ✕
+                    <Icone nome="close" aria-hidden />
                   </button>
                 )}
               </span>
@@ -1440,7 +1462,7 @@ export function BlocoTrazer({ sistema, lista, escolher }: { sistema: SistemaPubl
 
 /* ---------- 8. identidade ---------- */
 
-/** Mostra `n` itens a partir de `inicio`, dando a volta na lista (para o "↻ outras ideias"). */
+/** Mostra `n` itens a partir de `inicio`, dando a volta na lista (para o "outras ideias"). */
 function janela<T>(lista: T[], inicio: number, n: number): T[] {
   if (lista.length <= n) return lista;
   return Array.from({ length: n }, (_, i) => lista[(inicio + i) % lista.length]);
@@ -1489,8 +1511,9 @@ export function PassoIdentidade({ e, atualizar }: Omit<PropsPasso, "sistema">) {
               </Chip>
             ))}
             {s.ganchos.length > 6 && (
-              <button type="button" onClick={() => setInicio((i) => i + 6)} className="min-h-10 px-2 text-xs text-ambar hover:underline sm:min-h-8">
-                ↻ outros ganchos
+              <button type="button" onClick={() => setInicio((i) => i + 6)} className="inline-flex min-h-10 items-center gap-1 px-2 text-xs text-ambar hover:underline sm:min-h-8">
+                <Icone nome="shuffle" aria-hidden />
+                outros ganchos
               </button>
             )}
             <button type="button" onClick={() => juntar(sortear(s.ganchos.filter((g) => !e.historia.includes(g))))} className="min-h-10 px-2 text-xs text-ambar hover:underline sm:min-h-8"><Icone nome="dice" />  me dá um
@@ -1564,7 +1587,7 @@ function BlocoAventuras({ e, atualizar, aventuras }: Omit<PropsPasso, "sistema">
       {escolhida && (
         <p role="status" className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-musgo/50 bg-musgo/10 px-3 py-2 text-xs">
           <span>
-            ✓ <span className="font-semibold">{escolhida.titulo}</span> marcada. Nome, cenário e tom abaixo vieram dela e dá para mexer à vontade.
+            <Icone nome="check" aria-hidden /> <span className="font-semibold">{escolhida.titulo}</span> marcada. Nome, cenário e tom abaixo vieram dela e dá para mexer à vontade.
           </span>
           <button type="button" onClick={() => atualizar(semAventura(e, escolhida))} className="-my-1 rounded px-2 py-1 text-ambar hover:bg-ambar/10 hover:underline">
             Desmarcar
@@ -1619,8 +1642,9 @@ export function PassoCampanha({ e, atualizar, aventuras = [] }: Omit<PropsPasso,
           <div className="mb-1.5 mt-2 flex flex-wrap items-baseline justify-between gap-2 text-xs text-muted">
             <span>Sem ideia? Clique numa:</span>
             {s.cenarios.length > 6 && (
-              <button type="button" onClick={() => setInicio((i) => i + 6)} className="-my-2 py-2 text-ambar hover:underline">
-                ↻ outras ideias
+              <button type="button" onClick={() => setInicio((i) => i + 6)} className="-my-2 inline-flex min-h-10 items-center gap-1 text-ambar hover:underline">
+                <Icone nome="shuffle" aria-hidden />
+                outras ideias
               </button>
             )}
           </div>
@@ -1674,7 +1698,7 @@ export function PassoCampanha({ e, atualizar, aventuras = [] }: Omit<PropsPasso,
               <span className="block text-xs text-muted">{resumoEstilo(e)}</span>
             </span>
             <span className="text-muted transition-transform group-open/mais:rotate-180" aria-hidden>
-              ▾
+              <Icone nome="chevronDown" aria-hidden />
             </span>
           </summary>
           <div className="space-y-5 border-t border-border px-3 pb-4 pt-3">
@@ -1705,7 +1729,7 @@ export function PassoCampanha({ e, atualizar, aventuras = [] }: Omit<PropsPasso,
               <div className="flex flex-wrap gap-1.5">
                 {FOCOS.map((f) => (
                   <Chip key={f.id} ativo={e.foco.includes(f.id)} onClick={() => alternarFoco(f.id)}>
-                    {e.foco.includes(f.id) && "✓ "}
+                    {e.foco.includes(f.id) && <Icone nome="check" className="mr-1" aria-hidden />}
                     {f.nome}
                   </Chip>
                 ))}

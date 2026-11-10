@@ -6,7 +6,7 @@ import { obterSistema } from "@/lib/sistemas";
 import { publico } from "@/lib/sistemas/comum";
 import { criarHistoriaAcao } from "./historia-acoes";
 
-export const metadata: Metadata = { title: "Nova história · Taverna do Velho Mestre" };
+export const metadata: Metadata = { title: "Nova história" };
 
 // Criação rápida do modo história: nome, aparência, ofício, passado e onde começa. As regras ficam escondidas atrás do balcão.
 export default async function NovaHistoria(props: PageProps<"/nova">) {

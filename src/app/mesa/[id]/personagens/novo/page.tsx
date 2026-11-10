@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { personagensParaTrazer } from "@/app/nova/copiar-personagem";
+import { FaixaAviso } from "@/components/faixa-aviso";
 import { FormularioPersonagem } from "@/components/ficha/formulario-personagem";
 import { CriacaoHistoria } from "@/components/historia/criacao/criacao-historia";
+import { LinkVoltar } from "@/components/link-voltar";
 import { listarPersonagens, obterCampanha } from "@/lib/db";
 import { acessoNaPagina } from "@/lib/rede/acesso";
 import { obterSistema, sistemasPublicos } from "@/lib/sistemas";
@@ -20,7 +21,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata(props: PageProps<"/mesa/[id]/personagens/novo">): Promise<Metadata> {
   const { id } = await props.params;
   const c = obterCampanha(Number(id));
-  return { title: c ? `Novo personagem · ${c.nome}` : "Taverna do Velho Mestre" };
+  return { title: c ? `Novo personagem · ${c.nome}` : "Porta errada" };
 }
 
 export default async function NovoPersonagem(props: PageProps<"/mesa/[id]/personagens/novo">) {
@@ -51,7 +52,11 @@ export default async function NovoPersonagem(props: PageProps<"/mesa/[id]/person
   return (
     // data-tema já no HTML do servidor; o formulário põe o mesmo tema no <body> (fundo e cabeçalho)
     <main data-tema={temaDoSistema(campanha.sistema)} className="mx-auto max-w-6xl px-4 py-6 sm:py-8">
-      {!sistema.pronto && <p className="cartao mb-4 p-4 text-sm text-sangue">{sistema.nome} ainda está em construção: não dá para criar fichas nele por enquanto.</p>}
+      {!sistema.pronto && (
+        <FaixaAviso tom="alerta" className="mb-4">
+          {sistema.nome} ainda está em construção: não dá para criar fichas nele por enquanto.
+        </FaixaAviso>
+      )}
       <FormularioPersonagem
         sistemas={sistemasPublicos()}
         sistemaFixo={campanha.sistema}
@@ -64,9 +69,9 @@ export default async function NovoPersonagem(props: PageProps<"/mesa/[id]/person
         cabecalho={{
           titulo: "Mais uma cadeira na mesa",
           antes: (
-            <Link href={`/mesa/${campanha.id}`} className="-my-2 mb-1 inline-block py-2 text-xs text-muted hover:text-ambar">
-              ← voltar para {campanha.nome}
-            </Link>
+            <LinkVoltar href={`/mesa/${campanha.id}`} className="mb-1">
+              Voltar para {campanha.nome}
+            </LinkVoltar>
           ),
           subtitulo: (
             <>

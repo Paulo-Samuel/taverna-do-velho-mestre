@@ -564,7 +564,7 @@ export const pf1e: Sistema = {
   nome: "Pathfinder 1ª Edição (PRD)",
   nomeCurto: "Pathfinder 1e",
   descricao: "O herdeiro do 3.5: BBA, perícias por graduação, ameaça de crítico, talentos e dezenas de classes e raças.",
-  licenca: "OGL 1.0a — Pathfinder Roleplaying Game Reference Document (Paizo)",
+  licenca: "OGL 1.0a: Pathfinder Roleplaying Game Reference Document (Paizo)",
   dadoPrincipal: "d20",
   pronto: true,
   rotulos: { ancestralidade: "Raça", classe: "Classe", nivel: "Nível", defesa: "CA", dinheiro: "po", pv: "PV" },

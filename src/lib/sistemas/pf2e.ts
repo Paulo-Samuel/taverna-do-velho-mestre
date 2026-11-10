@@ -765,7 +765,7 @@ export const pf2e: Sistema = {
   nomeCurto: "PF2e",
   extensoesMestre: ["oposicao"],
   descricao: "Graus de sucesso, três ações por turno e uma montanha de ancestralidades e classes.",
-  licenca: "ORC License (Paizo) — Player Core, Player Core 2 e livros Remaster; alguns livros antigos sob OGL 1.0a",
+  licenca: "ORC License (Paizo): Player Core, Player Core 2 e livros Remaster; alguns livros antigos sob OGL 1.0a",
   dadoPrincipal: "d20",
   pronto: true,
   rotulos: { ancestralidade: "Ancestralidade", classe: "Classe", antecedente: "Antecedente", nivel: "Nível", defesa: "CA", dinheiro: "po", pv: "PV" },

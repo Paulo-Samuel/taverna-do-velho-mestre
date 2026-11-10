@@ -1,5 +1,6 @@
 // Fundo do modo história: noite funda com estrelas sutis (duas camadas; a de cima pisca devagar) e o
 // brilho de lareira do resto da taverna bem fraquinho no pé da página. Também traz os estilos próprios da mesa-livro.
+// Tudo sai dos tokens do tema (--background, --ambar, --pergaminho, --matiz-5): o céu acompanha o sistema da campanha.
 
 const estrelas = (pontos: [number, number, number][], cor: string) =>
   pontos.map(([x, y, r]) => `radial-gradient(${r}px ${r}px at ${x}px ${y}px, ${cor}, transparent)`).join(",");
@@ -19,7 +20,7 @@ const CAMADA_1 = estrelas(
     [255, 330, 1.3],
     [70, 120, 1],
   ],
-  "rgba(241,228,196,.55)",
+  "color-mix(in srgb, var(--pergaminho) 55%, transparent)",
 );
 const CAMADA_2 = estrelas(
   [
@@ -31,15 +32,15 @@ const CAMADA_2 = estrelas(
     [312, 455, 1.4],
     [20, 430, 1.6],
   ],
-  "rgba(255,240,210,.8)",
+  "color-mix(in srgb, var(--pergaminho) 80%, transparent)",
 );
 
 const CSS = `
 .ceu-historia { position: fixed; inset: 0; z-index: 0; pointer-events: none;
   background:
-    radial-gradient(1200px 500px at 50% 115%, rgba(224,162,74,.10), transparent 65%),
-    radial-gradient(900px 600px at 15% -10%, rgba(80,70,140,.16), transparent 60%),
-    linear-gradient(180deg, #08070d 0%, #0d0a10 45%, #120d0a 100%); }
+    radial-gradient(1200px 500px at 50% 115%, color-mix(in srgb, var(--ambar) 10%, transparent), transparent 65%),
+    radial-gradient(900px 600px at 15% -10%, color-mix(in srgb, var(--matiz-5) 12%, transparent), transparent 60%),
+    linear-gradient(180deg, color-mix(in srgb, var(--background) 88%, black), var(--background) 45%, color-mix(in srgb, var(--background) 92%, var(--ambar))); }
 .ceu-historia::before, .ceu-historia::after { content: ""; position: absolute; inset: 0; }
 .ceu-historia::before { background-image: ${CAMADA_1}; background-size: 360px 360px; opacity: .55; }
 .ceu-historia::after { background-image: ${CAMADA_2}; background-size: 520px 520px; animation: ceu-piscar 7s ease-in-out infinite alternate; }

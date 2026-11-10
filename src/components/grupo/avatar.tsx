@@ -10,8 +10,8 @@ import { INICIO } from "@/lib/constantes";
 /** Cores fixas por posição no grupo, para reconhecer o personagem de relance no chip, no cartão e no chat. */
 const CORES = [
   "bg-ambar/20 text-ambar border-ambar/50",
-  "bg-sangue/25 text-[#e98b7d] border-sangue/60",
-  "bg-musgo/25 text-[#a9c48a] border-musgo/60",
+  "bg-sangue/25 text-[var(--grau-falha)] border-sangue/60",
+  "bg-musgo/25 text-[var(--grau-sucesso)] border-musgo/60",
   "bg-pergaminho/15 text-pergaminho border-pergaminho/40",
 ];
 

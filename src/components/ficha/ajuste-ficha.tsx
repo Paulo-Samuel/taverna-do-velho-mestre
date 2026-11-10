@@ -302,7 +302,8 @@ function Botao({ rotulo, simbolo, desligado, aoClicar, grande, classe = "" }: { 
       title={rotulo}
       disabled={desligado}
       onClick={aoClicar}
-      className={`grid ${grande ? "size-7 text-sm" : "size-5 text-xs"} shrink-0 place-items-center rounded-full border border-border bg-surface leading-none text-muted transition hover:border-ambar hover:text-ambar focus-visible:border-ambar focus-visible:text-ambar focus-visible:outline-none disabled:cursor-not-allowed disabled:border-border/40 disabled:text-muted/30 disabled:hover:border-border/40 disabled:hover:text-muted/30 ${classe}`}
+      // before: no celular a área de toque chega a 40px sem aumentar o desenho do botão
+      className={`relative grid before:absolute before:-inset-2.5 sm:before:hidden ${grande ? "size-7 text-sm" : "size-5 text-xs"} shrink-0 place-items-center rounded-full border border-border bg-surface leading-none text-muted transition hover:border-ambar hover:text-ambar focus-visible:border-ambar focus-visible:text-ambar focus-visible:outline-none disabled:cursor-not-allowed disabled:border-border/40 disabled:text-muted/30 disabled:hover:border-border/40 disabled:hover:text-muted/30 ${classe}`}
     >
       {simbolo}
     </button>
@@ -326,7 +327,16 @@ export function BotoesMarcador({
   const v = ajuste.valor(alvo);
   if (!v) return <>{children}</>;
   // Humanidade do Vampiro: fora do modo de ajuste não tem −/+ (pela regra ela só muda no Remorso ou na degeneração)
-  if (v.protegido && !ajuste.editando) return <>{children}</>;
+  // As vagas dos dois botões ficam reservadas, para o número fechar na mesma coluna dos outros marcadores
+  if (v.protegido && !ajuste.editando) {
+    return (
+      <span className={`inline-flex items-center gap-1 ${classe}`}>
+        <span className="size-5 shrink-0" aria-hidden />
+        {children}
+        <span className="size-5 shrink-0" aria-hidden />
+      </span>
+    );
+  }
   const revelar = classeRevelar(ajuste);
   const motivo = ajuste.bloqueado ? " (o mestre está narrando)" : "";
   // no modo de edição (celular) os botões crescem para caber o dedo
@@ -365,7 +375,7 @@ export function LinhaMarcador({ ajuste, alvo }: { ajuste: AjusteFicha; alvo: Alv
     <div className="group/marcador flex items-center justify-between gap-2 text-xs">
       <span className="min-w-0 truncate text-muted">{v.rotulo}</span>
       <BotoesMarcador ajuste={ajuste} alvo={alvo}>
-        <span className={`min-w-10 text-center tabular-nums ${v.pendente ? "text-ambar" : "text-pergaminho"}`}>
+        <span className={`min-w-10 text-right tabular-nums ${v.pendente ? "text-ambar" : "text-pergaminho"}`}>
           {v.atual}
           {!ilimitado && <span className="text-muted">/{v.max}</span>}
         </span>
@@ -417,7 +427,7 @@ export function AdicionarNaLista({ ajuste, lista, dica }: { ajuste: AjusteFicha;
         ok
       </button>
       <button type="button" className="px-1 text-xs text-muted hover:text-foreground" onClick={() => setAberto(false)} aria-label="Fechar">
-        ✕
+        <Icone nome="close" />
       </button>
     </form>
   );
@@ -490,7 +500,7 @@ export function SeletorCondicao({ ajuste, condicoes, dica }: { ajuste: AjusteFic
         outra…
       </button>
       <button type="button" className="px-1 text-xs text-muted hover:text-foreground" onClick={() => setAberto(false)} aria-label="Fechar">
-        ✕
+        <Icone nome="close" />
       </button>
       {def.efeito && <p className="w-full text-xs text-muted">{def.efeito}</p>}
       {existente && <p className="w-full text-xs text-ambar">Já tem “{existente}”: grava no lugar dela.</p>}
@@ -505,6 +515,7 @@ export function PassoCondicao({ ajuste, texto, condicoes }: { ajuste: AjusteFich
   const { def, valor } = lida;
   const max = def.max ?? 9;
   const revelar = classeRevelar(ajuste, "item");
+  // −, + e × ficam colados na etiqueta: cada área de toque para na metade do vão, senão o vizinho de cima engole o toque
   return (
     <>
       <Botao
@@ -513,7 +524,7 @@ export function PassoCondicao({ ajuste, texto, condicoes }: { ajuste: AjusteFich
         desligado={ajuste.bloqueado}
         aoClicar={() => ajuste.trocar("condicoes", texto, valor > 1 ? textoCondicao(def, valor - 1) : null)}
         grande={false}
-        classe={revelar}
+        classe={`${revelar} before:-left-4.5 before:-right-0.5`}
       />
       <Botao
         rotulo={`Subir ${def.nome}`}
@@ -521,14 +532,14 @@ export function PassoCondicao({ ajuste, texto, condicoes }: { ajuste: AjusteFich
         desligado={ajuste.bloqueado || valor >= max}
         aoClicar={() => ajuste.trocar("condicoes", texto, textoCondicao(def, valor + 1))}
         grande={false}
-        classe={revelar}
+        classe={`${revelar} before:-left-0.5 before:-right-0.5`}
       />
     </>
   );
 }
 
-/** Botão × para tirar um item/condição. Precisa de um ancestral `group/item`. */
-export function BotaoRemover({ ajuste, lista, texto }: { ajuste: AjusteFicha; lista: Lista; texto: string }) {
+/** Botão × para tirar um item/condição. Precisa de um ancestral `group/item`. `colado`: vem logo depois de outros botões (etiqueta de condição). */
+export function BotaoRemover({ ajuste, lista, texto, colado = false }: { ajuste: AjusteFicha; lista: Lista; texto: string; colado?: boolean }) {
   return (
     <button
       type="button"
@@ -536,9 +547,10 @@ export function BotaoRemover({ ajuste, lista, texto }: { ajuste: AjusteFicha; li
       onClick={() => ajuste.remover(lista, texto)}
       aria-label={`Tirar ${texto}`}
       title={`Tirar ${texto}`}
-      className={`shrink-0 px-0.5 text-[11px] leading-none text-muted hover:text-sangue focus-visible:text-sangue focus-visible:outline-none disabled:text-muted/30 disabled:hover:text-muted/30 ${classeRevelar(ajuste, "item")}`}
+      // before: no celular a área de toque chega a 40px sem aumentar o desenho do ×; colado, ela cresce só para a direita (não cobre o "+")
+      className={`relative shrink-0 px-0.5 text-[11px] leading-none text-muted before:absolute before:-inset-x-3.5 before:-inset-y-3.5 ${colado ? "before:-left-0.5 before:-right-[23px]" : ""} hover:text-sangue focus-visible:text-sangue focus-visible:outline-none disabled:text-muted/30 disabled:hover:text-muted/30 sm:before:hidden ${classeRevelar(ajuste, "item")}`}
     >
-      ✕
+      <Icone nome="close" />
     </button>
   );
 }

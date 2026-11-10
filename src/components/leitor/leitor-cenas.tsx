@@ -13,12 +13,12 @@ import { CONSULTA_LARGO, useConsulta, useMenosMovimento, usePreferenciasLeitor }
 import { capitularCabe, EstiloProsa } from "./prosa";
 import { agruparTurnos, SEPARADOR, type Turno } from "./turnos";
 import { suportaRevelar, useRevelar, type Transicao } from "./use-revelar";
-import { TextoComIcones } from "@/components/icones";
+import { Icone, TextoComIcones } from "@/components/icones";
 
 // Leitor cena a cena das duas mesas (modo história e avançado), no lugar da conversa que rola.
 // O palco é sempre a cena atual (o último turno): a ação do jogador discreta no topo, a narração se revelando aos poucos, os
 // cartões de dado e de pedido de teste no ponto em que o mestre os pôs. Cena que não cabe vira páginas (o navegador quebra em
-// colunas, ver paginacao.ts); embaixo, uma barra mínima: os pontinhos das páginas no meio, "continuar ▸" e ouvir à direita, e
+// colunas, ver paginacao.ts); embaixo, uma barra mínima: os pontinhos das páginas no meio, "continuar" e ouvir à direita, e
 // à esquerda o "reler a história" (o Livro da campanha) e, no fim da cena, desfazer/outra resposta. Cenas antigas não voltam
 // ao palco: para reler há o Livro e o modo 📜 Rolagem do menu de leitura.
 // Cada mesa entrega como desenhar a prosa, a ação e os cartões; o leitor cuida de agrupar, paginar, revelar e virar a página.
@@ -26,7 +26,7 @@ import { TextoComIcones } from "@/components/icones";
 // mestre ganham caixa própria e as linhas de ficha/diário/XP viram os chips de "o que mudou na cena", que ficam fora do fluxo
 // paginado, numa faixa fina acima da barra (nenhuma página fica só com um chip; página própria só o "Fim da noite").
 // O teste pendente de quem joga aqui (`destaque`) nunca fica escondido em outra página: o cartão encolhe ou vira a versão compacta
-// para caber na página atual (paginacao.ts) e, se ainda assim cair na seguinte, a barra chama ("continuar para o dado ▸") e o
+// para caber na página atual (paginacao.ts) e, se ainda assim cair na seguinte, a barra chama ("continuar para o dado") e o
 // leitor avança sozinho quando a página termina de se revelar.
 // Tela baixa (variante `baixo:` do Tailwind, altura até 600 px): barra de 28 px, ação numa linha, menos respiro.
 
@@ -116,9 +116,7 @@ export function AcaoTopo({
           {nome}
         </span>
         {autor && autor !== nome && <span className="text-xs text-muted"> ({autor})</span>}
-        <span className="mx-1.5 text-muted/70" aria-hidden>
-          —
-        </span>
+        <span aria-hidden className="mx-2 inline-block h-px w-3 bg-border align-middle" />
         <span className="italic">{t}</span>
       </p>
       {/* o teste que a ação virou: no canto no desktop, numa linha própria no celular (a ação não fica espremida) */}
@@ -206,14 +204,12 @@ function FaixaMudancas({
           type="button"
           onClick={() => setManual(!aberta)}
           aria-expanded={aberta}
-          className="flex min-h-7 shrink-0 items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.22em] text-muted transition hover:text-ambar"
+          className="relative flex min-h-7 shrink-0 items-center gap-1.5 whitespace-nowrap before:absolute before:-inset-x-1 before:-inset-y-1.5 sm:before:hidden text-[11px] font-semibold uppercase tracking-[0.22em] text-muted transition hover:text-ambar"
           title={aberta ? "Recolher o que mudou na cena" : "Mostrar o que mudou na cena"}
         >
           <span>O que mudou</span>
           <span className="tabular-nums tracking-normal text-muted/70">· {total}</span>
-          <span aria-hidden className="text-[11px]">
-            {aberta ? "▾" : "▸"}
-          </span>
+          <Icone nome="chevronDown" className={`transition-transform motion-reduce:transition-none ${aberta ? "" : "-rotate-90"}`} />
         </button>
         {aberta && (
           <div className="relative min-w-0 flex-1 py-0.5">
@@ -367,7 +363,7 @@ export function LeitorCenas({
     revelarAte(paginas - 2);
     setPagina(paginas - 1);
   }, [fechaNoite, medido, paginas, paginaAtual, turno.chave, revelarAte]);
-  /** O "continuar para o dado ▸": vai direto à página do cartão, dando por lido o que vem antes. */
+  /** O "continuar para o dado": vai direto à página do cartão, dando por lido o que vem antes. */
   const seguirAoDado = () => {
     if (paginaDoDestaque === null) return avancar();
     revelarAte(paginaDoDestaque - 1);
@@ -423,6 +419,8 @@ export function LeitorCenas({
       if (emCampoDeTexto(e.target)) return;
       const alvo = e.target as HTMLElement | null;
       if (alvo?.closest?.("[role=dialog]")) return;
+      // o "Anteriormente" aberto por cima: as teclas não viram a página que está atrás do véu
+      if (document.querySelector("[data-anteriormente-veu]")) return;
       const emBotao = Boolean(alvo?.closest?.("button, a, summary, [role=button], [role=radio], [role=tab]"));
       const t = teclas.current;
       if (e.key === "ArrowRight" || e.key === "PageDown") {
@@ -580,7 +578,7 @@ export function LeitorCenas({
                 <Link
                   href={linkReler}
                   className={`${botaoNav} -ml-1 text-muted/80`}
-                  title="Reler a história inteira (Livro da campanha). Também dá para ler tudo rolando: 📜 Rolagem, no menu de leitura."
+                  title="Reler a história inteira (Livro da campanha). Também dá para ler tudo rolando: Rolagem, no menu de leitura."
                   aria-label="Reler a história"
                   data-reler
                 >
@@ -594,7 +592,7 @@ export function LeitorCenas({
             <div className="flex min-h-11 items-center justify-self-center sm:min-h-9 baixo:min-h-7">
               {paginas > 1 && (
                 <button type="button" className={`${botaoNav} min-w-8 px-1`} onClick={voltar} disabled={paginaAtual === 0} title="Página anterior (←)" aria-label="Página anterior">
-                  <span aria-hidden>◂</span>
+                  <Icone nome="arrowRight" className="rotate-180" />
                 </button>
               )}
               {paginas <= 1 ? null : paginas <= 8 ? (
@@ -610,10 +608,10 @@ export function LeitorCenas({
                       }}
                       aria-label={`Página ${k + 1} de ${paginas}`}
                       aria-current={k === paginaAtual ? "page" : undefined}
-                      className="group grid size-7 place-items-center sm:size-6"
+                      className="group relative grid size-7 place-items-center rounded focus-visible:outline-2 focus-visible:outline-ambar before:absolute before:inset-x-0 before:-inset-y-1.5 sm:size-6 sm:before:hidden"
                     >
                       <span
-                        className={`block rounded-full transition-all duration-300 ${
+                        className={`block rounded-full transition-all duration-300 motion-reduce:transition-none ${
                           k === paginaAtual ? "h-1.5 w-4 bg-ambar" : "size-1.5 bg-muted/40 group-hover:bg-muted/80"
                         }`}
                       />
@@ -631,16 +629,15 @@ export function LeitorCenas({
               {!completa ? (
                 <button type="button" className={`${botaoNav} text-muted/80`} onClick={revelarPagina} title="Mostrar o texto todo (Espaço)" aria-label="Mostrar o texto todo" data-mostrar-tudo>
                   <span className="hidden text-xs md:inline">mostrar tudo</span>
-                  <span aria-hidden className="text-xs">
-                    ⏵⏵
-                  </span>
+                  <Icone nome="fastForward" />
                 </button>
               ) : maisPaginas ? (
-                // no celular é uma pílula com rótulo (alvo de 44 px); quando o dado está adiante, a pílula âmbar chama em qualquer tela
+                // pílula âmbar em todas as larguras (36 px desenhados no celular, 32 no desktop; o alvo de toque completa a barra de
+                // 44 px pelo pseudo-elemento); quando o dado está adiante, ela chama mais forte
                 <button
                   type="button"
-                  className={`${botaoNav} text-ambar hover:text-ambar max-sm:min-h-11 max-sm:rounded-full max-sm:border max-sm:border-ambar/50 max-sm:bg-ambar/10 max-sm:px-3.5 ${
-                    aoDado ? "rounded-full border border-ambar/60 bg-ambar/10 px-3 hover:bg-ambar/15" : "-mr-1"
+                  className={`${botaoNav} relative min-h-9! rounded-full! border px-3.5! text-ambar hover:bg-ambar/15 hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar before:absolute before:-inset-x-1 before:-inset-y-1 sm:min-h-8! sm:before:hidden baixo:min-h-7! ${
+                    aoDado ? "border-ambar/70 bg-ambar/15" : "border-ambar/50 bg-ambar/10"
                   }`}
                   onClick={aoDado ? seguirAoDado : () => avancar()}
                   title={
@@ -660,8 +657,8 @@ export function LeitorCenas({
                   ) : (
                     <span>continuar</span>
                   )}
-                  <span aria-hidden className="leitor-chamar inline-block text-base leading-none">
-                    ▸
+                  <span aria-hidden className="leitor-chamar inline-flex leading-none">
+                    <Icone nome="arrowRight" />
                   </span>
                 </button>
               ) : null}

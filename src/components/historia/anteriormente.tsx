@@ -7,6 +7,7 @@ import type { Mensagem } from "@/lib/db";
 import type { Cena, EntradaDiario } from "@/lib/sistemas/tipos";
 import { fonteGotica } from "./fonte-gotica";
 import { Icone } from "@/components/icones";
+import { missaoEmAberto } from "@/lib/progresso-missoes";
 
 /** O que a rota do livro devolve com ?formato=resumo (recapitulacao/fechamento chegam com a W21; antes, só o resumo). */
 type Resumo = {
@@ -31,9 +32,7 @@ function Blocos({ blocos, classe }: { blocos: BlocoResumo[]; classe: string }) {
           <ul key={i} className="space-y-1 pl-1">
             {b.itens.map((it, j) => (
               <li key={j} className="flex gap-2">
-                <span className="text-ambar/80" aria-hidden>
-                  ◆
-                </span>
+                <span className="mt-[0.55em] size-1.5 shrink-0 rounded-full bg-ambar/70" aria-hidden />
                 <span className="min-w-0">{it}</span>
               </li>
             ))}
@@ -86,6 +85,7 @@ export function Anteriormente({
   diario,
   livro = false,
   aoContinuar,
+  aoMudarFase,
 }: {
   campanhaId: number;
   nome: string;
@@ -95,6 +95,8 @@ export function Anteriormente({
   /** visual de livro do modo história */
   livro?: boolean;
   aoContinuar: () => void;
+  /** avisa quando o cartão abre (true) e quando recolhe ou fecha (false): a mesa tira o leitor de trás do véu do foco e do toque */
+  aoMudarFase?: (aberto: boolean) => void;
 }) {
   const [fase, setFase] = useState<"oculto" | "aberto" | "recolhido">("oculto");
   const [resumo, setResumo] = useState<Resumo | null>(null);
@@ -158,9 +160,21 @@ export function Anteriormente({
     };
   }, [campanhaId]);
 
-  // Esc recolhe
+  // avisa a mesa quando o cartão abre e quando recolhe ou fecha (a função fica num ref: trocar de função não avisa de novo)
+  const avisar = useRef(aoMudarFase);
+  useEffect(() => {
+    avisar.current = aoMudarFase;
+  }, [aoMudarFase]);
+  const botaoContinuar = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    avisar.current?.(fase === "aberto");
+  }, [fase]);
+  useEffect(() => () => avisar.current?.(false), []);
+
+  // Esc recolhe; ao abrir, o foco vai ao "Continuar de onde paramos"
   useEffect(() => {
     if (fase !== "aberto") return;
+    botaoContinuar.current?.focus({ preventScroll: true });
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setFase("recolhido");
     document.addEventListener("keydown", esc);
     return () => document.removeEventListener("keydown", esc);
@@ -177,10 +191,11 @@ export function Anteriormente({
     return (
       <div className="pointer-events-none absolute inset-x-0 top-2 z-20 flex justify-center px-4">
         <div className="pointer-events-auto surgir flex items-center overflow-hidden rounded-full border border-ambar/40 bg-surface/95 text-xs shadow-lg backdrop-blur">
-          <button type="button" onClick={() => setFase("aberto")} className="min-h-9 px-3 text-ambar hover:bg-surface-2" aria-expanded={false}><Icone nome="scroll" />  Anteriormente…
+          <button type="button" onClick={() => setFase("aberto")} className="inline-flex min-h-10 items-center gap-1.5 px-3 text-ambar hover:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ambar sm:min-h-9" aria-expanded={false}>
+            <Icone nome="scroll" /> Anteriormente…
           </button>
-          <button type="button" onClick={() => setFase("oculto")} className="grid min-h-9 w-9 place-items-center border-l border-border text-muted hover:text-foreground" aria-label="Dispensar o resumo">
-            ✕
+          <button type="button" onClick={() => setFase("oculto")} className="grid min-h-10 w-10 place-items-center border-l border-border text-muted hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ambar sm:min-h-9 sm:w-9" aria-label="Dispensar o resumo">
+            <Icone nome="close" />
           </button>
         </div>
       </div>
@@ -202,33 +217,35 @@ export function Anteriormente({
       ? ultimoId - resumo.resumoAte > DEFASAGEM
       : false;
   const lugar = [cena.local, cena.momento].filter(Boolean).join(" · ");
-  const missoes = diario.filter((e) => e.tipo === "missao" && !/conclu|falh|cancel/i.test(e.status));
+  const missoes = diario.filter(missaoEmAberto);
 
   return (
-    <div className="absolute inset-x-0 top-0 z-20 flex justify-center px-3 pt-3 sm:px-6 sm:pt-5">
+    <div className="absolute inset-0 z-20 flex items-start justify-center px-3 pt-3 sm:px-6 sm:pt-5">
+      {/* o véu: apaga a leitura de trás para o resumo ser a única coisa na página; clicar nele recolhe */}
+      <div className="surgir absolute inset-0 bg-background/75 backdrop-blur-sm" onClick={() => setFase("recolhido")} data-anteriormente-veu aria-hidden />
       <section
         aria-labelledby="anteriormente-titulo"
         data-anteriormente
-        className={`surgir relative max-h-[min(70dvh,34rem)] w-full max-w-[42rem] overflow-y-auto overscroll-contain rounded-xl border p-5 shadow-[0_20px_60px_-20px_black] backdrop-blur sm:p-6 ${
+        className={`surgir relative max-h-[min(70dvh,34rem,calc(100%_-_0.75rem))] w-full max-w-[42rem] overflow-y-auto overscroll-contain rounded-xl border p-5 shadow-[0_20px_60px_-20px_color-mix(in_srgb,var(--background)_80%,transparent)] backdrop-blur sm:p-6 ${
           livro ? "border-ambar/40 bg-background/95" : "cartao cartao-tema bg-surface/95"
         }`}
       >
         <button
           type="button"
           onClick={() => setFase("recolhido")}
-          className="absolute right-2 top-2 grid size-9 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-foreground"
+          className="absolute right-2 top-2 grid size-10 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ambar sm:size-9"
           aria-label="Recolher o resumo"
           title="Recolher (Esc)"
         >
-          ▴
+          <Icone nome="chevronDown" className="rotate-180" />
         </button>
         <p className="pr-10 text-[11px] font-semibold uppercase tracking-[0.28em] text-muted">Vocês pararam {haQuanto(pausa)}</p>
         {livro ? (
-          <h2 id="anteriormente-titulo" className={`${fonteGotica.className} mt-1.5 pr-8 text-3xl leading-tight text-pergaminho sm:text-4xl`}>
+          <h2 id="anteriormente-titulo" className={`${fonteGotica.className} titulo-brilho mt-1.5 pr-8 text-3xl leading-tight text-pergaminho sm:text-4xl`}>
             Anteriormente, em {nome}…
           </h2>
         ) : (
-          <h2 id="anteriormente-titulo" className="titulo mt-1 pr-8 text-2xl leading-tight text-pergaminho">
+          <h2 id="anteriormente-titulo" className="titulo titulo-brilho mt-1 pr-8 text-2xl leading-tight text-pergaminho">
             Anteriormente…
           </h2>
         )}
@@ -237,7 +254,7 @@ export function Anteriormente({
         {lugar && (
           <p className="mt-3 text-sm text-muted">
             <Icone nome="place" />
-            {cena.titulo && <span className="text-foreground">{cena.titulo} — </span>}
+            {cena.titulo && <span className="text-foreground">{cena.titulo} · </span>}
             {lugar}
           </p>
         )}
@@ -248,7 +265,7 @@ export function Anteriormente({
               <button
                 type="button"
                 onClick={() => setInteiro((v) => !v)}
-                className="mt-2 min-h-9 text-sm text-ambar underline-offset-4 hover:underline"
+                className="mt-2 min-h-10 text-sm text-ambar underline-offset-4 hover:underline sm:min-h-9"
                 aria-expanded={inteiro}
                 data-resumo-inteiro
               >
@@ -272,12 +289,10 @@ export function Anteriormente({
             <ul className="mt-1.5 space-y-1 text-sm">
               {missoes.slice(0, 5).map((m) => (
                 <li key={m.id} className="flex gap-2">
-                  <span className="text-ambar/80" aria-hidden>
-                    ◆
-                  </span>
+                  <span className="mt-[0.55em] size-1.5 shrink-0 rounded-full bg-ambar/70" aria-hidden />
                   <span className="min-w-0">
                     <span className="text-foreground">{m.titulo}</span>
-                    {m.texto && <span className="text-muted"> — {m.texto.length > 140 ? `${m.texto.slice(0, 140)}…` : m.texto}</span>}
+                    {m.texto && <span className="text-muted">: {m.texto.length > 140 ? `${m.texto.slice(0, 140)}…` : m.texto}</span>}
                   </span>
                 </li>
               ))}
@@ -286,10 +301,11 @@ export function Anteriormente({
           </div>
         )}
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <button type="button" onClick={continuar} className="btn-ambar min-h-11 px-6">
+          <button ref={botaoContinuar} type="button" onClick={continuar} className="btn-ambar min-h-11 px-6">
             Continuar de onde paramos
           </button>
-          <Link href={`/mesa/${campanhaId}/livro`} className="text-sm text-muted underline-offset-4 hover:text-ambar hover:underline"><Icone nome="scroll" />  Reler o livro da campanha
+          <Link href={`/mesa/${campanhaId}/livro`} className="inline-flex min-h-10 items-center gap-1.5 text-sm text-muted underline-offset-4 hover:text-ambar hover:underline">
+            <Icone nome="scroll" /> Reler o livro da campanha
           </Link>
         </div>
       </section>

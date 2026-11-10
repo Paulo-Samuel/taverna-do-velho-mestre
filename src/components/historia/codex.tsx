@@ -16,10 +16,10 @@ import { corDoNome } from "./cores";
 import { fonteGotica } from "./fonte-gotica";
 import { Retrato, RetratoSVG } from "./retrato";
 import { retratoDaEntrada } from "./retrato/dados";
-import { Icone, TextoComIcones } from "@/components/icones";
+import { Icone, type NomeIcone } from "@/components/icones";
 
 // Códex do modo história: gaveta recolhível à esquerda (tela cheia no celular) com o personagem, as missões,
-// as pessoas e os lugares que o mestre anotou no diário, o grupo e os fatos fixados (📌). Tecla C abre e fecha; Esc fecha.
+// as pessoas e os lugares que o mestre anotou no diário, o grupo e os fatos fixados. Tecla C abre e fecha; Esc fecha.
 
 export type AbaCodex = "personagem" | "missoes" | "pessoas" | "lugares" | "grupo" | "fatos";
 
@@ -53,11 +53,12 @@ function Barra({ rotulo, atual: lido, max: maxLido, cor, ajuste }: { rotulo: str
   const atual = v?.atual ?? lido;
   const max = v?.max ?? maxLido;
   const pct = max > 0 ? Math.max(0, Math.min(100, (atual / max) * 100)) : 0;
+  // magia e sanidade nos matizes do tema (os mesmos valores da ficha da mesa avançada)
   const fundo =
     cor === "magia"
-      ? "bg-sky-400"
+      ? "bg-[var(--matiz-1)]"
       : cor === "sanidade"
-        ? "bg-violet-400"
+        ? "bg-[var(--matiz-5)]"
         : cor === "vida"
           ? pct > 50
             ? "bg-musgo"
@@ -119,7 +120,7 @@ function Bloco({ b, ajuste }: { b: BlocoFicha; ajuste?: AjusteFicha }) {
           {b.itens.length ? (
             <div className="flex flex-wrap gap-1.5">
               {b.itens.map((x, i) => (
-                <span key={`${x}-${i}`} className="rounded-full border border-border bg-surface-2 px-2.5 py-0.5 text-sm text-foreground/90">
+                <span key={`${x}-${i}`} className="etiqueta px-2.5 text-sm text-foreground/90">
                   {x}
                 </span>
               ))}
@@ -136,9 +137,7 @@ function Bloco({ b, ajuste }: { b: BlocoFicha; ajuste?: AjusteFicha }) {
             <ul className="space-y-1 text-sm">
               {b.itens.map((x, i) => (
                 <li key={`${x}-${i}`} className="flex gap-2">
-                  <span className="text-ambar/70" aria-hidden>
-                    ◆
-                  </span>
+                  <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-ambar/70" aria-hidden />
                   <span className="text-foreground/90">{x}</span>
                 </li>
               ))}
@@ -187,9 +186,10 @@ function FichaCodex({ mesa, p, aoRemorso }: { mesa: Mesa; p: PersonagemVisivel; 
           onClick={ajuste.alternarEdicao}
           aria-pressed={ajuste.editando}
           title="Corrigir à mão a vida e os recursos"
-          className={`rounded-full border px-2.5 py-0.5 text-xs transition ${ajuste.editando ? "border-ambar bg-ambar/15 text-ambar" : "border-border text-muted hover:border-ambar hover:text-ambar"}`}
+          className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 text-xs transition sm:min-h-8 ${ajuste.editando ? "border-ambar bg-ambar/15 text-ambar" : "border-border text-muted hover:border-ambar hover:text-ambar"}`}
         >
-          {ajuste.editando ? "✓ pronto" : "✎ ajustar"}
+          <Icone nome={ajuste.editando ? "check" : "pencil"} />
+          {ajuste.editando ? "pronto" : "ajustar"}
         </button>
       </div>
       {/* Vampiro: as Manchas só sobem à mão; quem as limpa é o teste de Remorso, rolado aqui */}
@@ -212,22 +212,30 @@ function FichaCodex({ mesa, p, aoRemorso }: { mesa: Mesa; p: PersonagemVisivel; 
   );
 }
 
-const STATUS: Record<string, [string, string]> = {
-  aberta: ["em andamento", "border-ambar/60 text-ambar"],
-  concluida: ["concluída", "border-musgo/60 text-musgo"],
-  falhou: ["fracassou", "border-sangue/60 text-sangue"],
-  aliado: ["aliado", "border-musgo/60 text-musgo"],
-  amigo: ["amigo", "border-musgo/60 text-musgo"],
-  neutro: ["neutro", "border-border text-muted"],
-  hostil: ["hostil", "border-sangue/60 text-sangue"],
-  inimigo: ["inimigo", "border-sangue/60 text-sangue"],
-  morto: ["morto", "border-border text-muted line-through"],
+/** Rótulo e matiz de cada status: "" é o âmbar do tema, null é a plaquinha neutra (`etiqueta`). */
+const STATUS: Record<string, [string, string | null]> = {
+  aberta: ["em andamento", ""],
+  concluida: ["concluída", "matiz-2"],
+  falhou: ["fracassou", "matiz-4"],
+  aliado: ["aliado", "matiz-2"],
+  amigo: ["amigo", "matiz-2"],
+  neutro: ["neutro", null],
+  hostil: ["hostil", "matiz-4"],
+  inimigo: ["inimigo", "matiz-4"],
+  morto: ["morto", null],
 };
 
 function Selo({ status }: { status: string }) {
   if (!status) return null;
-  const [rotulo, cor] = STATUS[status] ?? [status, "border-border text-muted"];
-  return <span className={`shrink-0 rounded-full border px-2 py-px text-[11px] uppercase tracking-wider ${cor}`}>{rotulo}</span>;
+  const [rotulo, matiz] = STATUS[status] ?? [status, null];
+  const base = matiz === null ? `etiqueta ${status === "morto" ? "line-through" : ""}` : `etiqueta-matiz ${matiz}`;
+  return <span className={`${base} shrink-0 text-[11px] uppercase tracking-wider`}>{rotulo}</span>;
+}
+
+/** Matiz da borda do cartão de uma pessoa conforme a atitude (aliado verde, hostil vermelho); o resto fica na borda comum. */
+function matizDaPessoa(status: string): string | null {
+  const matiz = STATUS[status]?.[1];
+  return status !== "aberta" && matiz ? matiz : null;
 }
 
 const texto = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
@@ -243,19 +251,37 @@ function Campo({ rotulo, valor }: { rotulo: string; valor: unknown }) {
   );
 }
 
-function Vazio({ children }: { children: ReactNode }) {
-  return <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm italic text-muted">{children}</p>;
+/** Aba sem nada: ícone (opcional), a frase e, se houver, uma segunda linha dizendo como aquilo se enche. */
+function Vazio({ children, icone, dica }: { children: ReactNode; icone?: NomeIcone; dica?: ReactNode }) {
+  return (
+    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted">
+      {icone && (
+        <p className="mb-2 text-2xl leading-none text-ambar/70" aria-hidden>
+          <Icone nome={icone} />
+        </p>
+      )}
+      <p className="italic">{children}</p>
+      {dica && <p className="mt-1 text-xs">{dica}</p>}
+    </div>
+  );
 }
 
 function AbaMissoes({ entradas, fatos }: { entradas: EntradaDiario[]; fatos: ControleFatos }) {
   const missoes = entradas.filter((e) => e.tipo === "missao").sort((a, b) => Number(a.status !== "aberta") - Number(b.status !== "aberta"));
-  if (!missoes.length) return <Vazio>Nenhuma missão ainda. O mundo está esperando.</Vazio>;
+  if (!missoes.length)
+    return (
+      <Vazio icone="scroll" dica="O mestre anota aqui quando alguém pedir um favor.">
+        Nenhuma missão ainda. O mundo está esperando.
+      </Vazio>
+    );
   return (
     <ul className="space-y-3">
       {missoes.map((m) => {
+        // missão encerrada: o corpo recua para o tom apagado, o título e o selo seguem legíveis (sem opacidade no cartão)
+        const encerrada = m.status !== "aberta";
         const pistas = Array.isArray(m.dados?.pistas) ? (m.dados.pistas as unknown[]).filter((x): x is string => typeof x === "string") : [];
         return (
-          <li key={m.id} className={`rounded-lg border border-border/80 bg-surface-2/60 p-3 ${m.status !== "aberta" ? "opacity-75" : ""}`}>
+          <li key={m.id} className="rounded-lg border border-border/80 bg-surface-2/60 p-3">
             <div className="flex items-start justify-between gap-2">
               <p className="font-semibold text-pergaminho">{m.titulo}</p>
               <div className="-mr-1.5 -mt-1 flex shrink-0 items-center gap-1">
@@ -263,7 +289,7 @@ function AbaMissoes({ entradas, fatos }: { entradas: EntradaDiario[]; fatos: Con
                 <BotaoFixar texto={resumoDaEntrada(m)} controle={fatos} rotulo={m.titulo} />
               </div>
             </div>
-            {m.texto && <p className="mt-1 text-sm leading-relaxed text-foreground/85">{m.texto}</p>}
+            {m.texto && <p className={`mt-1 text-sm leading-relaxed ${encerrada ? "text-muted" : "text-foreground/85"}`}>{m.texto}</p>}
             <div className="mt-2 space-y-0.5">
               <Campo rotulo="Objetivo" valor={m.dados?.objetivo} />
               <Campo rotulo="Recompensa" valor={m.dados?.recompensa} />
@@ -274,9 +300,7 @@ function AbaMissoes({ entradas, fatos }: { entradas: EntradaDiario[]; fatos: Con
                 <ul className="mt-1 space-y-0.5 text-sm">
                   {pistas.map((x, i) => (
                     <li key={i} className="flex gap-2">
-                      <span className="text-ambar/70" aria-hidden>
-                        ⁂
-                      </span>
+                      <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-ambar/70" aria-hidden />
                       {x}
                     </li>
                   ))}
@@ -296,14 +320,17 @@ function AbaPessoas({ entradas, fatos, foco }: { entradas: EntradaDiario[]; fato
     if (foco != null) document.getElementById(`codex-pessoa-${foco}`)?.scrollIntoView({ block: "center" });
   }, [foco]);
   const npcs = entradas.filter((e) => e.tipo === "npc").sort((a, b) => Number(a.status === "morto") - Number(b.status === "morto"));
-  if (!npcs.length) return <Vazio>Ninguém conhecido por enquanto.</Vazio>;
+  if (!npcs.length) return <Vazio icone="person">Ninguém conhecido por enquanto.</Vazio>;
   return (
     <ul className="space-y-3">
-      {npcs.map((n) => (
+      {npcs.map((n) => {
+        // a borda conta a atitude (aliado, hostil); o fundo é o mesmo de todos e o foco vindo da faixa vence
+        const matiz = foco === n.id ? null : matizDaPessoa(n.status);
+        return (
         <li
           key={n.id}
           id={`codex-pessoa-${n.id}`}
-          className={`flex gap-3 rounded-lg border bg-surface-2/60 p-3 ${foco === n.id ? "border-ambar ring-1 ring-ambar" : "border-border/80"} ${n.status === "morto" ? "opacity-60" : ""}`}
+          className={`flex gap-3 rounded-lg border bg-surface-2/60! p-3 ${foco === n.id ? "border-ambar ring-1 ring-ambar" : matiz ? `cartao-matiz ${matiz}` : "border-border/80"} ${n.status === "morto" ? "opacity-60" : ""}`}
         >
           {/* rosto do NPC (salvo ao anotar; NPC antigo ganha o mesmo, gerado aqui pelo nome); morto fica em tons de cinza */}
           <RetratoSVG
@@ -337,12 +364,13 @@ function AbaPessoas({ entradas, fatos, foco }: { entradas: EntradaDiario[]; fato
             </div>
           </div>
         </li>
-      ))}
+        );
+      })}
     </ul>
   );
 }
 
-function ListaSimples({ entradas, icone, fatos }: { entradas: EntradaDiario[]; icone: string; fatos: ControleFatos }) {
+function ListaSimples({ entradas, icone, fatos }: { entradas: EntradaDiario[]; icone: NomeIcone; fatos: ControleFatos }) {
   return (
     <ul className="space-y-2">
       {entradas.map((e) => (
@@ -350,7 +378,7 @@ function ListaSimples({ entradas, icone, fatos }: { entradas: EntradaDiario[]; i
           <div className="flex items-start justify-between gap-2">
             <p className="font-semibold text-pergaminho">
               <span className="mr-1.5 text-ambar/70" aria-hidden>
-                <TextoComIcones texto={icone} />
+                <Icone nome={icone} />
               </span>
               {e.titulo}
             </p>
@@ -373,7 +401,7 @@ function AbaLugares({ mesa, fatos }: { mesa: Mesa; fatos: ControleFatos }) {
   return (
     <div>
       {mesa.cena.local && (
-        <div className="mb-4 rounded-lg border border-ambar/40 bg-ambar/5 p-3">
+        <div className="cartao cartao-matiz mb-4 rounded-lg p-3">
           <p className="text-[11px] uppercase tracking-[0.22em] text-muted">Agora</p>
           <p className="font-semibold text-pergaminho">{mesa.cena.local}</p>
           {[mesa.cena.momento, mesa.cena.clima].filter(Boolean).length > 0 && (
@@ -382,15 +410,15 @@ function AbaLugares({ mesa, fatos }: { mesa: Mesa; fatos: ControleFatos }) {
           {mesa.cena.situacao && <p className="mt-1 text-sm text-foreground/85">{mesa.cena.situacao}</p>}
         </div>
       )}
-      {lugares.length ? <ListaSimples entradas={lugares} icone="⌂" fatos={fatos} /> : !mesa.cena.local && <Vazio>Nenhum lugar anotado ainda.</Vazio>}
+      {lugares.length ? <ListaSimples entradas={lugares} icone="place" fatos={fatos} /> : !mesa.cena.local && <Vazio icone="place">Nenhum lugar anotado ainda.</Vazio>}
       {itens.length > 0 && (
         <Secao titulo="Objetos notáveis">
-          <ListaSimples entradas={itens} icone="◆" fatos={fatos} />
+          <ListaSimples entradas={itens} icone="key" fatos={fatos} />
         </Secao>
       )}
       {notas.length > 0 && (
         <Secao titulo="Anotações">
-          <ListaSimples entradas={notas} icone="❡" fatos={fatos} />
+          <ListaSimples entradas={notas} icone="scroll" fatos={fatos} />
         </Secao>
       )}
     </div>
@@ -411,7 +439,7 @@ function AbaGrupo({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
           return (
             <li
               key={p.id}
-              className={`flex items-center gap-3 rounded-lg border p-2.5 ${ativo ? "border-ambar/60 bg-ambar/5" : "border-border/80 bg-surface-2/60"}`}
+              className={`flex items-center gap-3 rounded-lg p-2.5 ${ativo ? "cartao cartao-matiz" : "border border-border/80 bg-surface-2/60"}`}
             >
               <Retrato ficha={p.ficha} tamanho={48} />
               <div className="min-w-0 flex-1">
@@ -465,7 +493,7 @@ export function Codex({
   novidades,
   pessoaFoco,
 }: {
-  /** 🌙 Encerrar a noite: abre o diálogo do ritual (no celular o botão mora no pé do códex) */
+  /** Encerrar a noite: abre o diálogo do ritual (no celular o botão mora no pé do códex) */
   aoEncerrar?: () => void;
   /** pediu o teste de Remorso na ficha: a mesa fecha o códex e leva até o dado */
   aoRemorso?: (mensagemId: number | null) => void;
@@ -475,7 +503,7 @@ export function Codex({
   pessoaFoco?: number | null;
   mesa: Mesa;
   acoes: AcoesMesa;
-  /** fatos fixados (aba 📌 e o 📌 de cada entrada) */
+  /** fatos fixados (a aba Fatos e o alfinete de cada entrada) */
   fatos: ControleFatos;
   aberto: boolean;
   aoFechar: () => void;
@@ -548,11 +576,11 @@ export function Codex({
           <button
             type="button"
             onClick={aoFechar}
-            className="grid size-10 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-foreground"
+            className="botao-cabecalho"
             aria-label="Fechar o códex"
             title="Fechar (C ou Esc)"
           >
-            ✕
+            <Icone nome="close" />
           </button>
         </div>
         {/* as cinco abas cabem na largura (celular e gaveta de 400px) sem rolar de lado */}
@@ -610,12 +638,12 @@ export function Codex({
             <Icone nome="scroll" /> Livro
           </Link>
           <Link href={`/mesa/${mesa.campanha.id}/ajustes`} className="flex min-h-10 shrink-0 items-center gap-1 rounded-md px-2 hover:bg-surface-2 hover:text-ambar">
-            <span aria-hidden>⚙</span> Ajustes da mesa
+            <Icone nome="gear" /> Ajustes da mesa
           </Link>
           {/* no celular o cabeçalho não tem espaço: o modo de leitura (cena a cena / rolagem) mora aqui */}
           <MenuLeitura acima className="sm:hidden" />
         </div>
-        {/* no celular o 🌙 Encerrar a noite sai do cabeçalho e mora no pé do códex, em destaque */}
+        {/* no celular o Encerrar a noite sai do cabeçalho e mora no pé do códex, em destaque */}
         {aoEncerrar && (
           <div className="border-t border-border/70 px-3 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 sm:hidden">
             <button

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CeuEstrelado } from "@/components/historia/ceu-estrelado";
 import { fonteGotica } from "@/components/historia/fonte-gotica";
@@ -15,6 +14,7 @@ import { dataPorExtenso, montarLivro, romano, statusDaMissao, tituloDoCapitulo, 
 import { Prosa } from "./prosa";
 import "./livro.css";
 import { Icone } from "@/components/icones";
+import { LinkVoltar } from "@/components/link-voltar";
 
 // Livro da campanha: a história inteira como um livro, da capa às fichas e ao diário. Mesmo controle de acesso da mesa.
 // Tema do sistema (modo história: céu estrelado e letra gótica). Imprime limpo (livro.css) e baixa em Markdown.
@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata(props: PageProps<"/mesa/[id]/livro">): Promise<Metadata> {
   const { id } = await props.params;
   const c = obterCampanha(Number(id));
-  return { title: c ? `Livro · ${c.nome}` : "Taverna do Velho Mestre" };
+  return { title: c ? `Livro · ${c.nome}` : "Porta errada" };
 }
 
 function iniciais(nome: string): string {
@@ -52,7 +52,7 @@ function DesenharBloco({ b, ornamento, capitular }: { b: Bloco; ornamento: strin
     return (
       <p className="livro-acao">
         <span className="livro-acao-nome">{b.nome}</span>
-        {b.autor && b.autor !== b.nome && <span className="livro-acao-autor"> ({b.autor})</span>} — <em>{b.texto}</em>
+        {b.autor && b.autor !== b.nome && <span className="livro-acao-autor"> ({b.autor})</span>}: <em>{b.texto}</em>
       </p>
     );
   if (b.tipo === "fim")
@@ -61,13 +61,13 @@ function DesenharBloco({ b, ornamento, capitular }: { b: Bloco; ornamento: strin
         <p className="livro-separador" aria-hidden>
           {ornamento} {ornamento} {ornamento}
         </p>
-        <p className="livro-fim-noite-titulo">— Fim da noite{b.sessao ? ` ${b.sessao}` : ""} —</p>
+        <p className="livro-fim-noite-titulo">Fim da noite{b.sessao ? ` ${b.sessao}` : ""}</p>
       </div>
     );
   if (b.tipo === "nota")
     return (
       <p className="livro-nota">
-        <Icone nome="dice" />
+        <Icone nome="dice" className="mr-1.5 text-ambar" />
         {b.texto}
       </p>
     );
@@ -107,9 +107,18 @@ function ListaDiario({
                   titulo={`Retrato de ${e.titulo}`}
                 />
               )}
-              <span className="font-semibold text-pergaminho">{e.titulo}</span>
-              {r && <span className="livro-etiqueta"> {r}</span>}
-              {e.texto && <span className="text-foreground/85"> — {e.texto}</span>}
+              <span className="font-semibold text-pergaminho">
+                {e.titulo}
+                {e.texto && !r ? ":" : ""}
+              </span>
+              {r && (
+                <span className="livro-etiqueta">
+                  {" "}
+                  {r}
+                  {e.texto ? ":" : ""}
+                </span>
+              )}
+              {e.texto && <span className="text-foreground/85"> {e.texto}</span>}
             </li>
           );
         })}
@@ -132,6 +141,7 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
   const ornamento = historia ? "✦" : tema.ornamento;
   const fonteTitulo = historia ? fonteGotica.className : "titulo";
   const temNarracao = livro.capitulos.some((c) => c.blocos.some((b) => b.tipo === "narracao"));
+  const temSumario = temNarracao && livro.capitulos.length > 1;
   const diarioVazio = !livro.missoes.length && !livro.pessoas.length && !livro.lugares.length && !livro.outros.length && !livro.fatos.length;
   const periodo =
     dataPorExtenso(livro.campanha.criadaEm) === dataPorExtenso(livro.campanha.atualizadaEm)
@@ -139,23 +149,32 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
       : `de ${dataPorExtenso(livro.campanha.criadaEm)} a ${dataPorExtenso(livro.campanha.atualizadaEm)}`;
 
   return (
-    <div data-tema={historia ? "historia" : temaDoSistema(livro.sistema.id)} className={`livro ${historia ? "livro-historia" : "fundo-tema"} relative min-h-dvh`}>
+    <div data-tema={historia ? "historia" : temaDoSistema(livro.sistema.id)} className={`livro ${historia ? "livro-historia" : "fundo-tema"} relative min-h-dvh [&_:focus-visible]:outline-2 [&_:focus-visible]:outline-offset-2 [&_:focus-visible]:outline-ambar`}
+    >
       {historia ? <CeuEstrelado /> : <TemaPagina tema={temaDoSistema(livro.sistema.id)} />}
 
       {/* barra de ferramentas (some na impressão) */}
       <div className="nao-imprimir sticky top-0 z-20 border-b border-border/60 bg-background/85 backdrop-blur">
         <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-2 px-4 py-2">
-          <Link href={`/mesa/${livro.campanha.id}`} className="inline-flex min-h-10 items-center gap-1 rounded-md px-2 text-sm text-muted hover:bg-surface-2/60 hover:text-ambar">
-            ← Voltar à mesa
-          </Link>
-          <span className="flex-1" />
+          <LinkVoltar href={`/mesa/${livro.campanha.id}`}>
+            Voltar à mesa
+          </LinkVoltar>
+          <span className="min-w-0 flex-1 truncate text-center text-sm text-muted" title={livro.campanha.nome}>
+            {/* no celular vira só o espaço entre o voltar e os botões: o nome já está na capa */}
+            <span className="hidden sm:inline">{livro.campanha.nome}</span>
+          </span>
+          {temSumario && (
+            <a href="#sumario" className="inline-flex min-h-10 items-center gap-1 rounded-md px-2 text-sm text-muted hover:bg-surface-2/60 hover:text-ambar">
+              <Icone nome="book" /> Sumário
+            </a>
+          )}
           <a
             href={`/api/campanhas/${livro.campanha.id}/livro?formato=md`}
             download
             className="btn-borda min-h-10 px-3 py-2"
             title="Baixar a campanha em Markdown (.md): abre em qualquer editor de texto"
           >
-            <span aria-hidden>⬇</span> Markdown
+            <Icone nome="download" /> Markdown
           </a>
           <BotaoImprimir />
         </div>
@@ -163,10 +182,10 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
 
       <article className="relative z-10 mx-auto max-w-[44rem] px-5 pb-24 sm:px-8">
         {/* capa */}
-        <header className="livro-capa flex min-h-[78dvh] flex-col items-center justify-center py-16 text-center">
+        <header className="livro-capa my-6 flex min-h-[78dvh] flex-col items-center justify-center rounded-sm border border-ambar/30 px-4 py-16 text-center outline outline-1 outline-offset-4 outline-[color-mix(in_srgb,var(--ambar)_30%,transparent)] sm:px-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-muted">{historia ? "Uma história da Taverna do Velho Mestre" : livro.sistema.nome}</p>
           <div className="mx-auto mt-6 h-px w-48 bg-linear-to-r from-transparent via-ambar/60 to-transparent" />
-          <h1 className={`${fonteTitulo} mt-6 text-5xl leading-tight text-pergaminho sm:text-6xl`}>{livro.campanha.nome}</h1>
+          <h1 className={`${fonteTitulo} titulo-brilho mt-6 text-5xl leading-tight text-pergaminho sm:text-6xl`}>{livro.campanha.nome}</h1>
           <p className="mt-4 text-sm text-muted">{periodo}</p>
           {livro.campanha.cenario && <p className="mx-auto mt-8 max-w-xl text-[1.05rem] italic leading-relaxed text-foreground/85">{livro.campanha.cenario}</p>}
           {livro.fichas.length > 0 && (
@@ -174,10 +193,10 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
               <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted">Estrelando</p>
               <ul className="mt-4 flex flex-wrap justify-center gap-6">
                 {livro.fichas.map((f) => (
-                  <li key={f.id} className="flex w-28 flex-col items-center gap-2">
+                  <li key={f.id} className="flex w-40 flex-col items-center gap-2">
                     <Rosto f={f} historia={historia} tamanho={72} />
-                    <span className="w-full text-sm font-semibold leading-tight text-pergaminho">{f.nome}</span>
-                    {f.linha && <span className="-mt-1 w-full text-xs leading-tight text-muted">{f.linha}</span>}
+                    <span className="w-full text-balance text-sm font-semibold leading-tight text-pergaminho">{f.nome}</span>
+                    {f.linha && <span className="-mt-1 w-full text-balance text-xs leading-tight text-muted">{f.linha}</span>}
                   </li>
                 ))}
               </ul>
@@ -189,19 +208,32 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
         </header>
 
         {/* sumário */}
-        {temNarracao && livro.capitulos.length > 1 && (
-          <nav className="livro-sumario mx-auto mb-16 max-w-md" aria-label="Sumário">
+        {temSumario && (
+          <nav id="sumario" className="livro-sumario mx-auto mb-16 mt-12 max-w-md scroll-mt-16" aria-label="Sumário">
             <h2 className={`${fonteTitulo} text-center text-2xl text-pergaminho`}>Sumário</h2>
-            <ol className="mt-4 space-y-1.5">
+            <ol className="mt-4">
               {livro.capitulos.map((c) => (
                 <li key={c.numero}>
                   {c.noite && <p className="mb-1 mt-3 text-center text-[11px] font-semibold uppercase tracking-[0.3em] text-ambar/80">Noite {c.noite}{c.noiteData ? ` · ${c.noiteData}` : ""}</p>}
-                  <a href={`#capitulo-${c.numero}`} className="flex items-baseline gap-2 text-foreground/90 hover:text-ambar">
+                  <a href={`#capitulo-${c.numero}`} className="flex min-h-10 items-baseline gap-2 py-2 text-foreground/90 hover:text-ambar">
                     <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted">{romano(c.numero)}</span>
-                    <span className="min-w-0 flex-1 truncate">{tituloDoCapitulo(c)}</span>
+                    <span aria-hidden className="w-4 shrink-0 border-b border-dotted border-border" />
+                    <span className="min-w-0 flex-1 leading-snug">{tituloDoCapitulo(c)}</span>
                   </a>
                 </li>
               ))}
+              {[livro.fichas.length > 0 && { href: "#personagens", rotulo: "Os personagens" }, !diarioVazio && { href: "#diario", rotulo: "Diário da campanha" }]
+                .filter((x): x is { href: string; rotulo: string } => Boolean(x))
+                .map((x, i) => (
+                  <li key={x.href} className={i === 0 ? "mt-3 border-t border-border/60 pt-2" : ""}>
+                    <a href={x.href} className="flex min-h-10 items-baseline gap-2 py-2 text-foreground/90 hover:text-ambar">
+                      {/* sem número não há pontilhado: só o recuo, para alinhar com os títulos dos capítulos */}
+                      <span aria-hidden className="w-10 shrink-0" />
+                      <span aria-hidden className="w-4 shrink-0" />
+                      <span className="min-w-0 flex-1 leading-snug">{x.rotulo}</span>
+                    </a>
+                  </li>
+                ))}
             </ol>
           </nav>
         )}
@@ -217,7 +249,8 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
               <header className="mb-8 text-center">
                 {c.noite && (c.titulo || c.local) && (
                   <p className={`${fonteTitulo} livro-noite mb-3 text-lg text-ambar`}>
-                    <span aria-hidden>☾ </span>Noite {c.noite}
+                    <Icone nome="moon" className="mr-1.5" />
+                    Noite {c.noite}
                   </p>
                 )}
                 <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-muted">Capítulo {romano(c.numero)}</p>
@@ -241,7 +274,7 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
 
         {/* apêndices: fichas e diário */}
         {livro.fichas.length > 0 && (
-          <section className="livro-capitulo pt-20" aria-labelledby="fichas-titulo">
+          <section id="personagens" className="livro-capitulo scroll-mt-16 pt-20" aria-labelledby="fichas-titulo">
             <h2 id="fichas-titulo" className={`${fonteTitulo} text-center text-3xl text-pergaminho`}>
               Os personagens
             </h2>
@@ -251,7 +284,7 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
                   <div className="flex items-center gap-3">
                     <Rosto f={f} historia={historia} tamanho={48} />
                     <div className="min-w-0">
-                      <p className="titulo truncate text-lg text-pergaminho">{f.nome}</p>
+                      <p className="titulo text-lg leading-tight text-pergaminho [overflow-wrap:anywhere]">{f.nome}</p>
                       {f.linha && <p className="text-xs text-muted">{f.linha}</p>}
                     </div>
                   </div>
@@ -271,7 +304,7 @@ export default async function PaginaLivro(props: PageProps<"/mesa/[id]/livro">) 
         )}
 
         {!diarioVazio && (
-          <section className="livro-capitulo pt-20" aria-labelledby="diario-titulo">
+          <section id="diario" className="livro-capitulo scroll-mt-16 pt-20" aria-labelledby="diario-titulo">
             <h2 id="diario-titulo" className={`${fonteTitulo} text-center text-3xl text-pergaminho`}>
               Diário da campanha
             </h2>

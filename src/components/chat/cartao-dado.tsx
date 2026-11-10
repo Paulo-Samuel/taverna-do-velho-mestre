@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { PRAZO_DECISAO_MS, PRAZO_DISCRETO_MS } from "@/lib/constantes";
 import type { Mensagem } from "@/lib/db";
-import { Icone, TextoComIcones } from "@/components/icones";
+import { Icone, type NomeIcone } from "@/components/icones";
 
 // Cartão de uma mensagem de dado: teste de personagem (d20, d100, Fate, PbtA, parada de d10 do Vampiro V5), rolagem livre (mestre ou jogador),
 // mudança de ficha, XP, descanso, iniciativa, fim de combate, cena e diário. Tipo desconhecido cai num cartão genérico com mensagem.texto.
@@ -13,11 +13,11 @@ import { Icone, TextoComIcones } from "@/components/icones";
 type Dados = Record<string, any>;
 
 const COR_GRAU: Record<string, string> = {
-  sucesso_critico: "text-ambar",
-  sucesso: "text-musgo",
-  parcial: "text-sky-300",
-  falha: "text-sangue",
-  falha_critica: "text-sangue",
+  sucesso_critico: "text-[var(--critico,var(--ambar))]",
+  sucesso: "text-[var(--grau-sucesso)]",
+  parcial: "text-[var(--grau-parcial)]",
+  falha: "text-[var(--grau-falha)]",
+  falha_critica: "text-[var(--grau-falha)]",
 };
 
 // animações extras do cartão; React 19 iça e deduplica este <style> pelo href
@@ -45,9 +45,11 @@ function Selo({ children, cor = "border-border text-muted" }: { children: ReactN
 function Selos({ r }: { r: Dados }) {
   return (
     <>
-      {r.manual && <Selo cor="border-pergaminho/40 text-pergaminho">✋ manual</Selo>}
+      {r.manual && <Selo cor="border-pergaminho/40 text-pergaminho">
+          <Icone nome="pencil" /> manual
+        </Selo>}
       {r.secreta && <Selo cor="border-sangue/50 text-sangue">secreta</Selo>}
-      {r.privada && <Selo cor="border-sky-300/40 text-sky-300">só para você</Selo>}
+      {r.privada && <Selo cor="border-[color-mix(in_srgb,var(--grau-parcial)_45%,transparent)] text-[var(--grau-parcial)]">só para você</Selo>}
     </>
   );
 }
@@ -106,8 +108,8 @@ function Face({
     >
       {valor}
       {explodiu && !descartado && (
-        <span className="absolute -right-1.5 -top-1.5 text-[11px] text-ambar" aria-label="explodiu">
-          ✶
+        <span className="absolute -right-1.5 -top-1.5 text-[11px] leading-none text-ambar" role="img" aria-label="explodiu">
+          <Icone nome="sparkle" />
         </span>
       )}
     </span>
@@ -224,7 +226,7 @@ export function LinhaOposicao({ r, novo = false }: { r: { oposicao?: unknown }; 
   const d10 = /d10$/.test(o.expressao);
   return (
     <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted" title="o servidor rolou a parada de quem resiste; empate fica com quem resiste">
-      <span aria-hidden>⚔</span>
+      <Icone nome="swords" />
       <span className="text-foreground/85">{textoOposicaoCartao(o)}</span>
       {d10 &&
         o.dados.map((v, i) => (
@@ -244,7 +246,7 @@ function LinhaDano({ r }: { r: Dados }) {
   return (
     <p className="mt-1 text-xs">
       <span className="font-semibold text-sangue">
-        ⚔ dano sugerido {valor}
+        <Icone nome="swords" /> dano sugerido {valor}
         {typeof d.tipo === "string" && d.tipo ? ` ${d.tipo}` : ""}
       </span>
       {typeof d.texto === "string" && d.texto && <span className="text-muted"> · {d.texto}</span>}
@@ -376,7 +378,7 @@ function TesteFate({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: 
 
 const FAIXAS_PBTA = [
   { rotulo: "6−", cor: "bg-sangue/70", texto: "text-sangue", ate: 6 },
-  { rotulo: "7–9", cor: "bg-sky-400/60", texto: "text-sky-300", ate: 9 },
+  { rotulo: "7–9", cor: "bg-[color-mix(in_srgb,var(--grau-parcial)_60%,transparent)]", texto: "text-[var(--grau-parcial)]", ate: 9 },
   { rotulo: "10+", cor: "bg-musgo/80", texto: "text-musgo", ate: Infinity },
 ];
 
@@ -424,7 +426,7 @@ function D10({ valor, fome, despertar, i, novo, pequeno }: { valor: number; fome
       : bestial
         ? "text-sangue"
         : sucesso
-          ? "text-[#e0675a]"
+          ? "text-[var(--grau-falha)]"
           : "text-sangue/70"
     : dez
       ? // cor de crítico do tema: no Vampiro o acento é vermelho, e o 10 normal não pode parecer dado de Fome
@@ -526,7 +528,7 @@ function TesteVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: b
             <span key={`n${i}`} className="relative rounded-md ring-1 ring-ambar/80 ring-offset-1 ring-offset-transparent" title={`rerrolado com Força de Vontade: ${trocas.get(i)} → ${v}`}>
               <D10 valor={v} fome={false} i={i} novo={novo} />
               <span className="absolute -left-1 -top-1.5 text-[11px] font-bold text-ambar" aria-hidden>
-                ↻
+                <Icone nome="redo" />
               </span>
             </span>
           ) : (
@@ -546,7 +548,7 @@ function TesteVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: b
       {rr?.vontade && (
         <p className="mt-1.5 text-xs text-ambar">
           <span className="font-semibold">
-            ↻ Força de Vontade {rr.vontade.antes} → {rr.vontade.depois}
+            <Icone nome="redo" /> Força de Vontade {rr.vontade.antes} → {rr.vontade.depois}
           </span>{" "}
           <span className="text-muted">(superficial)</span> · rerrolou {(rr.dados ?? []).map((t) => `${t.antes}→${t.depois}`).join(", ")}
         </p>
@@ -630,7 +632,7 @@ function FacesDespertar({ x, novo, pequeno = false }: { x: DespertarVtm; novo: b
             <span className="inline-flex items-center opacity-40" title="rerrolado (Potência de Sangue)">
               <D10 valor={r[0]} fome despertar i={i++} novo={novo} pequeno={pequeno} />
               <span className="text-[11px] text-muted" aria-hidden>
-                ↻
+                <Icone nome="redo" />
               </span>
             </span>
           )}
@@ -690,8 +692,10 @@ function SangueVtm({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: 
         <span className={`titulo max-w-[7.5rem] shrink-0 text-balance text-right text-base leading-tight sm:text-lg ${cor} ${novo ? "cd-pop" : ""}`}>{r.rotuloGrau}</span>
       </div>
       {surto && ganho > 0 && <p className="mt-1.5 text-xs text-[var(--critico)]">+{ganho} dados no próximo teste (fora de disciplinas)</p>}
-      {x.rerrolagem && x.rolagens.some((f) => f.length > 1) && <p className="mt-1 text-xs text-muted">↻ rerrolou pela Potência de Sangue</p>}
-      {x.estourou && <p className="mt-1 text-xs text-sangue/90">Fome 5: o sangue não responde e a Besta exige — teste de frenesi de fome.</p>}
+      {x.rerrolagem && x.rolagens.some((f) => f.length > 1) && <p className="mt-1 text-xs text-muted">
+          <Icone nome="redo" /> rerrolou pela Potência de Sangue
+        </p>}
+      {x.estourou && <p className="mt-1 text-xs text-sangue/90">Fome 5: o sangue não responde e a Besta exige: teste de frenesi de fome.</p>}
     </Moldura>
   );
 }
@@ -811,7 +815,9 @@ function Ficha({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: bool
   return (
     <Moldura mensagem={mensagem} destaque="border-dashed border-border" tom="bg-surface/60">
       <p className="flex items-baseline gap-2 text-sm">
-        <span className="text-xs">✎</span>
+        <span className="text-xs text-muted">
+          <Icone nome="pencil" />
+        </span>
         <span className="min-w-0 flex-1 truncate">
           {r.personagem && <span className="text-foreground">{r.personagem}</span>}
           {r.motivo && <span className="text-muted"> · {r.motivo}</span>}
@@ -838,7 +844,7 @@ function Ficha({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: bool
       {(recursos.length > 0 || ganhou.length > 0 || perdeu.length > 0 || condicoes.length > 0) && (
         <div className="mt-1.5 flex flex-wrap gap-1 text-[11px]">
           {recursos.map((x) => (
-            <span key={`r${x}`} className="rounded bg-sky-400/10 px-1.5 py-0.5 text-sky-300">
+            <span key={`r${x}`} className="rounded bg-[color-mix(in_srgb,var(--grau-parcial)_12%,transparent)] px-1.5 py-0.5 text-[var(--grau-parcial)]">
               {x}
             </span>
           ))}
@@ -863,7 +869,7 @@ function Ficha({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: bool
         <div className="mt-1.5 flex flex-wrap gap-1 text-[11px]">
           {alertas.map((x) => (
             <span key={`a${x}`} className="rounded border border-sangue/50 bg-sangue/15 px-1.5 py-0.5 font-semibold text-sangue">
-              ⚠ {x}
+              <Icone nome="warning" /> {x}
             </span>
           ))}
         </div>
@@ -878,7 +884,7 @@ function Xp({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo: boolean
     <Moldura mensagem={mensagem} destaque={subiu ? "border-ambar/70" : "border-ambar/25"} tom={subiu ? "bg-ambar/10" : "bg-surface-2/60"}>
       <div className={`flex items-center gap-3 ${subiu ? "text-ambar" : ""}`}>
         <span className={`grid size-10 shrink-0 place-items-center rounded-full border border-ambar/50 text-lg text-ambar ${novo ? "dado-rolando" : ""} ${novo && subiu ? "cd-brilho" : ""}`} aria-hidden>
-          ✦
+          <Icone nome="sparkle" />
         </span>
         <div className="min-w-0 flex-1 text-sm text-foreground">
           <p>
@@ -903,10 +909,10 @@ function qualDescanso(r: Dados): string {
 
 function Descanso({ r, mensagem }: { r: Dados; mensagem: Mensagem }) {
   return (
-    <Moldura mensagem={mensagem} destaque="border-sky-300/25" tom="bg-surface/60">
+    <Moldura mensagem={mensagem} destaque="border-[color-mix(in_srgb,var(--grau-parcial)_30%,transparent)]" tom="bg-surface/60">
       <p className="flex items-baseline gap-2 text-sm">
-        <span className="text-sky-300" aria-hidden>
-          ☾
+        <span className="text-[var(--grau-parcial)]" aria-hidden>
+          <Icone nome="moon" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="text-foreground">{r.personagem}</span>
@@ -926,7 +932,9 @@ function Iniciativa({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo:
   return (
     <Moldura mensagem={mensagem} destaque="border-sangue/40" tom="bg-surface-2/80">
       <p className="flex items-baseline justify-between gap-2 text-xs text-muted">
-        <span className="uppercase tracking-wider text-sangue">⚔ Iniciativa</span>
+        <span className="uppercase tracking-wider text-sangue">
+          <Icone nome="swords" /> Iniciativa
+        </span>
         {num(r.rodada) !== null && <span>rodada {r.rodada}</span>}
       </p>
       <ol className="mt-1.5 space-y-0.5">
@@ -936,7 +944,7 @@ function Iniciativa({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo:
             className={`flex items-baseline gap-2 rounded-md border-l-2 px-2 py-0.5 text-sm ${c.aliado ? "border-musgo bg-musgo/5" : "border-sangue bg-sangue/5"} ${novo ? "cd-face" : ""}`}
             style={novo ? ({ "--i": i } as CSSProperties) : undefined}
           >
-            <span className="w-7 shrink-0 text-right font-semibold tabular-nums text-foreground">{c.iniciativa ?? "—"}</span>
+            <span className="w-7 shrink-0 text-right font-semibold tabular-nums text-foreground">{c.iniciativa ?? <span className="font-normal text-muted">·</span>}</span>
             <span className={`min-w-0 flex-1 truncate ${c.aliado ? "text-musgo" : "text-sangue"}`}>{c.nome}</span>
             {c.detalhe && <span className="hidden shrink-0 text-xs text-muted sm:inline">{c.detalhe}</span>}
           </li>
@@ -947,11 +955,11 @@ function Iniciativa({ r, mensagem, novo }: { r: Dados; mensagem: Mensagem; novo:
   );
 }
 
-function Nota({ icone, rotulo, texto }: { icone: string; rotulo: string; texto: string }) {
+function Nota({ icone, rotulo, texto }: { icone: NomeIcone; rotulo: string; texto: string }) {
   return (
     <div className="surgir mx-auto flex w-full max-w-lg items-baseline gap-2 rounded-lg border border-dashed border-border/80 px-3 py-1.5 text-xs text-muted">
       <span className="text-ambar" aria-hidden>
-        <TextoComIcones texto={icone} />
+        <Icone nome={icone} />
       </span>
       <span className="shrink-0 uppercase tracking-wider">{rotulo}</span>
       <span className="min-w-0 flex-1 text-foreground/80">{texto}</span>
@@ -982,15 +990,15 @@ function Conteudo({ mensagem, novo }: { mensagem: Mensagem; novo: boolean }) {
     case "longo":
       return <Descanso r={r} mensagem={mensagem} />;
     case "cena":
-      return <Nota icone="◈" rotulo="Cena" texto={String(r.texto ?? mensagem.texto)} />;
+      return <Nota icone="place" rotulo="Cena" texto={String(r.texto ?? mensagem.texto)} />;
     case "diario":
-      return <Nota icone="❡" rotulo="Diário" texto={String(r.texto ?? mensagem.texto)} />;
+      return <Nota icone="scroll" rotulo="Diário" texto={String(r.texto ?? mensagem.texto)} />;
     case "iniciativa":
       return <Iniciativa r={r} mensagem={mensagem} novo={novo} />;
     case "combate":
-      return <Nota icone="⚔" rotulo="Combate" texto={String(r.resumo ?? mensagem.texto)} />;
+      return <Nota icone="swords" rotulo="Combate" texto={String(r.resumo ?? mensagem.texto)} />;
     default:
-      return <Nota icone="✦" rotulo="Mesa" texto={mensagem.texto} />;
+      return <Nota icone="sparkle" rotulo="Mesa" texto={mensagem.texto} />;
   }
 }
 
@@ -1159,8 +1167,10 @@ export function DecisaoDoTeste({
                     sim ? "border-ambar bg-ambar/20 text-ambar ring-1 ring-ambar" : v >= 6 ? "border-border text-foreground/90" : "border-border/70 text-muted"
                   } disabled:cursor-default`}
                 >
-                  {sim ? "↻" : ""}
-                  {v}
+                  <span className="inline-flex items-center gap-px">
+                    {sim && <Icone nome="redo" className="text-[0.8em]" />}
+                    {v}
+                  </span>
                 </button>
               );
             })}
@@ -1186,7 +1196,15 @@ export function DecisaoDoTeste({
             onClick={() => void decidir(false)}
             className="btn-ambar min-h-11 flex-col gap-0 px-4 py-2 leading-tight focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ambar"
           >
-            <span>{enviando === "rerrolar" ? "Rerrolando…" : `↻ ${opcao.rotulo}`}</span>
+            <span>
+              {enviando === "rerrolar" ? (
+                "Rerrolando…"
+              ) : (
+                <>
+                  <Icone nome="redo" /> {opcao.rotulo}
+                </>
+              )}
+            </span>
             <span className="text-[11px] font-normal opacity-80">
               {escolhaDados ? textoMarcados : "rola o d20 de novo e fica com o novo"}
               {opcao.custo ? ` · −${opcao.custo}` : ""}

@@ -7,12 +7,12 @@ export const DECLARACAO_DARK_PACK =
 
 export function AvisoDarkPack({ compacto = false }: { compacto?: boolean }) {
   return (
-    <div className={`flex items-center gap-3 ${compacto ? "text-[11.5px] leading-snug" : "text-xs leading-relaxed"} text-muted`}>
+    <div className={`flex items-start gap-3 sm:items-center ${compacto ? "text-xs leading-snug" : "text-xs leading-relaxed sm:text-sm"} text-muted`}>
       {/* eslint-disable-next-line @next/next/no-img-element -- logo pequeno e fixo, sem otimização de imagem */}
       <img src="/darkpack.png" alt="Dark Pack" width={compacto ? 36 : 56} height={compacto ? 36 : 56} className="shrink-0" />
-      <p>
+      <p className="max-w-prose">
         Vampiro: A Máscara entra na taverna como <strong className="text-foreground">fã-conteúdo gratuito e não oficial</strong>, sob a
-        política Dark Pack; não é material oficial de World of Darkness. {DECLARACAO_DARK_PACK}
+        política Dark Pack; não é material oficial de World of Darkness. <span lang="en">{DECLARACAO_DARK_PACK}</span>
       </p>
     </div>
   );

@@ -136,6 +136,8 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   /** ação devolvida ao campo depois de desfazer o turno */
   const [preencher, setPreencher] = useState<{ texto: string; n: number } | null>(null);
   const [ajuda, setAjuda] = useState(false);
+  // o "Anteriormente" aberto por cima da leitura: o que fica atrás do véu sai do foco e do toque (inert)
+  const [resumoAberto, setResumoAberto] = useState(false);
   // leitor cena a cena (padrão) ou rolagem contínua; com a tela baixa demais para páginas (zoom 200 %, notebook a 175 %) a
   // rolagem entra sozinha e volta às páginas quando a altura voltar, a não ser que a pessoa insista nas páginas
   const { modo, paginasEmTelaBaixa } = usePreferenciasLeitor();
@@ -608,7 +610,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
           <span>
             {mesa.personagens.filter((p) => agiram.has(p.id)).length}/{mesa.personagens.length} agiram
           </span>
-          <button className="text-ambar underline-offset-2 hover:underline" onClick={() => void acoes.controle("forcar")}>
+          <button type="button" className="inline-flex min-h-10 items-center text-ambar underline-offset-2 hover:underline" onClick={() => void acoes.controle("forcar")}>
             Narrar agora com as ações que já chegaram
           </button>
         </div>
@@ -635,27 +637,33 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
         </p>
       ),
     });
+  // a primeira frase do erro vai em destaque; o resto explica
+  const [, erroFrase = mesa.erro ?? "", erroResto = ""] = /^([\s\S]+?[.!?…])(\s[\s\S]*)?$/.exec(mesa.erro ?? "") ?? [];
   if (mesa.erro)
     cauda.push({
       chave: "erro",
       no: (
-        <div className="my-4 flex items-start justify-between gap-3 rounded-md border border-sangue/60 bg-sangue/10 px-4 py-3 text-sm" role="alert">
-          <div className="min-w-0">
-            <p className="py-1.5">{mesa.erro}</p>
+        <div className="my-4 flex items-start gap-3 rounded-md border border-sangue/60 bg-sangue/10 px-4 py-3 text-sm" role="alert">
+          <Icone nome="warning" className="mt-2 text-base text-sangue" />
+          <div className="min-w-0 flex-1">
+            <p className="py-1.5">
+              <span className="font-semibold">{erroFrase}</span>
+              {erroResto}
+            </p>
             {(mesa.erroInfo?.refazer || mesa.erroInfo?.acao === "config") && (
               <div className="mt-1 flex flex-wrap gap-2" data-erro-acoes>
                 {mesa.erroInfo?.refazer && (
                   <>
-                    <button type="button" data-tentar-de-novo className="btn-ambar min-h-9 px-3 text-xs" onClick={() => void aposErro(true)}>
-                      ↻ Tentar de novo
+                    <button type="button" data-tentar-de-novo className="btn-ambar min-h-10 gap-1.5 px-3 text-xs sm:min-h-9" onClick={() => void aposErro(true)}>
+                      <Icone nome="redo" /> Tentar de novo
                     </button>
-                    <button type="button" className="btn-borda min-h-9 px-3 text-xs" onClick={() => void aposErro(false)}>
-                      ✎ Reescrever a ação
+                    <button type="button" className="btn-borda min-h-10 gap-1.5 px-3 text-xs sm:min-h-9" onClick={() => void aposErro(false)}>
+                      <Icone nome="pencil" /> Reescrever a ação
                     </button>
                   </>
                 )}
                 {mesa.erroInfo?.acao === "config" && (
-                  <a href="/config" className="btn-borda min-h-9 px-3 text-xs">
+                  <a href="/config" className="btn-borda min-h-10 px-3 text-xs sm:min-h-9">
                     Abrir Configurações
                   </a>
                 )}
@@ -663,12 +671,13 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
             )}
           </div>
           <button
+            type="button"
             onClick={acoes.limparErro}
-            className="-my-1 -mr-2 grid size-9 shrink-0 place-items-center rounded-md text-muted hover:bg-sangue/20 hover:text-foreground"
+            className="-my-1 -mr-2 grid size-10 shrink-0 place-items-center rounded-md text-muted hover:bg-sangue/20 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ambar sm:size-9"
             aria-label="Fechar o aviso"
             title="Fechar o aviso"
           >
-            ✕
+            <Icone nome="close" />
           </button>
         </div>
       ),
@@ -677,7 +686,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
   const telaVazia = vazia ? (
     <div className="surgir py-10 text-center">
       <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted">{mesa.sistema.nomeCurto}</p>
-      <h2 className={`${fonteGotica.className} mt-2 text-4xl leading-tight text-pergaminho sm:text-5xl`}>{mesa.campanha.nome}</h2>
+      <h2 className={`${fonteGotica.className} titulo-brilho mt-2 text-4xl leading-tight text-pergaminho sm:text-5xl`}>{mesa.campanha.nome}</h2>
       <div className="mx-auto mt-4 h-px w-40 bg-linear-to-r from-transparent via-ambar/60 to-transparent" />
       {mesa.personagens.length > 0 ? (
         <>
@@ -695,10 +704,10 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
             Vai jogar mais gente? Adicione os personagens antes de começar: o mestre apresenta todo mundo na cena de abertura.
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
-            <Link href={linkNovo} className="btn-borda min-h-12">
-              + Adicionar personagem
+            <Link href={linkNovo} className="btn-borda min-h-12 gap-1.5">
+              <Icone nome="plus" /> Adicionar personagem
             </Link>
-            <button className="btn-ambar min-h-12 px-7 text-base" onClick={() => void acoes.controle("iniciar")}>
+            <button type="button" className="btn-palco" onClick={() => void acoes.controle("iniciar")}>
               Começar a aventura
             </button>
           </div>
@@ -706,8 +715,8 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
       ) : (
         <>
           <p className="mx-auto mt-6 max-w-md text-sm text-muted">Ninguém sentado ainda. Crie um personagem para começar a história.</p>
-          <Link href={linkNovo} className="btn-ambar mt-5 min-h-12">
-            + Criar personagem
+          <Link href={linkNovo} className="btn-ambar mt-5 min-h-12 gap-1.5">
+            <Icone nome="plus" /> Criar personagem
           </Link>
         </>
       )}
@@ -774,14 +783,15 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
       {/* o livro: uma luz de vela suave atrás da coluna de texto e a vinheta nas bordas dão o ar de página; a altura deste espaço decide a tela baixa */}
       <div ref={palco} className="relative z-10 flex min-h-0 flex-1 flex-col" data-espaco-leitor>
         <div
-          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_42%_62%_at_50%_44%,rgba(241,228,196,0.055),transparent_72%),radial-gradient(ellipse_80%_90%_at_50%_50%,transparent_55%,rgba(0,0,0,0.35))]"
+          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_42%_62%_at_50%_44%,color-mix(in_srgb,var(--pergaminho)_5.5%,transparent),transparent_72%),radial-gradient(ellipse_80%_90%_at_50%_50%,transparent_55%,color-mix(in_srgb,black_35%,transparent))]"
           aria-hidden
         />
         {/* conexão caída há mais de 3 s: a faixa some sozinha quando o fluxo de eventos volta */}
         {mesa.semSinal && (
           <div role="alert" data-sem-sinal className="flex shrink-0 items-center justify-center gap-2 border-b border-sangue/50 bg-sangue/15 px-4 py-2 text-center text-sm text-foreground">
-            <span className="size-2 shrink-0 animate-pulse rounded-full bg-sangue" aria-hidden />
-            Sem sinal da taverna — tentando de novo…
+            <Icone nome="warning" className="text-sangue" />
+            <span className="size-2 shrink-0 animate-pulse rounded-full bg-sangue motion-reduce:animate-none" aria-hidden />
+            Sem sinal da taverna. Tentando de novo…
           </div>
         )}
         <Anteriormente
@@ -791,11 +801,14 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
           cena={mesa.cena}
           diario={mesa.diario}
           livro
+          aoMudarFase={setResumoAberto}
           aoContinuar={() => {
             longeRef.current = false;
             if (!cenas) irParaOFim(true);
           }}
         />
+        {/* com o "Anteriormente" aberto, a leitura de trás do véu sai do foco e do toque */}
+        <div className="flex min-h-0 flex-1 flex-col" inert={resumoAberto || undefined} data-leitura>
         {cenas ? (
           <LeitorCenas
             ref={leitor}
@@ -881,15 +894,16 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
               <button
                 type="button"
                 onClick={() => irParaOFim(true)}
-                className={`surgir absolute bottom-3 left-1/2 z-20 min-h-10 -translate-x-1/2 rounded-full border bg-surface/95 px-4 py-2 text-sm shadow-lg backdrop-blur hover:bg-surface-2 ${
+                className={`surgir absolute bottom-3 left-1/2 z-10 min-h-10 -translate-x-1/2 rounded-full border bg-surface/95 px-4 py-2 text-sm shadow-lg backdrop-blur hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-ambar ${
                   novasAbaixo ? "border-ambar/60 text-ambar" : "border-border text-muted hover:text-foreground"
                 }`}
               >
-                {novasAbaixo ? (mesa.aoVivo && total <= vistas ? "↓ o mestre está narrando" : "↓ novas mensagens") : "↓ voltar ao fim"}
+                <Icone nome="arrowDown" /> {novasAbaixo ? (mesa.aoVivo && total <= vistas ? "o mestre está narrando" : "novas mensagens") : "voltar ao fim"}
               </button>
             )}
           </>
         )}
+        </div>
       </div>
 
       {/* rodapé enxuto: sugestões (espaço reservado), campo de ação com o retrato e o aviso flutuando por cima */}
@@ -934,11 +948,11 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
                   <span>O mestre está escrevendo…</span>
                   <button
                     type="button"
-                    className="min-h-9 rounded-md px-2 not-italic text-muted hover:bg-sangue/10 hover:text-sangue sm:min-h-7"
+                    className="inline-flex min-h-9 items-center gap-1 rounded-md px-2 not-italic text-muted hover:bg-sangue/10 hover:text-sangue focus-visible:outline-2 focus-visible:outline-ambar sm:min-h-7"
                     onClick={() => void acoes.controle("cancelar")}
                     title="Interromper o mestre"
                   >
-                    ■ interromper
+                    <Icone nome="stop" /> interromper
                   </button>
                 </>
               ) : meuPendente ? (
@@ -956,9 +970,9 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
                 ? minhaNaFila
                   ? `${ativo.ficha.nome} já agiu. Quer complementar?`
                   : noiteNova
-                    ? `Noite ${noiteNova} — o que ${ativo.ficha.nome} faz?`
+                    ? `Noite ${noiteNova}: o que ${ativo.ficha.nome} faz?`
                     : `O que ${ativo.ficha.nome} faz?`
-                : "Fale com o mestre fora do jogo ((assim)), ou crie um personagem."
+                : "Fale com o mestre ((fora do jogo))"
             }
             rotuloCampo={ativo ? `Ação de ${ativo.ficha.nome}` : "Mensagem ao mestre"}
             enviar={enviar}
@@ -967,7 +981,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
             inicio={
               ativo ? (
                 <div className="flex shrink-0 items-center gap-1">
-                  {/* o retrato abre a ficha (com a vida embaixo); com mais gente no grupo, o ⇄ troca de personagem */}
+                  {/* o retrato abre a ficha (com a vida embaixo); com mais gente no grupo, as setas trocam de personagem */}
                   <button
                     type="button"
                     onClick={() => abrirCodex("personagem")}
@@ -977,12 +991,13 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
                   >
                     <Retrato ficha={ativo.ficha} tamanho={38} className="rounded" />
                     <span
-                      className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-full border border-border bg-background px-1 text-[9.5px] leading-[14px] tabular-nums ${
+                      className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 inline-flex items-center gap-0.5 whitespace-nowrap rounded-full border border-border bg-background px-1.5 text-[11px] leading-4 tabular-nums ${
                         ativo.ficha.pvMax > 0 && ativo.ficha.pv <= ativo.ficha.pvMax / 4 ? "text-sangue" : "text-muted"
                       }`}
                       aria-hidden
                     >
-                      ♥{ativo.ficha.pv}
+                      <Icone nome="heart" />
+                      {ativo.ficha.pv}
                     </span>
                   </button>
                   {mesa.personagens.length > 1 && (
@@ -993,7 +1008,7 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
                       aria-label="Trocar de personagem"
                       title="Trocar de personagem"
                     >
-                      ⇄
+                      <Icone nome="shuffle" />
                     </button>
                   )}
                 </div>
@@ -1002,24 +1017,24 @@ export function MesaHistoria({ estadoInicial, comecarSozinho }: { estadoInicial:
                 <button
                   type="button"
                   data-so-assistindo
-                  className="h-11 shrink-0 rounded-md border border-border/70 px-3 text-sm text-ambar hover:border-ambar/60"
+                  className="inline-flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border/70 px-3 text-sm text-ambar hover:border-ambar/60"
                   title="Você está só assistindo. Escolha com quem vai jogar."
                   onClick={() => abrirCodex("grupo")}
                 >
-                  Só assistindo · escolher personagem
+                  <Icone nome="person" /> Escolher personagem
                 </button>
               ) : (
-                <Link href={linkNovo} className="grid h-11 shrink-0 place-items-center rounded-md border border-border/70 px-3 text-sm text-ambar hover:border-ambar/60">
-                  + Personagem
+                <Link href={linkNovo} className="inline-flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border/70 px-3 text-sm text-ambar hover:border-ambar/60">
+                  <Icone nome="plus" /> Personagem
                 </Link>
               )
             }
           />
           )}
-          <p className="mt-1.5 text-center text-xs leading-4 text-muted/60 baixo:hidden">
+          <p className="mt-1.5 text-center text-xs leading-4 text-muted baixo:hidden">
             Os personagens são IA. As respostas são ficção.
-            <button type="button" onClick={() => setAjuda(true)} className="ml-2 hidden underline-offset-2 hover:text-ambar hover:underline [@media(pointer:fine)]:inline">
-              Atalhos: <kbd className="rounded border border-border/70 px-1">?</kbd>
+            <button type="button" onClick={() => setAjuda(true)} className="-my-1 ml-2 hidden min-h-6 items-center gap-1 rounded px-1 hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar [@media(pointer:fine)]:inline-flex">
+              Atalhos: <kbd className="rounded border border-border px-1 text-foreground/80">?</kbd>
             </button>
           </p>
         </div>

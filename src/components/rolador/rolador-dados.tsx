@@ -415,8 +415,8 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar, 
         <div className="flex items-center gap-2 border-b border-border px-4 pb-2 pt-2 sm:pt-3">
           <h2 className="titulo text-lg text-pergaminho">Rolador</h2>
           <span className="min-w-0 flex-1 truncate text-xs text-muted">{personagem ? `${personagem.ficha.nome}${autor ? ` · ${autor}` : ""}` : autor || "sem personagem"}</span>
-          <button type="button" onClick={() => fechar()} className="grid size-8 place-items-center rounded-md text-muted hover:text-foreground" aria-label="Fechar rolador">
-            ✕
+          <button type="button" onClick={() => fechar()} className="grid size-10 place-items-center rounded-md text-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ambar sm:size-8" aria-label="Fechar rolador">
+            <Icone nome="close" />
           </button>
         </div>
 
@@ -586,7 +586,7 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar, 
                 <div className="flex flex-wrap items-end gap-3">
                   {rotuloAlvo && (
                     <Campo rotulo={rotuloAlvo}>
-                      <input value={alvo} onChange={(e) => setAlvo(e.target.value.replace(/[^\d-]/g, ""))} inputMode="numeric" placeholder="—" className="campo w-24" />
+                      <input value={alvo} onChange={(e) => setAlvo(e.target.value.replace(/[^\d-]/g, ""))} inputMode="numeric" placeholder="nenhum" className="campo w-24" />
                     </Campo>
                   )}
                   <Contador rotulo="Mod." valor={modTeste} mudar={setModTeste} min={-20} max={20} sinal />
@@ -610,7 +610,7 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar, 
 
           {aba === "manual" && (
             <>
-              <p className="text-xs text-muted">Rolou na mesa de verdade? Conte o resultado. Fica marcado como manual — a taverna confia, mas anota.</p>
+              <p className="text-xs text-muted">Rolou na mesa de verdade? Conte o resultado. Fica marcado como manual: a taverna confia, mas anota.</p>
               <Campo rotulo="Expressão (opcional)">
                 <input value={manualExpr} onChange={(e) => setManualExpr(e.target.value)} placeholder="1d20+5" spellCheck={false} autoCapitalize="off" maxLength={80} className="campo font-mono" />
               </Campo>
@@ -655,8 +655,8 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar, 
                         </span>
                       </span>
                       {h.pedido.tipo !== "manual" && (
-                        <button type="button" onClick={() => void enviar(h.pedido)} disabled={enviando} className="shrink-0 rounded px-1.5 py-1 text-xs text-muted hover:text-ambar" title="Rolar de novo igualzinho" aria-label="Rolar de novo">
-                          ↻
+                        <button type="button" onClick={() => void enviar(h.pedido)} disabled={enviando} className="-my-1 -mr-1.5 grid size-10 shrink-0 place-items-center rounded text-sm text-muted hover:text-ambar focus-visible:outline-2 focus-visible:outline-ambar disabled:opacity-50 sm:my-0 sm:size-8" title="Rolar de novo igualzinho" aria-label="Rolar de novo">
+                          <Icone nome="redo" />
                         </button>
                       )}
                     </li>
@@ -686,7 +686,7 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar, 
               onClick={() => setPrivada((v) => !v)}
               aria-pressed={privada}
               title="Tecla P"
-              className={`shrink-0 rounded-md border px-2.5 py-2 text-xs ${privada ? "border-sky-300/60 bg-sky-300/10 text-sky-300" : "border-border text-muted hover:text-foreground"}`}
+              className={`shrink-0 rounded-md border px-2.5 py-2 text-xs ${privada ? "border-[color-mix(in_srgb,var(--grau-parcial)_60%,transparent)] bg-[color-mix(in_srgb,var(--grau-parcial)_12%,transparent)] text-[var(--grau-parcial)]" : "border-border text-muted hover:text-foreground"}`}
             >
               {privada ? <Icone nome="eyeOff" /> : <Icone nome="eye" />}{" "}{privada ? "Só para mim" : "Pública"}
             </button>
@@ -697,7 +697,8 @@ export function RoladorDados({ campanhaId, sistema, personagem, autor, aoRolar, 
             <span className="truncate">{enviando ? "Rolando…" : rotuloRolar}</span>
           </button>
         </div>
-        {pendente && <p className="px-4 pb-1 text-xs text-sangue">⚠ Rolagem solta: isso não resolve o teste pedido pelo mestre.</p>}
+        {pendente && <p className="px-4 pb-1 text-xs text-sangue">
+            <Icone nome="warning" /> Rolagem solta: isso não resolve o teste pedido pelo mestre.</p>}
         <p className="hidden px-4 pb-2 text-[11px] text-muted sm:block">Enter rola · 1–8 escolhe o dado · +/− quantidade · A/Z vantagem/desvantagem · P privada · Esc fecha</p>
       </div>
     </>

@@ -16,7 +16,9 @@ import { CSS_CRIACAO } from "./estilos";
 import { gotica } from "./fonte";
 import { sortearGanchos } from "./ganchos";
 import { sortearNomes } from "./nomes";
+import { FaixaAviso } from "@/components/faixa-aviso";
 import { Icone, TextoComIcones } from "@/components/icones";
+import { LinkVoltar } from "@/components/link-voltar";
 
 // Criação do modo história em cinco passos, no estilo "senta aí e conta quem você é": nome, aparência, ofício, passado e
 // onde a história começa (com tom e estilo do mestre). Sem número nenhum na tela; as regras ficam escondidas no sistema
@@ -139,17 +141,74 @@ function lerRascunho(bruto: string | null, ultimo = ULTIMO): Rascunho | null {
 
 // ---------- pecinhas ----------
 
+/** O cartão de escolha da criação (opções, retratos prontos, ofícios, ganchos, começos, aventuras): um só desenho para todos. */
+function classesEscolha(ativo: boolean): string {
+  return `cartao-clicavel rounded-xl border ${ativo ? "border-ambar bg-ambar/12" : "border-border bg-surface-2/60"}`;
+}
+
+/** Bolinha de "é este" no canto do cartão escolhido (o cartão precisa ser relative). */
+function SeloEscolhido({ className = "right-2 top-2" }: { className?: string }) {
+  return (
+    <span className={`absolute ${className} grid size-5 place-items-center rounded-full bg-ambar text-xs text-background`} aria-hidden>
+      <Icone nome="check" aria-hidden />
+    </span>
+  );
+}
+
 function Opcao({ ativo, onClick, children, className = "" }: { ativo: boolean; onClick: () => void; children: ReactNode; className?: string }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={ativo}
-      className={`rounded-lg border px-3 py-2.5 text-sm transition ${
-        ativo ? "border-ambar bg-ambar/15 text-pergaminho shadow-[0_0_18px_-8px_var(--ambar)]" : "border-border bg-surface-2/60 text-foreground hover:border-ambar/60"
-      } ${className}`}
+      className={`${classesEscolha(ativo)} min-h-10 px-3 py-2.5 text-sm ${ativo ? "text-pergaminho" : "text-foreground"} ${className}`}
     >
       {children}
+    </button>
+  );
+}
+
+/** Botão discreto de sortear de novo (nomes, rostos, ganchos); naLinha: mora ao lado de um rótulo, sem empurrar a linha. */
+function BotaoSortear({ onClick, children, naLinha }: { onClick: () => void; children: ReactNode; naLinha?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-sm text-ambar hover:underline ${naLinha ? "-my-2 -mr-2" : ""}`}
+    >
+      <Icone nome="shuffle" aria-hidden />
+      {children}
+    </button>
+  );
+}
+
+/** Um rosto da grade: anel fino quando não é o escolhido, anel âmbar e selo quando é. */
+function BotaoRosto({
+  dados,
+  ativo,
+  posicao,
+  total,
+  onClick,
+  title,
+}: {
+  dados: DadosRetrato;
+  ativo: boolean;
+  posicao: number;
+  total: number;
+  onClick: () => void;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={ativo}
+      aria-label={`Rosto ${posicao} de ${total}`}
+      title={title}
+      className={`relative rounded-[14px] p-0.5 transition ${ativo ? "ring-2 ring-ambar" : "ring-1 ring-border hover:ring-ambar/60"}`}
+    >
+      <RetratoSVG dados={dados} className="block h-auto w-full" />
+      {ativo && <SeloEscolhido className="right-1 top-1" />}
     </button>
   );
 }
@@ -175,7 +234,7 @@ function CartaoHeroi({ retrato, nome, linhas }: { retrato: DadosRetrato | null; 
         <RetratoSVG dados={retrato} tamanho={84} titulo={`Retrato de ${nome}`} className="shrink-0" />
       ) : (
         <span className="grid size-[84px] shrink-0 place-items-center rounded-xl border border-dashed border-border text-3xl text-muted" aria-hidden>
-          ?
+          <Icone nome="person" aria-hidden />
         </span>
       )}
       <div className="min-w-0 flex-1">
@@ -209,7 +268,7 @@ function Oferta({
   const retrato = useMemo(() => retratoDo(rascunho), [rascunho]);
   return (
     <section className="cartao surgir relative overflow-clip border-ambar/25 bg-surface/85 px-5 py-7 backdrop-blur-sm sm:px-8">
-      <h1 className={`${gotica.className} text-center text-[2.1rem] leading-tight text-pergaminho sm:text-5xl`}>De volta, é?</h1>
+      <h1 className={`${gotica.className} titulo-brilho text-center text-[2.1rem] leading-tight text-pergaminho sm:text-5xl`}>De volta, é?</h1>
       <p className="mt-2 text-center text-sm italic text-muted">Alguém ficou esperando no balcão. E ainda não pagou a conta.</p>
       <div className="mt-6">
         <CartaoHeroi
@@ -419,9 +478,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
         {/* mais um herói numa mesa que já existe: de onde se veio e quem já está sentado */}
         {soPersonagem && mesa && (
           <div className="mb-3 text-sm">
-            <Link href={`/mesa/${mesa.id}`} className="-my-2 inline-block py-2 text-xs text-muted hover:text-ambar">
-              ← voltar para {mesa.nome}
-            </Link>
+            <LinkVoltar href={`/mesa/${mesa.id}`}>Voltar para {mesa.nome}</LinkVoltar>
             <p className="mt-1 text-muted">
               <span className="text-pergaminho">Mais uma cadeira na mesa.</span>{" "}
               {mesa.grupo.length ? `Já sentados: ${mesa.grupo.join(", ")}.` : "A mesa ainda está vazia."} Cada personagem pode ser de um jogador diferente
@@ -452,15 +509,15 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                       aria-current={atual ? "step" : undefined}
                       className={`flex min-h-10 items-center gap-1.5 rounded-full px-1.5 text-xs transition sm:px-2 ${
                         atual ? "text-pergaminho" : feito ? "text-ambar/90 hover:text-ambar" : "text-muted hover:text-foreground"
-                      } disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:text-muted`}
+                      } disabled:cursor-not-allowed disabled:hover:text-muted`}
                     >
                       <span
-                        className={`grid size-5 shrink-0 place-items-center rounded-full border text-[11px] font-semibold tabular-nums ${
-                          atual ? "border-ambar bg-ambar text-[#1a120c]" : feito ? "border-ambar/70 text-ambar" : "border-border"
+                        className={`grid size-6 shrink-0 place-items-center rounded-full border text-[11px] font-semibold tabular-nums ${
+                          atual ? "border-ambar bg-ambar text-background" : feito ? "border-ambar/70 text-ambar" : "border-border text-muted"
                         }`}
                         aria-hidden
                       >
-                        {feito ? "✓" : i + 1}
+                        {feito ? <Icone nome="check" aria-hidden /> : i + 1}
                       </span>
                       <span className={`truncate ${atual ? "font-semibold" : "sr-only sm:not-sr-only"}`}>{nome}</span>
                     </button>
@@ -489,7 +546,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
           </div>
 
           <div key={r.passo} className="criacao-passo px-5 pt-6 sm:px-8 sm:pt-8">
-            <h1 className={`${gotica.className} text-center text-[2.1rem] leading-tight text-pergaminho drop-shadow-[0_2px_10px_rgba(224,162,74,0.25)] sm:text-5xl`}>
+            <h1 className={`${gotica.className} titulo-brilho text-center text-[2.1rem] leading-tight text-pergaminho sm:text-5xl`}>
               {TITULOS[r.passo]}
             </h1>
             <p className="mt-2 text-center text-sm italic text-muted">{SUBTITULOS[r.passo]}</p>
@@ -498,6 +555,8 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
               </p>
             )}
 
+            {/* enquanto a mesa é criada, nada do passo muda (contents: o fieldset não entra no desenho) */}
+            <fieldset disabled={enviando} className="contents">
             {/* ---------- passo 1: nome ---------- */}
             {r.passo === 0 && (
               <div className="mt-7 space-y-6">
@@ -524,9 +583,9 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                       </Opcao>
                     ))}
                   </div>
-                  <button type="button" onClick={() => mudar({ rodadaNomes: r.rodadaNomes + 1 })} className="mx-auto mt-3 block text-sm text-ambar hover:underline">
-                    ↻ Sortear outros
-                  </button>
+                  <div className="mt-1 text-center">
+                    <BotaoSortear onClick={() => mudar({ rodadaNomes: r.rodadaNomes + 1 })}>Sortear outros</BotaoSortear>
+                  </div>
                 </div>
               </div>
             )}
@@ -546,12 +605,15 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                           onClick={() => mudar({ arquetipo: a.id, sexo: a.sexo, origem: a.origem, rosto: a.rosto, classe: a.classe || r.classe })}
                           aria-pressed={ativo}
                           title={a.resumo}
-                          className={`flex min-h-11 min-w-0 flex-col items-center gap-1.5 rounded-xl border p-2 text-center transition ${
-                            ativo ? "border-ambar bg-ambar/15 shadow-[0_0_18px_-8px_var(--ambar)]" : "border-border bg-surface-2/60 hover:border-ambar/60"
-                          }`}
+                          // celular: retrato pequeno ao lado do nome e do resumo (dedo não tem hover); sm+: retrato em cima
+                          className={`${classesEscolha(ativo)} relative flex min-h-11 min-w-0 items-center gap-2 p-2 text-left sm:flex-col sm:gap-1.5 sm:text-center`}
                         >
-                          <RetratoSVG dados={retratoDoArquetipo(a)} className="block h-auto w-full max-w-[96px]" />
-                          <span className={`text-sm font-semibold leading-tight ${ativo ? "text-ambar" : "text-pergaminho"}`}>{a.nome}</span>
+                          {ativo && <SeloEscolhido className="right-1.5 top-1.5" />}
+                          <RetratoSVG dados={retratoDoArquetipo(a)} className="block h-auto w-14 shrink-0 sm:w-full sm:max-w-[96px]" />
+                          <span className="min-w-0">
+                            <span className={`block text-sm font-semibold leading-tight ${ativo ? "text-ambar" : "text-pergaminho"}`}>{a.nome}</span>
+                            <span className="mt-0.5 block text-xs leading-snug text-muted sm:hidden">{a.resumo}</span>
+                          </span>
                         </button>
                       );
                     })}
@@ -583,24 +645,22 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                   <div className="mb-2 flex items-baseline justify-between gap-2">
                     <Rotulo>Rosto</Rotulo>
                     {rostosGrade.length > 0 && (
-                      <button type="button" onClick={() => mudar({ rodadaRostos: r.rodadaRostos + 1, rosto: "", arquetipo: "" })} className="text-sm text-ambar hover:underline">
-                        ↻ Outros rostos
-                      </button>
+                      <BotaoSortear naLinha onClick={() => mudar({ rodadaRostos: r.rodadaRostos + 1, rosto: "", arquetipo: "" })}>
+                        Outros rostos
+                      </BotaoSortear>
                     )}
                   </div>
                   {rostosGrade.length ? (
                     <div className="grid grid-cols-4 gap-2">
-                      {rostosGrade.map((f) => (
-                        <button
+                      {rostosGrade.map((f, i) => (
+                        <BotaoRosto
                           key={f.semente}
-                          type="button"
+                          dados={f.dados}
+                          ativo={r.rosto === f.semente && !r.arquetipo}
+                          posicao={i + 1}
+                          total={rostosGrade.length}
                           onClick={() => mudar({ rosto: f.semente, arquetipo: "" })}
-                          aria-pressed={r.rosto === f.semente && !r.arquetipo}
-                          aria-label="Escolher este rosto"
-                          className={`relative rounded-[14px] p-[3px] transition ${r.rosto === f.semente && !r.arquetipo ? "scale-105 bg-ambar shadow-[0_0_22px_-2px_var(--ambar)]" : "bg-transparent opacity-75 hover:opacity-100"}`}
-                        >
-                          <RetratoSVG dados={f.dados} className="block h-auto w-full" />
-                        </button>
+                        />
                       ))}
                     </div>
                   ) : (
@@ -647,15 +707,14 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                         type="button"
                         onClick={() => mudar({ classe: c.id })}
                         aria-pressed={ativo}
-                        className={`flex items-start gap-3 rounded-xl border p-3 text-left transition ${
-                          ativo ? "border-ambar bg-ambar/12 shadow-[0_0_22px_-10px_var(--ambar)]" : "border-border bg-surface-2/60 hover:border-ambar/60"
-                        }`}
+                        className={`${classesEscolha(ativo)} relative flex items-start gap-3 p-3 text-left`}
                       >
+                        {ativo && <SeloEscolhido />}
                         <span className="grid size-11 shrink-0 place-items-center rounded-lg border border-border bg-background/60 text-2xl" aria-hidden>
                           {c.icone && <TextoComIcones texto={c.icone} />}
                         </span>
                         <span className="min-w-0">
-                          <span className={`block font-semibold ${ativo ? "text-ambar" : "text-pergaminho"}`}>{c.nome}</span>
+                          <span className={`block pr-6 font-semibold ${ativo ? "text-ambar" : "text-pergaminho"}`}>{c.nome}</span>
                           <span className="mt-0.5 block text-sm leading-snug text-muted">{c.descricao}</span>
                         </span>
                       </button>
@@ -696,9 +755,9 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                   <div>
                     <div className="mb-2 flex items-baseline justify-between gap-2">
                       <Rotulo>Ou pegue um gancho</Rotulo>
-                      <button type="button" onClick={() => mudar({ rodadaGanchos: r.rodadaGanchos + 1 })} className="text-sm text-ambar hover:underline">
-                        ↻ Outros
-                      </button>
+                      <BotaoSortear naLinha onClick={() => mudar({ rodadaGanchos: r.rodadaGanchos + 1 })}>
+                        Outros
+                      </BotaoSortear>
                     </div>
                     <div className="space-y-2">
                       {ganchos.map((g, i) => {
@@ -711,16 +770,13 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                             onClick={() => usarGancho(g)}
                             aria-pressed={usado}
                             title={usado ? "Tirar da história" : "Pôr na história"}
-                            className={`flex w-full items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left text-sm italic transition ${
-                              usado
-                                ? "border-ambar bg-ambar/12 text-pergaminho shadow-[0_0_18px_-8px_var(--ambar)]"
-                                : padrao
-                                  ? "border-ambar/40 border-dashed bg-surface-2/60 text-foreground hover:border-ambar/70"
-                                  : "border-border bg-surface-2/60 text-foreground hover:border-ambar/60 hover:text-pergaminho"
+                            // o tracejado marca o gancho que o mestre usa se a história ficar em branco
+                            className={`${classesEscolha(usado)} flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-sm italic ${
+                              usado ? "text-pergaminho" : padrao ? "border-dashed text-foreground" : "text-foreground"
                             }`}
                           >
-                            <span className={`mt-px shrink-0 not-italic ${usado ? "text-ambar" : "text-muted"}`} aria-hidden>
-                              {usado ? "✓" : "+"}
+                            <span className={`mt-0.5 shrink-0 not-italic ${usado ? "text-ambar" : "text-muted"}`} aria-hidden>
+                              <Icone nome={usado ? "check" : "plus"} aria-hidden />
                             </span>
                             <span className="min-w-0 flex-1">“{g}”</span>
                           </button>
@@ -746,15 +802,9 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                           type="button"
                           onClick={() => escolherComeco(c.id)}
                           aria-pressed={ativo}
-                          className={`relative flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition ${
-                            ativo ? "border-ambar bg-ambar/12 shadow-[0_0_22px_-10px_var(--ambar)]" : "border-border bg-surface-2/60 hover:border-ambar/60"
-                          }`}
+                          className={`${classesEscolha(ativo)} relative flex flex-col items-start gap-1 p-3 text-left`}
                         >
-                          {ativo && (
-                            <span className="absolute right-2 top-2 grid size-5 place-items-center rounded-full bg-ambar text-[11px] font-bold text-[#1a120c]" aria-hidden>
-                              ✓
-                            </span>
-                          )}
+                          {ativo && <SeloEscolhido />}
                           <span className="text-2xl leading-none" aria-hidden>
                             <TextoComIcones texto={c.icone} />
                           </span>
@@ -782,15 +832,9 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                             onClick={() => alternarAventura(a)}
                             aria-pressed={ativo}
                             title={ativo ? "Clique de novo para desmarcar" : undefined}
-                            className={`relative flex items-start gap-3 rounded-xl border p-3 text-left transition ${
-                              ativo ? "border-ambar bg-ambar/12 shadow-[0_0_22px_-10px_var(--ambar)]" : "border-border bg-surface-2/60 hover:border-ambar/60"
-                            }`}
+                            className={`${classesEscolha(ativo)} relative flex items-start gap-3 p-3 text-left`}
                           >
-                            {ativo && (
-                              <span className="absolute right-2 top-2 grid size-5 place-items-center rounded-full bg-ambar text-[11px] font-bold text-[#1a120c]" aria-hidden>
-                                ✓
-                              </span>
-                            )}
+                            {ativo && <SeloEscolhido />}
                             <Icone nome="scroll" className="text-2xl leading-none" />
                             <span className="min-w-0 flex-1">
                               <span className={`block pr-5 text-sm font-semibold leading-tight ${ativo ? "text-ambar" : "text-pergaminho"}`}>{a.titulo}</span>
@@ -833,7 +877,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                     <span className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-muted">
                       {dificuldade.nome} · <span className="hidden sm:inline">narração</span> {narracao.nome.toLowerCase()}
                       <span className="text-ambar transition group-open:rotate-180" aria-hidden>
-                        ▾
+                        <Icone nome="chevronDown" aria-hidden />
                       </span>
                     </span>
                   </summary>
@@ -894,25 +938,29 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
               </div>
             )}
 
+            </fieldset>
+
             {/* barra de botões: gruda no pé da tela nos passos compridos (rostos, ofícios), com o aviso logo acima */}
             <div className="sticky bottom-0 z-10 -mx-5 mt-7 border-t border-border/50 bg-surface/95 px-5 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3 backdrop-blur sm:-mx-8 sm:px-8">
               {(aviso || estado.erro) && (
-                <p role="alert" className="surgir mb-3 rounded-md border border-sangue/50 bg-sangue/10 px-3 py-2 text-sm text-pergaminho">
+                <FaixaAviso tom="erro" className="surgir mb-3">
                   {aviso ?? estado.erro}
-                </p>
+                </FaixaAviso>
               )}
               <div className="flex items-center gap-3">
                 {r.passo > 0 && (
                   <button type="button" onClick={voltar} className="btn-borda min-h-12 px-4" disabled={enviando}>
-                    ← Voltar
+                    <Icone nome="arrowLeft" aria-hidden />
+                    Voltar
                   </button>
                 )}
                 {r.passo < ultimo ? (
                   <button type="button" onClick={avancar} className="btn-ambar min-h-12 flex-1 py-3 text-base">
-                    Continuar →
+                    Continuar
+                    <Icone nome="arrowRight" aria-hidden />
                   </button>
                 ) : (
-                  <button type="submit" className="btn-ambar min-h-12 flex-1 py-3 text-base" disabled={enviando}>
+                  <button type="submit" className="btn-ambar min-h-12 flex-1 py-3 text-base" disabled={enviando} aria-busy={enviando}>
                     {soPersonagem ? (enviando ? "Puxando o banco…" : "Sentar à mesa") : enviando ? "Acendendo as velas…" : "Começar a aventura"}
                   </button>
                 )}
@@ -945,7 +993,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
           mesa && (
             <p className="mt-6 text-center text-sm text-muted">
               Mudou de ideia?{" "}
-              <Link href={`/mesa/${mesa.id}`} className="text-ambar/90 underline-offset-4 hover:underline">
+              <Link href={`/mesa/${mesa.id}`} className="inline-block py-2.5 text-ambar/90 underline-offset-4 hover:underline">
                 Voltar para a mesa
               </Link>
             </p>
@@ -953,7 +1001,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
         ) : (
           <p className="mt-6 text-center text-sm text-muted">
             Prefere escolher as regras?{" "}
-            <Link href="/nova/avancada" className="text-ambar/90 underline-offset-4 hover:underline">
+            <Link href="/nova/avancada" className="inline-block py-2.5 text-ambar/90 underline-offset-4 hover:underline">
               Modo avançado
             </Link>
           </p>
@@ -961,7 +1009,7 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
           </div>
 
           {!pendente && (
-            <aside className="hidden lg:sticky lg:top-6 lg:block" aria-label="Prévia do herói">
+            <aside className="hidden lg:sticky lg:top-6 lg:block lg:pt-14" aria-label="Prévia do herói">
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted">Seu herói até aqui</p>
               <CartaoHeroi
                 retrato={retrato}
@@ -976,9 +1024,18 @@ export function CriacaoHistoria({ sistema, semente, acao, aventuras = [], aventu
                   `${tomNome} · mestre ${dificuldade.nome.toLowerCase()}`,
                 ]}
               />
-              <p className="mt-3 text-xs leading-snug text-muted">
-                {pendencias.length ? `Falta: ${pendencias.join(" · ")}` : "Tudo escolhido: siga até o começo e abra a mesa."}
-              </p>
+              {pendencias.length ? (
+                <p className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                  <span>Falta:</span>
+                  {pendencias.map((p) => (
+                    <span key={p} className="etiqueta">
+                      {p}
+                    </span>
+                  ))}
+                </p>
+              ) : (
+                <p className="mt-3 text-xs leading-snug text-muted">Tudo escolhido: siga até o começo e abra a mesa.</p>
+              )}
             </aside>
           )}
         </div>
@@ -1041,11 +1098,11 @@ export function EdicaoHistoria({ semente, inicial, acao, mesa, ocupado }: PropsE
         <div className="criacao-estrelas" />
       </div>
       <main className="relative z-10 mx-auto w-full max-w-lg px-4 pb-16 pt-6 sm:pt-10">
-        <Link href={`/mesa/${mesa.id}`} className="-my-2 mb-3 inline-block py-2 text-xs text-muted hover:text-ambar">
-          ← voltar para {mesa.nome}
-        </Link>
+        <LinkVoltar href={`/mesa/${mesa.id}`} className="mb-3">
+          Voltar para {mesa.nome}
+        </LinkVoltar>
         <form action={aoEnviar} className="cartao relative overflow-clip border-ambar/25 bg-surface/85 px-5 pt-6 backdrop-blur-sm sm:px-8 sm:pt-8">
-          <h1 className={`${gotica.className} text-center text-[2.1rem] leading-tight text-pergaminho sm:text-5xl`}>Quem você é agora?</h1>
+          <h1 className={`${gotica.className} titulo-brilho text-center text-[2.1rem] leading-tight text-pergaminho sm:text-5xl`}>Quem você é agora?</h1>
           <p className="mt-2 text-center text-sm italic text-muted">A estrada muda as pessoas. Às vezes, o nome também.</p>
 
           <div className="mt-6 space-y-6">
@@ -1059,23 +1116,21 @@ export function EdicaoHistoria({ semente, inicial, acao, mesa, ocupado }: PropsE
             <div>
               <div className="mb-2 flex items-baseline justify-between gap-2">
                 <Rotulo>Outro rosto? (opcional)</Rotulo>
-                <button type="button" onClick={() => (setRodada((n) => n + 1), setRosto(""))} className="text-sm text-ambar hover:underline">
-                  ↻ Outros rostos
-                </button>
+                <BotaoSortear naLinha onClick={() => (setRodada((n) => n + 1), setRosto(""))}>
+                  Outros rostos
+                </BotaoSortear>
               </div>
               <div className="grid grid-cols-4 gap-2">
-                {grade.map((f) => (
-                  <button
+                {grade.map((f, i) => (
+                  <BotaoRosto
                     key={f.semente}
-                    type="button"
+                    dados={f.dados}
+                    ativo={rosto === f.semente}
+                    posicao={i + 1}
+                    total={grade.length}
                     onClick={() => setRosto(rosto === f.semente ? "" : f.semente)}
-                    aria-pressed={rosto === f.semente}
-                    aria-label="Escolher este rosto"
                     title={rosto === f.semente ? "Clique de novo para manter o rosto atual" : undefined}
-                    className={`relative rounded-[14px] p-[3px] transition ${rosto === f.semente ? "scale-105 bg-ambar shadow-[0_0_22px_-2px_var(--ambar)]" : "bg-transparent opacity-75 hover:opacity-100"}`}
-                  >
-                    <RetratoSVG dados={f.dados} className="block h-auto w-full" />
-                  </button>
+                  />
                 ))}
               </div>
               <p className="mt-1.5 text-xs italic text-muted">Sem escolher nenhum, fica o rosto de sempre. Origem e ofício não mudam aqui.</p>
@@ -1105,16 +1160,20 @@ export function EdicaoHistoria({ semente, inicial, acao, mesa, ocupado }: PropsE
           </div>
 
           <div className="sticky bottom-0 z-10 -mx-5 mt-7 border-t border-border/50 bg-surface/95 px-5 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3 backdrop-blur sm:-mx-8 sm:px-8">
-            {(aviso || estado.erro || ocupado) && (
-              <p role="alert" className="surgir mb-3 rounded-md border border-sangue/50 bg-sangue/10 px-3 py-2 text-sm text-pergaminho">
-                {aviso ?? estado.erro ?? "O Velho Mestre está contando a história agora. Pode escrever; guarde quando ele terminar."}
-              </p>
-            )}
+            {aviso || estado.erro ? (
+              <FaixaAviso tom="erro" className="surgir mb-3">
+                {aviso ?? estado.erro}
+              </FaixaAviso>
+            ) : ocupado ? (
+              <FaixaAviso tom="info" className="surgir mb-3">
+                O Velho Mestre está contando a história agora. Pode escrever; guarde quando ele terminar.
+              </FaixaAviso>
+            ) : null}
             <div className="flex items-center gap-3">
               <Link href={`/mesa/${mesa.id}`} className="btn-borda min-h-12 px-4">
                 Cancelar
               </Link>
-              <button type="submit" className="btn-ambar min-h-12 flex-1 py-3 text-base" disabled={enviando}>
+              <button type="submit" className="btn-ambar min-h-12 flex-1 py-3 text-base" disabled={enviando} aria-busy={enviando}>
                 {enviando ? "Guardando…" : "Guardar"}
               </button>
             </div>

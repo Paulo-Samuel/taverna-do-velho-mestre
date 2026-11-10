@@ -341,7 +341,7 @@ export const dnd5e: Sistema = {
   nomeCurto: "D&D 5e",
   extensoesMestre: ["oposicao"],
   descricao: "O clássico de fantasia: d20 + modificador contra CD, vantagem e desvantagem, espaços de magia. 12 classes, 10 espécies, 16 antecedentes.",
-  licenca: "SRD 5.2 — Creative Commons BY 4.0 (Wizards of the Coast)",
+  licenca: "SRD 5.2: Creative Commons BY 4.0 (Wizards of the Coast)",
   dadoPrincipal: "d20",
   pronto: true,
   rotulos: { ancestralidade: "Espécie", classe: "Classe", antecedente: "Antecedente", nivel: "Nível", defesa: "CA", dinheiro: "po", pv: "PV" },

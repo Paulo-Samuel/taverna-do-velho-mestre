@@ -3,6 +3,7 @@
 import { useActionState, useCallback, useEffect, useRef, useState, useTransition } from "react";
 import type { Diagnostico } from "@/lib/diagnostico";
 import type { AjustesMestre, IdProvedor } from "@/lib/mestre";
+import { Icone } from "@/components/icones";
 import { salvarAjustesAcao, statusLoginAcao, testarConexaoAcao, usarExecutavelAcao, type EstadoSalvar, type ResultadoTeste } from "./acoes";
 import type { AlternativaClaude, StatusClaude } from "./claude-local";
 
@@ -60,10 +61,10 @@ const MODELOS_CLI = [
 
 // Preços por milhão de tokens (entrada/saída), para dar noção do tamanho da conta.
 const MODELOS_API = [
-  { id: "claude-sonnet-5-5", rotulo: "US$ 2 / 10 — padrão" },
-  { id: "claude-opus-5-5", rotulo: "US$ 4 / 20 — narra melhor, custa o dobro" },
-  { id: "claude-haiku-5-5", rotulo: "US$ 0,10 / 0,50 — baratíssimo" },
-  { id: "claude-fable-5-1", rotulo: "US$ 10 / 50 — o mais capaz, para quem tem ouro" },
+  { id: "claude-sonnet-5-5", rotulo: "US$ 2 / 10: padrão" },
+  { id: "claude-opus-5-5", rotulo: "US$ 4 / 20: narra melhor, custa o dobro" },
+  { id: "claude-haiku-5-5", rotulo: "US$ 0,10 / 0,50: baratíssimo" },
+  { id: "claude-fable-5-1", rotulo: "US$ 10 / 50: o mais capaz, para quem tem ouro" },
 ];
 
 export function FormularioConfig({ ajustes, padroes }: { ajustes: AjustesMestre; padroes: PadroesEnv }) {
@@ -83,9 +84,9 @@ export function FormularioConfig({ ajustes, padroes }: { ajustes: AjustesMestre;
   };
 
   return (
-    <form ref={formRef} action={salvar} className="mt-8 space-y-8">
+    <form ref={formRef} id="mestre" action={salvar} className="mt-8 scroll-mt-20 space-y-10">
       <fieldset>
-        <legend className="titulo mb-3 text-xl text-pergaminho">Quem mestra</legend>
+        <legend className="titulo mb-3 text-2xl text-pergaminho">Quem mestra</legend>
         <div className="grid gap-3 sm:grid-cols-2">
           <CartaoOpcao
             marcado={escolha === ""}
@@ -111,10 +112,10 @@ export function FormularioConfig({ ajustes, padroes }: { ajustes: AjustesMestre;
 
       {/* As seções escondidas continuam no formulário: salvar uma não apaga a outra. */}
       <section className={efetivo === "cli" ? "space-y-4" : "hidden"}>
-        <h2 className="titulo text-xl text-pergaminho">Claude Code</h2>
+        <h2 className="titulo text-2xl text-pergaminho">Claude Code</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block text-sm">
-            <span className="text-muted">Modelo</span>
+            <span className="text-sm font-medium text-pergaminho">Modelo</span>
             <input
               name="modeloCli"
               list="modelos-cli"
@@ -134,7 +135,7 @@ export function FormularioConfig({ ajustes, padroes }: { ajustes: AjustesMestre;
             <span className="mt-1 block text-xs text-muted">Apelido (sonnet, opus, haiku) ou o nome completo do modelo.</span>
           </label>
           <label className="block text-sm">
-            <span className="text-muted">Executável (opcional)</span>
+            <span className="text-sm font-medium text-pergaminho">Executável (opcional)</span>
             <input
               name="binCli"
               defaultValue={ajustes.binCli ?? ""}
@@ -154,9 +155,9 @@ export function FormularioConfig({ ajustes, padroes }: { ajustes: AjustesMestre;
       </section>
 
       <section className={efetivo === "api" ? "space-y-4" : "hidden"}>
-        <h2 className="titulo text-xl text-pergaminho">API da Anthropic</h2>
+        <h2 className="titulo text-2xl text-pergaminho">API da Anthropic</h2>
         <label className="block text-sm sm:max-w-md">
-          <span className="text-muted">Modelo</span>
+          <span className="text-sm font-medium text-pergaminho">Modelo</span>
           <input
             name="modeloApi"
             list="modelos-api"
@@ -190,12 +191,12 @@ export function FormularioConfig({ ajustes, padroes }: { ajustes: AjustesMestre;
           </span>
         </label>
         <label className="block text-sm sm:max-w-md">
-          <span className="text-muted">Esforço do mestre</span>
+          <span className="text-sm font-medium text-pergaminho">Esforço do mestre</span>
           <select name="esforcoApi" defaultValue={ajustes.esforcoApi ?? ""} className="campo mt-1">
             <option value="">Padrão (médio)</option>
             {ESFORCOS_API.map((e) => (
               <option key={e.id} value={e.id}>
-                {e.rotulo} ({e.id}) — {e.texto}
+                {e.rotulo} ({e.id}): {e.texto}
               </option>
             ))}
           </select>
@@ -362,7 +363,7 @@ function StatusLogin({ binRef, ativo }: { binRef: React.RefObject<HTMLFormElemen
           </p>
           {status.desatualizado && (
             <p className="text-sangue">
-              Claude Code {status.versao} é mais antigo que o mínimo {status.versaoMinima} — rode <code className="text-ambar">claude update</code> (ou
+              Claude Code {status.versao} é mais antigo que o mínimo {status.versaoMinima}: rode <code className="text-ambar">claude update</code> (ou
               reinstale pelo winget) e verifique de novo.
             </p>
           )}
@@ -373,7 +374,7 @@ function StatusLogin({ binRef, ativo }: { binRef: React.RefObject<HTMLFormElemen
             <p className="text-musgo">
               Logado{status.metodo === "claude.ai" ? " com a conta do claude.ai" : status.metodo ? ` (${status.metodo})` : ""}
               {status.plano ? `, plano ${status.plano}` : ""}
-              {status.email ? ` — ${status.email}` : ""}.
+              {status.email ? `, ${status.email}` : ""}.
             </p>
           ) : status.erro ? (
             <p className="text-sangue">Instalado, mas não consegui conferir o login.</p>
@@ -393,8 +394,9 @@ function StatusLogin({ binRef, ativo }: { binRef: React.RefObject<HTMLFormElemen
       )}
 
       {status && status.alternativas.length > 0 && (
-        <details className="mt-3 text-xs text-muted">
-          <summary className="cursor-pointer">
+        <details className="group mt-3 text-xs text-muted">
+          <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-1 hover:text-ambar [&::-webkit-details-marker]:hidden">
+            <Icone nome="chevronDown" className="transition-transform group-open:rotate-180 motion-reduce:transition-none" />
             {status.instalado ? "Outras instalações nesta máquina" : "Instalações encontradas nesta máquina"} ({status.alternativas.length})
           </summary>
           <ul className="mt-2 space-y-2">
@@ -445,7 +447,7 @@ function LinhaExecutavel({ caminho, aoUsar, ocupado }: { caminho: string; aoUsar
   return (
     <div className="flex flex-wrap items-center gap-2">
       <code className="min-w-0 flex-1 break-all font-mono text-xs text-foreground">{caminho}</code>
-      <button type="button" className="btn-borda min-h-9 px-3 py-1 text-xs" onClick={() => aoUsar(caminho)} disabled={ocupado}>
+      <button type="button" className="btn-borda min-h-10 px-3 py-1 text-xs" onClick={() => aoUsar(caminho)} disabled={ocupado}>
         Usar este
       </button>
     </div>
@@ -464,6 +466,11 @@ function Instalacao() {
       <li>Reinicie a taverna (ou informe o caminho do executável acima) e verifique de novo.</li>
     </ol>
   );
+}
+
+/** valor do diagnóstico que é caminho de disco (C:\..., \\servidor\..., /home/...): vai em letra de máquina e pode quebrar em qualquer ponto */
+function ehCaminho(valor: string) {
+  return /^(?:[A-Za-z]:[\\/]|\\\\|\/)\S/.test(valor);
 }
 
 /**
@@ -507,20 +514,30 @@ export function SecaoDiagnostico({ inicial }: { inicial: Diagnostico }) {
   };
 
   return (
-    <section id="diagnostico" className="mt-12 scroll-mt-8 space-y-4">
+    <section id="diagnostico" className="mt-10 scroll-mt-20 space-y-4">
       <div>
-        <h2 className="titulo text-xl text-pergaminho">Diagnóstico</h2>
+        <h2 className="titulo text-2xl text-pergaminho">Diagnóstico</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted">
           Quando o mestre não responde, mande este relatório para quem instalou a taverna (ou o arquivo do dia em{" "}
           <code className="text-ambar">data/logs/</code>). Vai sem a chave de API e sem e-mail.
         </p>
       </div>
 
-      <dl className="cartao grid gap-x-4 gap-y-2 p-4 text-sm sm:grid-cols-[max-content_1fr]">
+      <dl className="cartao grid gap-x-4 px-4 py-2 text-sm sm:grid-cols-[max-content_1fr] sm:gap-y-2 sm:py-4">
         {diag.itens.map((i) => (
-          <div key={i.rotulo} className="contents">
-            <dt className="text-muted">{i.rotulo}</dt>
-            <dd className={`min-w-0 break-words ${i.alerta ? "text-sangue" : "text-foreground"}`}>{i.valor}</dd>
+          <div key={i.rotulo} className="border-b border-border/50 py-2 last:border-0 sm:contents">
+            <dt className={`text-xs uppercase tracking-wider sm:text-sm sm:normal-case sm:tracking-normal ${i.alerta ? "text-sangue" : "text-muted"}`}>
+              {i.rotulo}
+            </dt>
+            <dd className={`min-w-0 ${ehCaminho(i.valor) ? "font-mono text-xs break-all" : "break-words"} ${i.alerta ? "text-sangue" : "text-foreground"}`}>
+              {i.alerta && (
+                <>
+                  <Icone nome="warning" className="mr-1.5 inline-block align-[-0.15em]" />
+                  <span className="sr-only">Atenção: </span>
+                </>
+              )}
+              {i.valor}
+            </dd>
           </div>
         ))}
       </dl>
@@ -540,8 +557,9 @@ export function SecaoDiagnostico({ inicial }: { inicial: Diagnostico }) {
         </span>
       </div>
 
-      <details className="cartao p-4 text-sm" open={diag.linhas.length > 0}>
-        <summary className="cursor-pointer text-pergaminho">
+      <details className="group cartao p-4 text-sm" open={diag.linhas.length > 0}>
+        <summary className="flex min-h-10 cursor-pointer list-none flex-wrap items-center gap-x-2 text-pergaminho hover:text-ambar [&::-webkit-details-marker]:hidden">
+          <Icone nome="chevronDown" className="transition-transform group-open:rotate-180 motion-reduce:transition-none" />
           Últimas {diag.linhas.length} linhas do log <span className="text-xs text-muted">(gerado em {diag.geradoEm})</span>
         </summary>
         {diag.linhas.length ? (
@@ -552,8 +570,11 @@ export function SecaoDiagnostico({ inicial }: { inicial: Diagnostico }) {
       </details>
 
       {/* o relatório inteiro, para o caso de a cópia automática não funcionar */}
-      <details className="text-xs text-muted">
-        <summary className="cursor-pointer">Ver o relatório inteiro</summary>
+      <details className="group text-xs text-muted">
+        <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-1 hover:text-ambar [&::-webkit-details-marker]:hidden">
+          <Icone nome="chevronDown" className="transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+          Ver o relatório inteiro
+        </summary>
         <textarea
           ref={areaRef}
           readOnly

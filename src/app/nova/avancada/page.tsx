@@ -6,7 +6,7 @@ import { sistemasPublicos } from "@/lib/sistemas";
 import { criarCampanhaAcao } from "../acoes";
 import { personagensParaTrazer } from "../copiar-personagem";
 
-export const metadata: Metadata = { title: "Nova campanha (avançado) · Taverna do Velho Mestre" };
+export const metadata: Metadata = { title: "Nova campanha (avançado)" };
 // lê o banco (personagens de outras mesas) e os cabeçalhos (máquina da taverna?): não pode ser pré-renderizada
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ export default async function NovaCampanha(props: PageProps<"/nova/avancada">) {
   // personagens de outras mesas para o cartão "Trazer um personagem" (lista vazia pela rede)
   const copiaveis = await personagensParaTrazer();
   return (
-    <main className="mx-auto max-w-6xl px-4 py-6 sm:py-8">
+    <main className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
       {/* o título mora no formulário: grande no primeiro passo, numa linha junto da barra de passos depois */}
       <FormularioPersonagem
         sistemas={sistemasPublicos()}
@@ -36,7 +36,7 @@ export default async function NovaCampanha(props: PageProps<"/nova/avancada">) {
       />
       <p className="mt-6 text-center text-sm text-muted">
         Prefere responder três perguntas e deixar o resto com o mestre?{" "}
-        <Link href="/nova" className="text-ambar underline-offset-4 hover:underline">
+        <Link href="/nova" className="-my-2.5 inline-block py-2.5 text-ambar underline-offset-4 hover:underline">
           Vá pelo modo história
         </Link>
         .

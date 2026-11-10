@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import type { AcoesMesa, Mesa } from "@/lib/cliente/use-mesa";
 import type { PersonagemVisivel } from "@/lib/mesa";
+import { corDoRecurso } from "@/components/ficha/cores-recurso";
+import { Icone } from "@/components/icones";
 import { Avatar, quemAgiu, resumoPersonagem } from "./avatar";
 
 // Grupo da mesa: cartão de cada personagem (vida, recursos, condições, quem controla), troca do ativo,
@@ -73,7 +75,7 @@ function Responsavel({ personagem, campanhaId, sugestao, aoErro }: { personagem:
         ) : (
           "sem dono (qualquer um joga)"
         )}{" "}
-        ✎
+        <Icone nome="pencil" />
       </button>
     );
   }
@@ -98,7 +100,7 @@ function Responsavel({ personagem, campanhaId, sugestao, aoErro }: { personagem:
         ok
       </button>
       <button type="button" className="px-1 text-xs text-muted hover:text-foreground" onClick={() => setEditando(false)} aria-label="Cancelar">
-        ✕
+        <Icone nome="close" />
       </button>
     </form>
   );
@@ -129,6 +131,9 @@ function CartaoPersonagem({
   const recursos = Object.entries(ficha.recursos ?? {})
     .filter(([, r]) => r && r.max > 0)
     .slice(0, 3);
+  // mesma cor da barra na aba da ficha: o tipo vem dos blocos que o sistema desenha (o que a ficha não mostra em barra fica no anil)
+  const tipoDaBarra = new Map<string, string>();
+  for (const b of p.blocos) if (b.tipo === "barras") for (const x of b.itens) tipoDaBarra.set(x.rotulo, x.cor ?? "outro");
   const aparelhos = mesa.presenca.filter((j) => j.personagemId === p.id);
   const caido = ficha.pvMax > 0 && ficha.pv <= 0;
 
@@ -155,8 +160,16 @@ function CartaoPersonagem({
           <div className="flex items-baseline justify-between gap-2">
             <p className="truncate font-semibold text-pergaminho">{ficha.nome}</p>
             {agiu !== null && (
-              <span className={`shrink-0 rounded-full px-1.5 text-[11px] uppercase tracking-wider ${agiu ? "bg-musgo/30 text-[#a9c48a]" : "bg-surface-2 text-muted"}`}>
-                {agiu ? "agiu ✓" : "falta agir"}
+              <span
+                className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 text-[11px] uppercase tracking-wider ${agiu ? "bg-[color-mix(in_srgb,var(--grau-sucesso)_22%,transparent)] text-[var(--grau-sucesso)]" : "bg-surface-2 text-muted"}`}
+              >
+                {agiu ? (
+                  <>
+                    agiu <Icone nome="check" />
+                  </>
+                ) : (
+                  "falta agir"
+                )}
               </span>
             )}
           </div>
@@ -167,7 +180,7 @@ function CartaoPersonagem({
       <div className="mt-2.5 space-y-1.5">
         {ficha.pvMax > 0 && <Barra rotulo={caido ? `${rotulos.pv} · caído!` : rotulos.pv} atual={ficha.pv} max={ficha.pvMax} cor={corVida(ficha.pv, ficha.pvMax)} />}
         {recursos.map(([id, r]) => (
-          <Barra key={id} rotulo={r.rotulo} atual={r.atual} max={r.max} cor="bg-[#7d8fd6]" />
+          <Barra key={id} rotulo={r.rotulo} atual={r.atual} max={r.max} cor={corDoRecurso(tipoDaBarra.get(r.rotulo) ?? "magia")} />
         ))}
       </div>
 
@@ -179,7 +192,7 @@ function CartaoPersonagem({
             </span>
           )}
           {ficha.condicoes.map((c) => (
-            <span key={c} className="rounded border border-sangue/50 bg-sangue/10 px-1.5 text-[#e98b7d]">
+            <span key={c} className="rounded border border-sangue/50 bg-sangue/10 px-1.5 text-[var(--grau-falha)]">
               {c}
             </span>
           ))}
@@ -206,7 +219,10 @@ function CartaoPersonagem({
 
       <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-border pt-2 text-xs">
         {ativo ? (
-          <span className="text-ambar">▶ agindo agora</span>
+          <span className="inline-flex items-center gap-1 text-ambar">
+            <Icone nome="chevronDown" className="-rotate-90" />
+            agindo agora
+          </span>
         ) : (
           <button type="button" className="rounded-md border border-ambar/60 px-2.5 py-1 text-ambar hover:bg-ambar/10" onClick={() => acoes.escolherPersonagem(p.id)}>
             Jogar com este{indice < 9 && <span className="ml-1 hidden text-muted sm:inline">Alt+{indice + 1}</span>}
@@ -266,7 +282,7 @@ export function PainelGrupo({ mesa, acoes }: { mesa: Mesa; acoes: AcoesMesa }) {
         <div className="flex items-start justify-between gap-2 rounded-md border border-sangue/60 bg-sangue/10 px-3 py-2 text-xs">
           <p>{erro}</p>
           <button onClick={() => setErro(null)} className="text-muted hover:text-foreground" aria-label="Fechar">
-            ✕
+            <Icone nome="close" />
           </button>
         </div>
       )}

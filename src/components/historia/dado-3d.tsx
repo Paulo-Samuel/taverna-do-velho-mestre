@@ -248,12 +248,12 @@ function DadoPlano({
     >
       <polygon
         points="50,4 90,27 90,73 50,96 10,73 10,27"
-        fill={padrao ? "#3a2210" : aparencia.corpo.escura}
+        fill={padrao ? "color-mix(in srgb, var(--ambar) 25%, var(--background))" : aparencia.corpo.escura}
         stroke={contorno}
         strokeWidth="2.5"
         strokeLinejoin="round"
       />
-      <polygon points="50,22 76,66 24,66" fill={padrao ? "#5a3517" : aparencia.corpo.media} stroke={contorno} strokeWidth="1.6" strokeLinejoin="round" />
+      <polygon points="50,22 76,66 24,66" fill={padrao ? "color-mix(in srgb, var(--ambar) 40%, var(--background))" : aparencia.corpo.media} stroke={contorno} strokeWidth="1.6" strokeLinejoin="round" />
       <g stroke={traco} strokeWidth="1.2" opacity="0.8">
         <line x1="50" y1="4" x2="50" y2="22" />
         <line x1="90" y1="27" x2="76" y2="66" />

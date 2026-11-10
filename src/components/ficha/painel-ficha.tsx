@@ -18,7 +18,9 @@ import {
   useAjusteFicha,
   type AjusteFicha,
 } from "./ajuste-ficha";
+import { COR_RECURSO, corDoRecurso } from "./cores-recurso";
 import { BotaoGastarXp } from "./gastar-xp";
+import { Icone } from "@/components/icones";
 
 // Ficha de um personagem, desenhada a partir dos blocos que o sistema calcula no servidor.
 // Nada aqui conhece regra de sistema: só sabe desenhar barras, grades, etiquetas, listas e textos.
@@ -27,11 +29,9 @@ import { BotaoGastarXp } from "./gastar-xp";
 /** Progresso de XP, quando o servidor manda (null = sistema por marcos ou nível máximo). */
 export type ProgressoXp = { xpNivelAtual: number | null; xpProximoNivel: number | null };
 
-const CORES: Record<string, string> = { vida: "bg-musgo", magia: "bg-sky-500", sanidade: "bg-violet-400", outro: "bg-ambar" };
-
 function corDaBarra(cor: string | undefined, pct: number) {
-  if (cor === "vida") return pct > 50 ? "bg-musgo" : pct > 20 ? "bg-ambar" : "bg-sangue";
-  return CORES[cor ?? "outro"] ?? CORES.outro;
+  if (cor === "vida") return pct > 50 ? COR_RECURSO.vida : pct > 20 ? "bg-ambar" : "bg-sangue";
+  return corDoRecurso(cor ?? "outro");
 }
 
 function Barras({ itens, ajuste }: Extract<BlocoFicha, { tipo: "barras" }> & { ajuste?: AjusteFicha }) {
@@ -47,7 +47,8 @@ function Barras({ itens, ajuste }: Extract<BlocoFicha, { tipo: "barras" }> & { a
         // recursos pequenos (espaços, pontos de destino, estresse) leem melhor como caixinhas
         const caixas = b.cor !== "vida" && b.max >= 1 && b.max <= 10 && Number.isInteger(b.max);
         const numero = (
-          <span className="shrink-0 tabular-nums">
+          // no modo de ajuste o número tem largura mínima: o "−" de "5/5" e o de "14/14" ficam na mesma coluna
+          <span className={`shrink-0 text-right tabular-nums ${ajuste?.editando ? "min-w-9" : ""}`}>
             <span className={v?.pendente ? "text-ambar" : b.cor === "vida" && pct <= 20 ? "text-sangue" : "text-pergaminho"}>{b.atual}</span>
             <span className="text-muted">/{b.max}</span>
           </span>
@@ -62,6 +63,12 @@ function Barras({ itens, ajuste }: Extract<BlocoFicha, { tipo: "barras" }> & { a
                 <BotoesMarcador ajuste={ajuste} alvo={alvo}>
                   {numero}
                 </BotoesMarcador>
+              ) : ajuste ? (
+                // barra que não se ajusta à mão: guarda a vaga dos botões para o número fechar na mesma coluna das outras
+                <span className="inline-flex items-center gap-1">
+                  {numero}
+                  <span className={ajuste.editando ? "size-7 shrink-0" : "size-5 shrink-0"} aria-hidden />
+                </span>
               ) : (
                 numero
               )}
@@ -99,11 +106,34 @@ function classeValor(valor: string) {
 }
 
 // Rótulo em versalete ocupa até duas linhas; palavras longas ("Manipulação", "Inteligência") perdem o espaçamento largo
+// e as muito longas ("Deslocamento") apertam e quebram com hífen ("DESLOCA-MENTO"); a fonte nunca desce de 11px.
 function classeRotulo(rotulo: string) {
   const palavra = maiorPalavra(rotulo);
   if (palavra <= 8) return "text-[11px] tracking-wider";
-  if (palavra <= 11) return "text-[11px] tracking-normal";
-  return "text-[11px] tracking-normal";
+  if (palavra <= 11) return "text-[11px] tracking-normal hyphens-auto [overflow-wrap:anywhere]";
+  // overflow-wrap: se o navegador não souber hifenizar em português, a palavra ainda quebra em vez de vazar da caixa
+  return "text-[11px] tracking-tight hyphens-auto [overflow-wrap:anywhere]";
+}
+
+const VOGAL = /[aeiouáàâãéêíóôõúü]/i;
+const CONSOANTE = /[bcdfghjklmnpqrstvwxyzç]/i;
+
+// O navegador sem dicionário de português não hifeniza sozinho e o rótulo quebrava em "DESLOCAMENT/O".
+// Palavra com mais de 8 letras ganha hífens discretos (U+00AD) nas divisas vogal|consoante+vogal, que em português
+// são sempre fim de sílaba ("Deslo-ca-mento", "Manipu-la-ção"), com pelo menos 3 letras de cada lado.
+function comHifens(rotulo: string) {
+  return rotulo
+    .split(/(\s+)/)
+    .map((p) => {
+      if (p.length <= 8) return p;
+      let r = "";
+      for (let i = 0; i < p.length; i++) {
+        if (i >= 3 && p.length - i >= 3 && VOGAL.test(p[i - 1]) && CONSOANTE.test(p[i]) && VOGAL.test(p[i + 1])) r += "­";
+        r += p[i];
+      }
+      return r;
+    })
+    .join("");
 }
 
 /** Valor comprido ("Força + Briga", "13ª Cria (recém-abraçado)") ganha duas colunas em vez de espremer. */
@@ -120,10 +150,12 @@ function Grade({ itens, ajuste }: Extract<BlocoFicha, { tipo: "grade" }> & { aju
         return (
           <div
             key={`${i.rotulo}-${n}`}
-            className={`group/marcador relative flex min-w-0 flex-col justify-center rounded-md border border-border bg-surface-2/70 px-1 py-1.5 text-center ${largo(i) ? "col-span-2" : ""}`}
+            className={`group/marcador relative flex min-h-[3.4rem] min-w-0 flex-col justify-center rounded-md border border-border bg-surface-2/70 px-1 py-1.5 text-center ${largo(i) ? "col-span-2" : ""}`}
             title={[i.rotulo, i.detalhe].filter(Boolean).join(" · ")}
           >
-            <p className={`line-clamp-2 break-words uppercase leading-tight text-muted ${classeRotulo(i.rotulo)}`}>{i.rotulo}</p>
+            <p lang="pt-BR" className={`line-clamp-2 uppercase leading-tight text-muted ${classeRotulo(i.rotulo)}`}>
+              {comHifens(i.rotulo)}
+            </p>
             <p className={`titulo break-words leading-tight tracking-normal! ${classeValor(valor)} ${v?.pendente ? "text-ambar" : "text-pergaminho"}`}>{valor}</p>
             {i.detalhe && <p className="line-clamp-2 break-words text-xs leading-tight text-ambar">{i.detalhe}</p>}
             {alvo && ajuste && (
@@ -169,7 +201,7 @@ function Etiquetas({ itens, ajuste, condicoes }: { itens: string[]; ajuste?: Aju
         <span key={`${i}-${n}`} className="group/item inline-flex items-center gap-1 rounded-full border border-border bg-surface-2/60 px-2 py-0.5 text-xs">
           {i}
           {ajuste && condicoes && <PassoCondicao ajuste={ajuste} texto={i} condicoes={condicoes} />}
-          {ajuste && <BotaoRemover ajuste={ajuste} lista="condicoes" texto={i} />}
+          {ajuste && <BotaoRemover ajuste={ajuste} lista="condicoes" texto={i} colado={Boolean(condicoes)} />}
         </span>
       ))}
     </div>
@@ -219,10 +251,8 @@ export function BlocoVisual({ bloco, ajuste, condicoes }: { bloco: BlocoFicha; a
 function Secao({ titulo, contagem, aberta, children }: { titulo: string; contagem?: number; aberta: boolean; children: ReactNode }) {
   return (
     <details open={aberta} className="group border-t border-border/70 pt-2">
-      <summary className="flex cursor-pointer list-none items-center gap-2 py-1 text-xs uppercase tracking-wider text-muted hover:text-ambar [&::-webkit-details-marker]:hidden">
-        <span className="text-[11px] transition-transform group-open:rotate-90" aria-hidden>
-          ▶
-        </span>
+      <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 py-2 text-xs uppercase tracking-wider text-muted hover:text-ambar sm:min-h-0 sm:py-1 [&::-webkit-details-marker]:hidden">
+        <Icone nome="chevronDown" className="-rotate-90 transition-transform group-open:rotate-0 motion-reduce:transition-none" />
         <span className="flex-1">{titulo}</span>
         {contagem !== undefined && <span className="rounded-full bg-surface-2 px-1.5 text-[11px] tabular-nums">{contagem}</span>}
       </summary>
@@ -286,6 +316,9 @@ export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste
   const mostrarXp = proximo !== null || ficha.xp > 0 || Boolean(acaoXp);
   const pctXp = proximo !== null && proximo > base ? Math.max(0, Math.min(100, ((ficha.xp - base) / (proximo - base)) * 100)) : 0;
 
+  // com ajuste, os números das barras deixam a vaga do botão "+" à direita: o "faltam N" do XP fecha na mesma coluna
+  const recuoNumeros = ajuste ? (ajuste.editando ? "pr-8" : "pr-6") : "";
+
   const visiveis = blocosComAjuste(blocos, ajuste);
   const temHistoria = visiveis.some((b) => /hist[óo]ria/i.test(tituloDe(b) ?? ""));
   const vistos = new Map<string, number>();
@@ -293,35 +326,43 @@ export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste
   return (
     <div className="space-y-3 text-sm">
       <header>
-        <p className="titulo break-words text-2xl leading-tight text-pergaminho">{ficha.nome}</p>
+        <p className={`titulo break-words text-balance leading-tight text-pergaminho ${ficha.nome.length > 16 ? "text-xl" : "text-2xl"}`}>{ficha.nome}</p>
         <p className="text-muted">
           {[anc, classe].filter(Boolean).join(" · ")}
           {antecedente && <span className="text-muted/80"> · {antecedente}</span>}
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-          <span className="rounded-full border border-ambar/40 bg-ambar/10 px-2 py-0.5 text-ambar">
-            {sistema.rotulos.nivel} {ficha.nivel}
-          </span>
-          {jogador && <span className="rounded-full border border-border px-2 py-0.5 text-muted">jogado por {jogador}</span>}
-          {linkEditar && (
-            <Link
-              href={linkEditar}
-              title="Nome, história, conceito, convicções, pedras de toque, vantagens e defeitos (os números ficam como estão)"
-              className="ml-auto rounded-full border border-border px-2 py-0.5 text-muted transition hover:border-ambar hover:text-ambar"
-            >
-              ✐ editar
-            </Link>
-          )}
-          {ajuste && (
-            <button
-              type="button"
-              onClick={ajuste.alternarEdicao}
-              aria-pressed={ajuste.editando}
-              title="Corrigir à mão o que o mestre esqueceu: vida, recursos, dinheiro, condições, inventário"
-              className={`${linkEditar ? "" : "ml-auto "}rounded-full border px-2 py-0.5 transition ${ajuste.editando ? "border-ambar bg-ambar/15 text-ambar" : "border-border text-muted hover:border-ambar hover:text-ambar"}`}
-            >
-              {ajuste.editando ? "✓ pronto" : "✎ ajustar"}
-            </button>
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <span className="rounded-full border border-ambar/40 bg-ambar/10 px-2 py-0.5 text-ambar">
+              {sistema.rotulos.nivel} {ficha.nivel}
+            </span>
+            {jogador && <span className="rounded-full border border-border px-2 py-0.5 text-muted">jogado por {jogador}</span>}
+          </div>
+          {(linkEditar || ajuste) && (
+            <div className="ml-auto flex shrink-0 gap-1.5">
+              {linkEditar && (
+                <Link
+                  href={linkEditar}
+                  title="Nome, história, conceito, convicções, pedras de toque, vantagens e defeitos (os números ficam como estão)"
+                  className="btn-borda min-h-10 gap-1 px-3 py-1 text-xs sm:min-h-0"
+                >
+                  <Icone nome="pencil" />
+                  editar
+                </Link>
+              )}
+              {ajuste && (
+                <button
+                  type="button"
+                  onClick={ajuste.alternarEdicao}
+                  aria-pressed={ajuste.editando}
+                  title="Corrigir à mão o que o mestre esqueceu: vida, recursos, dinheiro, condições, inventário"
+                  className={`btn-borda min-h-10 gap-1 px-3 py-1 text-xs sm:min-h-0 ${ajuste.editando ? "border-ambar! bg-ambar/15! text-ambar!" : ""}`}
+                >
+                  <Icone nome={ajuste.editando ? "check" : "pencil"} />
+                  {ajuste.editando ? "pronto" : "ajustar"}
+                </button>
+              )}
+            </div>
           )}
         </div>
         {mostrarXp && (
@@ -331,9 +372,9 @@ export function CartaoFicha({ ficha, blocos, sistema, jogador, progresso, ajuste
               {acaoXp}
               {proximo !== null &&
                 (ficha.xp >= proximo ? (
-                  <span className="text-ambar">pronto para subir!</span>
+                  <span className={`text-ambar ${recuoNumeros}`}>pronto para subir!</span>
                 ) : (
-                  <span>faltam {(proximo - ficha.xp).toLocaleString("pt-BR")}</span>
+                  <span className={`text-right tabular-nums ${recuoNumeros}`}>faltam {(proximo - ficha.xp).toLocaleString("pt-BR")}</span>
                 ))}
             </div>
             {proximo !== null && (

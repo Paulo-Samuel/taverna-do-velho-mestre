@@ -7,7 +7,7 @@ import { SEPARADOR } from "./turnos";
 import { Icone } from "@/components/icones";
 
 // Peças de desenho da cena, comuns ao leitor cena a cena e ao modo 📜 Rolagem das duas mesas: o aparte ((fora do jogo)), o
-// divisor de fim de sessão ("— Fim da noite 3 —"), o mestre escrevendo no palco e a prosa corrida com os apartes no meio.
+// divisor de fim de sessão ("Fim da noite 3", entre dois fios), o mestre escrevendo no palco e a prosa corrida com os apartes no meio.
 
 /** Caixa do aparte: "💬 Mestre, fora do jogo" e o texto sem o itálico da narração. */
 export function Aparte({ quem = "Mestre", children, className = "" }: { quem?: string; children: ReactNode; className?: string }) {
@@ -46,16 +46,16 @@ export function BotaoPerguntar({ ligado, aoAlternar, className = "" }: { ligado:
   );
 }
 
-/** "— Fim da noite 3 —": fecha o capítulo da sessão, com o enfeite do tema. */
+/** "Fim da noite 3" entre dois fios: fecha o capítulo da sessão, com o enfeite do tema. */
 export function FimDaNoite({ sessao, data, simbolo }: { sessao: number | null; data?: string | null; simbolo?: string }) {
   const quando = data ? dataCurta(data) : null;
   return (
     <div className="leitor-fim-noite" role="separator" aria-label={sessao ? `Fim da noite ${sessao}` : "Fim da noite"} data-fim-noite>
       <Ornamento simbolo={simbolo} className="mb-0! mt-0! w-full max-w-[13em]!" />
-      <p className="leitor-fim-noite-titulo">
-        <span aria-hidden>— </span>
-        Fim da noite{sessao ? ` ${sessao}` : ""}
-        <span aria-hidden> —</span>
+      <p className="leitor-fim-noite-titulo flex w-full max-w-[17em] items-center gap-3">
+        <span aria-hidden className="h-px flex-1 bg-border" />
+        <span>Fim da noite{sessao ? ` ${sessao}` : ""}</span>
+        <span aria-hidden className="h-px flex-1 bg-border" />
       </p>
       {quando && <p className="leitor-fim-noite-data">{quando}</p>}
     </div>

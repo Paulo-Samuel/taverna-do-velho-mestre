@@ -10,7 +10,13 @@ import { descricaoDoTeste, tipoDoTeste } from "@/components/historia/tipo-teste"
 // texto e a perícia; o texto inteiro fica no title.
 // Celular ou tela baixa: uma linha só, "3 sugestões · Intimidação · Persuasão" com uma setinha para baixo, que abre a lista por cima do palco (o palco não encolhe).
 // No leitor cena a cena elas ficam apagadinhas até a pessoa chegar ao fim da cena; aí entram uma a uma, com destaque.
+// Apagadinhas = cada peça um tom abaixo (texto, borda e seta; o selo só perde saturação, porque opacidade o derrubaria
+// abaixo de 4,5:1), sem filtro no bloco: o texto segue acima de 4,5:1.
+// A entrada (sugestao-entrar, com fill "both") termina em opacidade 1; com prefers-reduced-motion não há animação e as linhas já nascem cheias.
 // Clicar numa sugestão envia a ação na hora.
+
+/** O que o botão-resumo diz enquanto a cena ainda não acabou (title e nome acessível). */
+const DICA_DISCRETAS = "Sugestões do mestre: dá para escolher antes de terminar a cena";
 
 const CSS = `
 @keyframes sugestao-entrar{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -26,7 +32,7 @@ export function SugestoesCompactas({
 }: {
   sugestoes: SugestaoAcao[];
   aoEscolher: (texto: string) => void;
-  /** leitor cena a cena: a pessoa ainda não chegou ao fim da cena (apagadinhas, mas clicáveis; por filtro, porque a entrada prende a opacidade) */
+  /** leitor cena a cena: a pessoa ainda não chegou ao fim da cena (apagadinhas, mas clicáveis e legíveis; o tom baixa por peça, não no bloco) */
   discretas?: boolean;
   desabilitado?: boolean;
 }) {
@@ -64,7 +70,7 @@ export function SugestoesCompactas({
   return (
     <div
       ref={caixa}
-      className={`relative transition-[filter] duration-500 motion-reduce:transition-none ${discretas ? "brightness-[.62] saturate-50 hover:brightness-100 hover:saturate-100 focus-within:brightness-100 focus-within:saturate-100" : ""}`}
+      className="relative"
       data-sugestoes={discretas ? "discretas" : "destaque"}
     >
       <style href="taverna-sugestoes" precedence="default">
@@ -76,15 +82,17 @@ export function SugestoesCompactas({
         onClick={() => setAberta((v) => !v)}
         aria-expanded={aberta}
         aria-controls="lista-sugestoes"
-        className="sugestao-entrar flex min-h-10 w-full items-center gap-2 rounded-lg border border-border/70 bg-surface/60 px-3 text-left text-sm focus-visible:border-ambar focus-visible:outline-none largo:hidden"
+        title={discretas ? DICA_DISCRETAS : undefined}
+        aria-label={discretas ? `${sugestoes.length} ${sugestoes.length === 1 ? "sugestão" : "sugestões"}${pericias.length > 0 ? ` · ${pericias.join(" · ")}` : ""}. ${DICA_DISCRETAS}` : undefined}
+        className={`sugestao-entrar flex min-h-10 w-full items-center gap-2 rounded-lg border bg-surface/60 px-3 text-left text-sm focus-visible:border-ambar focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ambar largo:hidden ${discretas ? "border-border/40" : "border-border/70"}`}
       >
-        <span className="shrink-0 text-ambar" aria-hidden>
+        <span className={`shrink-0 ${discretas ? "text-muted" : "text-ambar"}`} aria-hidden>
           <Icone nome="arrowRight" />
         </span>
-        <span className="shrink-0 text-foreground/90">
+        <span className={`shrink-0 ${discretas ? "text-foreground/75" : "text-foreground/90"}`}>
           {sugestoes.length} {sugestoes.length === 1 ? "sugestão" : "sugestões"}
         </span>
-        <span className="min-w-0 flex-1 truncate text-xs text-muted">{pericias.length > 0 && `· ${pericias.join(" · ")}`}</span>
+        <span className="min-w-0 flex-1 truncate text-xs text-foreground/70">{pericias.length > 0 && `· ${pericias.join(" · ")}`}</span>
         <span className={`shrink-0 text-xs text-muted transition-transform motion-reduce:transition-none ${aberta ? "rotate-180" : ""}`} aria-hidden>
           <Icone nome="chevronDown" />
         </span>
@@ -103,7 +111,7 @@ export function SugestoesCompactas({
               onClick={() => escolher(s.texto)}
               disabled={desabilitado}
               title={s.texto}
-              className="group flex min-h-11 w-full items-center gap-2.5 rounded-md border border-border/45 bg-surface/45 px-2.5 py-1.5 text-left text-[0.95rem] transition hover:border-ambar/60 hover:bg-surface-2/80 focus-visible:border-ambar focus-visible:outline-none disabled:opacity-50 largo:h-7 largo:min-h-0 largo:py-0 largo:text-[0.9rem]"
+              className={`group flex min-h-11 w-full items-center gap-2.5 rounded-md border bg-surface/45 px-2.5 py-1.5 text-left text-[0.95rem] transition hover:border-ambar/60 hover:bg-surface-2/80 focus-visible:border-ambar focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ambar disabled:opacity-50 largo:h-7 largo:min-h-0 largo:py-0 largo:text-[0.9rem] ${discretas ? "border-border/40" : "border-border/45"}`}
             >
               {/* número do atalho de teclado (1, 2, 3); no toque vira só a seta */}
               <kbd
@@ -112,11 +120,11 @@ export function SugestoesCompactas({
               >
                 {i + 1}
               </kbd>
-              <span className="shrink-0 text-ambar/80 [@media(pointer:fine)]:hidden" aria-hidden>
+              <span className={`shrink-0 [@media(pointer:fine)]:hidden ${discretas ? "text-muted" : "text-ambar/80"}`} aria-hidden>
                 <Icone nome="arrowRight" />
               </span>
-              <span className="min-w-0 flex-1 leading-snug text-foreground/85 group-hover:text-foreground largo:truncate">{s.texto}</span>
-              <Teste pericia={s.pericia} />
+              <span className={`min-w-0 flex-1 leading-snug group-hover:text-foreground group-focus-visible:text-foreground largo:truncate ${discretas ? "text-foreground/75" : "text-foreground/85"}`}>{s.texto}</span>
+              <Teste pericia={s.pericia} discreta={discretas} />
             </button>
           </li>
         ))}
@@ -126,8 +134,9 @@ export function SugestoesCompactas({
 }
 
 // Tipo de teste da sugestão: o texto da perícia mais um selo com o tipo (em texto, a cor nunca é a única pista).
+// O selo é a plaquinha do matiz do tipo (tipo-teste.ts), encolhida para caber na linha de 28px.
 // Sem perícia, nada; perícia que não se reconhece fica como era (itálico discreto), sem tipo inventado.
-function Teste({ pericia }: { pericia?: string }) {
+function Teste({ pericia, discreta = false }: { pericia?: string; discreta?: boolean }) {
   if (!pericia) return null;
   const info = tipoDoTeste(pericia);
   if (!info) return <span className="shrink-0 text-xs italic text-muted group-hover:text-ambar/90">{pericia}</span>;
@@ -135,11 +144,14 @@ function Teste({ pericia }: { pericia?: string }) {
     <span className="flex max-w-[45%] shrink-0 items-center gap-1.5 text-xs">
       <span className="sr-only">{descricaoDoTeste(pericia, info)}</span>
       {info.tipo !== "semrolagem" && (
-        <span className="truncate italic text-muted group-hover:text-ambar/90" aria-hidden>
+        <span className="truncate pr-0.5 italic text-muted group-hover:text-ambar/90" aria-hidden>
           {pericia}
         </span>
       )}
-      <span className={`shrink-0 whitespace-nowrap rounded border px-1.5 py-px text-[11px] font-medium leading-4 ${info.classe}`} aria-hidden>
+      <span
+        className={`${info.classe} px-1.5 py-0 text-[11px] leading-4 shrink-0 whitespace-nowrap ${discreta ? "saturate-50 group-hover:saturate-100 group-focus-visible:saturate-100" : ""}`}
+        aria-hidden
+      >
         {info.rotulo}
       </span>
     </span>

@@ -232,6 +232,51 @@ const CAMINHOS = {
       <path d="M18.6 15.4l.6 1.8 1.8.6-1.8.6-.6 1.8-.6-1.8-1.8-.6 1.8-.6z" />
     </>
   ),
+  arrowLeft: <path d="M20 12H4.6M10 6.4 4.4 12l5.6 5.6" />,
+  swords: (
+    <>
+      <path d="M13.6 16.4 3.6 6.4V3.6h2.8l10 10" />
+      <path d="M12.4 18.6l6.2-6.2M15.8 15.8l4.4 4.4" />
+      <path d="M10.4 7.6l-4-4M13.8 9.8l6.6-6.2v2.8l-4.6 4.6" />
+      <path d="M5.4 12.4l6.2 6.2M8.2 15.8l-4.4 4.4" />
+    </>
+  ),
+  warning: (
+    <>
+      <path d="M12 3.6 21.4 20H2.6z" />
+      <path d="M12 9.6v5" />
+      <path d="M12 17.4v.2" />
+    </>
+  ),
+  undo: (
+    <>
+      <path d="M8.6 5 4 9.6l4.6 4.6" />
+      <path d="M4 9.6h10.4a5.2 5.2 0 0 1 0 10.4H9" />
+    </>
+  ),
+  redo: (
+    <>
+      <path d="M15.4 5 20 9.6l-4.6 4.6" />
+      <path d="M20 9.6H9.6a5.2 5.2 0 0 0 0 10.4H15" />
+    </>
+  ),
+  stop: <rect x="5.5" y="5.5" width="13" height="13" rx="2.4" />,
+  heart: (
+    <path d="M12 20.4s-7.6-4.6-7.6-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.6 2.6c0 5.6-7.6 10.2-7.6 10.2z" />
+  ),
+  fastForward: <path d="M5 6.4l5.6 5.6L5 17.6M13 6.4l5.6 5.6-5.6 5.6" />,
+  download: (
+    <>
+      <path d="M12 3.6v11.2M7 10.2l5 5 5-5" />
+      <path d="M4 16.4v2.2a1.8 1.8 0 0 0 1.8 1.8h12.4a1.8 1.8 0 0 0 1.8-1.8v-2.2" />
+    </>
+  ),
+  external: (
+    <>
+      <path d="M18.4 13.4v4.8a1.8 1.8 0 0 1-1.8 1.8H5.8A1.8 1.8 0 0 1 4 18.2V7.4a1.8 1.8 0 0 1 1.8-1.8h4.8" />
+      <path d="M14 4h6v6M20 4l-9 9" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type NomeIcone = keyof typeof CAMINHOS;
@@ -310,6 +355,12 @@ const EMOJI_ICONE: Record<string, NomeIcone> = {
   "🏹": "bow",
   "🪓": "axe",
   "✨": "sparkle",
+  "⚔️": "swords",
+  "⚔": "swords",
+  "🗡️": "swords",
+  "🗡": "swords",
+  "⚠️": "warning",
+  "⚠": "warning",
 };
 
 const RE_EMOJI = new RegExp(

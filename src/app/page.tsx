@@ -77,11 +77,11 @@ function Etiquetas({ c }: { c: CampanhaListada }) {
       )}
       {historia ? (
         <span className="etiqueta" title="Mesa em estilo de livro: ações sugeridas e você rola os dados na tela">
-          Modo história
+          <Icone nome="scroll" /> Modo história
         </span>
       ) : (
         <span className="etiqueta" title="Ficha completa e mesa com painéis">
-          Modo avançado
+          <Icone nome="shield" /> Modo avançado
         </span>
       )}
       {c.config.modo === "rodada" && (
@@ -90,7 +90,8 @@ function Etiquetas({ c }: { c: CampanhaListada }) {
         </span>
       )}
       {c.config.pin && (
-        <span className="etiqueta" title="Quem entra pela rede precisa do PIN"><Icone nome="lock" />  PIN
+        <span className="etiqueta" title="Quem entra pela rede precisa do PIN">
+          <Icone nome="lock" /> PIN
         </span>
       )}
     </div>
@@ -122,7 +123,7 @@ function LinhaPersonagem({ p, nomeClasse }: { p: Personagem; nomeClasse: string 
         </span>
       </div>
       {pvMax > 0 && (
-        <div className="mt-1 h-1 overflow-hidden rounded-full bg-surface-2" aria-hidden>
+        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
           <div className={`h-full ${corDaVida(pv, pvMax)}`} style={{ width: `${largura}%` }} />
         </div>
       )}
@@ -139,7 +140,7 @@ function Continuar({ c }: { c: CampanhaListada }) {
   const missoes = contarMissoes(listarDiario(c.id));
   const noite = c.noites.ultima?.numero;
   const feitas = missoes.total > 0 ? Math.round((missoes.concluidas / missoes.total) * 100) : 0;
-  const textoMissoes = `${missoes.abertas} ${missoes.abertas === 1 ? "missão em aberto" : "missões em aberto"}`;
+  const textoMissoes = `${missoes.concluidas} de ${missoes.total} ${missoes.total === 1 ? "missão concluída" : "missões concluídas"}`;
   return (
     <section
       aria-labelledby="continuar-titulo"
@@ -163,16 +164,16 @@ function Continuar({ c }: { c: CampanhaListada }) {
             {noite != null && missoes.total > 0 && " · "}
             {missoes.total > 0 && textoMissoes}
           </p>
-          {missoes.total > 0 && (
+          {/* com nada concluído a barra vazia só parece defeito: o texto de cima já conta */}
+          {feitas > 0 && (
             <div
               role="progressbar"
               aria-label="Missões concluídas"
               aria-valuemin={0}
               aria-valuemax={missoes.total}
               aria-valuenow={missoes.concluidas}
-              aria-valuetext={`${missoes.concluidas} de ${missoes.total} missões concluídas`}
-              title={`${missoes.concluidas} de ${missoes.total} missões concluídas`}
-              className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-2"
+              aria-valuetext={textoMissoes}
+              className="mt-1.5 h-1.5 overflow-hidden rounded-full border border-border/60 bg-surface-2"
             >
               <div className="h-full bg-ambar" style={{ width: `${feitas}%` }} />
             </div>
@@ -186,20 +187,92 @@ function Continuar({ c }: { c: CampanhaListada }) {
       ) : (
         c.cenario && <p className="mt-3 line-clamp-3 text-sm text-muted">{c.cenario}</p>
       )}
-      <div className="mt-5 flex flex-wrap gap-2">
+      <div className="mt-5 flex flex-wrap items-center gap-2">
         <Link href={`/mesa/${c.id}`} className="btn-palco min-h-11 basis-full whitespace-nowrap sm:basis-auto sm:px-8">
           Continuar a história
         </Link>
         <Link href={`/mesa/${c.id}/ajustes`} className="btn-borda min-h-11 px-4">
           Ajustes
         </Link>
-        <Link href={`/mesa/${c.id}/livro`} className="inline-flex min-h-11 items-center gap-1 px-2 text-sm text-muted underline-offset-4 hover:text-ambar hover:underline" title="Livro da campanha: reler, imprimir ou baixar">
+        <Link href={`/mesa/${c.id}/livro`} className="inline-flex min-h-10 items-center gap-1 rounded-sm px-1 text-sm text-muted hover:text-ambar sm:min-h-8" title="Livro da campanha: reler, imprimir ou baixar">
           <Icone nome="scroll" /> Livro
         </Link>
+        <form action={excluirCampanhaAcao} className="ml-auto text-sm">
+          <input type="hidden" name="id" value={c.id} />
+          <BotaoExcluir nome={c.nome} />
+        </form>
       </div>
     </section>
   );
 }
+
+/** Cartão da grade: o título estica o link sobre o cartão inteiro; os botões ficam por cima dele (relative z-10). */
+function CartaoCampanha({ c }: { c: CampanhaListada }) {
+  return (
+    <li data-tema={temaDoSistema(c.sistema.id)} className={`cartao cartao-tema cartao-matiz cartao-clicavel relative flex flex-col p-5 ${matizDaCampanha(c.id, c.sistema.id)}`}>
+      {/* as plaquinhas ficam por cima do link esticado para a dica (title) continuar aparecendo */}
+      <div className="relative z-10 w-fit">
+        <Etiquetas c={c} />
+      </div>
+      <h3 className="titulo mt-2 text-xl text-pergaminho">
+        <Link href={`/mesa/${c.id}`} className="rounded-sm after:absolute after:inset-0 after:rounded-xl hover:text-ambar focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ambar">
+          {c.nome}
+        </Link>
+      </h3>
+      {c.cenario ? (
+        <p className="mt-1 line-clamp-2 text-sm text-muted">{c.cenario}</p>
+      ) : (
+        <p className="mt-1 text-sm italic text-muted">Sem cenário anotado. O mestre improvisa.</p>
+      )}
+
+      <div className="mt-3">
+        {c.personagens.length ? (
+          <ul className="space-y-2" aria-label="Personagens">
+            {c.personagens.map((p) => (
+              <LinhaPersonagem key={p.id} p={p} nomeClasse={nomeDaClasse(c, p)} />
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm italic text-muted">Ninguém sentou ainda.</p>
+        )}
+      </div>
+
+      <div className="relative z-10 mt-auto flex flex-wrap gap-2 pt-4">
+        <Link href={`/mesa/${c.id}`} className="btn-borda min-h-10 flex-1 gap-1.5 px-3 py-2" aria-label={`Entrar em ${c.nome}`}>
+          Entrar <Icone nome="arrowRight" />
+        </Link>
+        <Link href={`/mesa/${c.id}/ajustes`} className="btn-borda min-h-10 px-3 py-2">
+          Ajustes
+        </Link>
+      </div>
+      <div className="relative z-10 mt-3 flex flex-wrap items-center justify-between gap-x-2 border-t border-border pt-2 text-xs text-muted">
+        {c.noites.quantas && c.noites.ultima ? (
+          <span title={`Última jogada: ${dataDoBanco(c.noites.ultima.fim).toLocaleString("pt-BR")}`}>
+            {c.noites.quantas} {c.noites.quantas === 1 ? "noite" : "noites"} · última jogada {haQuanto(c.noites.ultima.fim)}
+          </span>
+        ) : (
+          <span title={dataDoBanco(c.atualizadaEm).toLocaleString("pt-BR")}>Última jogada: {haQuanto(c.atualizadaEm)}</span>
+        )}
+        <Link
+          href={`/mesa/${c.id}/livro`}
+          className="ml-auto inline-flex min-h-10 items-center gap-1 rounded-sm px-1 hover:text-ambar sm:min-h-8"
+          title="Livro da campanha: reler, imprimir ou baixar"
+        >
+          <Icone nome="scroll" /> Livro
+        </Link>
+        <form action={excluirCampanhaAcao}>
+          <input type="hidden" name="id" value={c.id} />
+          <BotaoExcluir nome={c.nome} />
+        </form>
+      </div>
+    </li>
+  );
+}
+
+/** Quantas campanhas a grade mostra antes de guardar o resto no "Ver as outras". */
+const CAMPANHAS_A_VISTA = 6;
+/** Com resto guardado, uma vaga da grade fica para o "Abrir outra mesa": seis células fecham as linhas (2 ou 3 colunas). */
+const campanhasAVista = (total: number) => (total > CAMPANHAS_A_VISTA ? CAMPANHAS_A_VISTA - 1 : CAMPANHAS_A_VISTA);
 
 /** "Quem está mestrando" em uma linha: cabe embaixo dos botões sem empurrar as campanhas no celular. */
 function MestreCompacto({ nome, aviso }: { nome: string; aviso: string }) {
@@ -209,8 +282,8 @@ function MestreCompacto({ nome, aviso }: { nome: string; aviso: string }) {
         <span>
           Mestrando: <span className="text-ambar">{nome}</span>
         </span>
-        <Link href="/config" className="inline-flex min-h-10 items-center text-ambar underline-offset-4 hover:underline sm:min-h-0">
-          Trocar o mestre →
+        <Link href="/config" className="inline-flex min-h-10 items-center gap-1 text-ambar underline-offset-4 hover:underline sm:min-h-0">
+          Trocar o mestre <Icone nome="arrowRight" />
         </Link>
       </p>
       <p className="text-xs">{aviso}</p>
@@ -229,22 +302,27 @@ function AventurasProntas() {
           Aventuras prontas
         </h2>
         <Link href="/aventuras" className="inline-flex min-h-11 items-center text-sm text-ambar hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ambar">
-          Ver todas →
+          Ver todas as {lista.length} aventuras <Icone nome="arrowRight" className="ml-1" />
         </Link>
         <p className="basis-full text-sm text-muted">Sem ideia? Escolha uma: o mestre já chega com o roteiro decorado (e com os segredos que você não vai ler).</p>
       </div>
-      <ul className="-mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-3" aria-label="Aventuras prontas">
+      {/* celular: carrossel com a borda direita sumindo (tem mais para o lado); sm+: grade com as quatro primeiras */}
+      <ul
+        className="-mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-3 max-sm:pr-10 max-sm:[mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4"
+        aria-label="Aventuras prontas"
+      >
         {lista.map((a, i) => {
           const sistema = a.sistemas[0];
           const tema = dadosDoTema(sistema);
           return (
-            <li key={a.id} className="w-60 shrink-0 snap-start sm:w-64">
+            <li key={a.id} className={`w-60 shrink-0 snap-start sm:w-auto ${i >= 4 ? "sm:hidden" : ""}`}>
               <Link
                 href={linkDaAventura(a)}
                 data-tema={temaDoSistema(sistema)}
                 className={`cartao cartao-tema group relative flex h-full flex-col overflow-hidden cartao-matiz cartao-clicavel ${sistema === "historia" ? matizDaPosicao(i) : ""}`}
               >
-                <CapaAventura id={a.id} sistema={sistema} className="max-h-24" />
+                {/* a capa é 2:1; na grade de duas colunas o cartão é largo e o teto de 96px cortava a silhueta pela metade */}
+                <CapaAventura id={a.id} sistema={sistema} className="max-h-24 sm:max-h-36 lg:max-h-24" />
                 {a.tutorial && <span className="fita-destaque">Comece por aqui</span>}
                 <span className="flex flex-1 flex-col p-4">
                 <span className="etiqueta w-fit text-ambar-forte">
@@ -260,13 +338,19 @@ function AventurasProntas() {
                     </span>
                   )}
                 </span>
-                {a.recomendado && <span className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted/70">{a.recomendado}</span>}
+                {/* na tutorial a fita "Comece por aqui" já diz isso */}
+                {!a.tutorial && a.recomendado && <span className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted/70">{a.recomendado}</span>}
                 </span>
               </Link>
             </li>
           );
         })}
       </ul>
+      <p className="mt-3">
+        <Link href="/aventuras" className="btn-borda min-h-11 w-full gap-1.5 sm:w-auto">
+          Ver todas as {lista.length} aventuras <Icone nome="arrowRight" />
+        </Link>
+      </p>
     </section>
   );
 }
@@ -291,6 +375,9 @@ export default async function Inicio(props: PageProps<"/">) {
   const recente = campanhas[0];
   // a campanha em destaque não se repete na grade: o palco de cima já é ela
   const outras = recente ? campanhas.slice(1) : campanhas;
+  const aVista = campanhasAVista(outras.length);
+  // quando há resto, ele tem pelo menos duas campanhas (o plural do "Ver as outras" é sempre certo)
+  const guardadas = outras.length - aVista;
   // primeira visita (nenhuma campanha): a aventura-tutorial ganha um cartão de destaque
   const tutorial = campanhas.length === 0 ? aventuraTutorial() : null;
   const modoAvancado = (
@@ -328,11 +415,13 @@ export default async function Inicio(props: PageProps<"/">) {
           </p>
           {recente ? (
             <div className="mt-6 flex flex-wrap items-center gap-3">
-              <Link href="/nova" className="btn-borda min-h-11">
-                Nova história
+              <Link href="/nova" className="btn-borda min-h-11 gap-1.5">
+                <Icone nome="pencil" /> Nova história
               </Link>
               <form action={jogarAgoraAcao}>
-                <BotaoJogarAgora className="btn-borda min-h-11">Jogar agora com herói pronto</BotaoJogarAgora>
+                <BotaoJogarAgora className="btn-borda min-h-11 gap-1.5">
+                  <Icone nome="dice" /> Jogar agora com herói pronto
+                </BotaoJogarAgora>
               </form>
               {modoAvancado}
             </div>
@@ -353,7 +442,7 @@ export default async function Inicio(props: PageProps<"/">) {
               </div>
             </div>
           )}
-          {recente && <MestreCompacto nome={provedor.nome} aviso={`${aviso}${!configurado ? " (escolha vinda do .env)" : ""}`} />}
+          {recente && <MestreCompacto nome={provedor.nome} aviso={`${aviso}${!configurado ? " (padrão da instalação)" : ""}`} />}
         </div>
 
         {recente ? (
@@ -364,10 +453,10 @@ export default async function Inicio(props: PageProps<"/">) {
             <p className="text-ambar">{provedor.nome}</p>
             <p className="mt-2">
               {aviso}
-              {!configurado && " (escolha vinda do .env)"}
+              {!configurado && " (padrão da instalação)"}
             </p>
-            <Link href="/config" className="mt-1 inline-flex min-h-10 items-center text-ambar underline-offset-4 hover:underline">
-              Trocar o mestre →
+            <Link href="/config" className="mt-1 inline-flex min-h-10 items-center gap-1 text-ambar underline-offset-4 hover:underline">
+              Trocar o mestre <Icone nome="arrowRight" />
             </Link>
           </div>
         )}
@@ -375,17 +464,10 @@ export default async function Inicio(props: PageProps<"/">) {
 
       {!recente && <FaixaHerois />}
 
-      <div className="mb-4 flex items-end justify-between gap-3">
-        <h2 className="titulo text-2xl text-pergaminho">
-          {recente && outras.length > 0 ? "Outras campanhas" : "Campanhas"}{" "}
-          {outras.length > 1 && <span className="text-base text-muted">({outras.length})</span>}
-        </h2>
-        {campanhas.length > 0 && (
-          <Link href="/nova" className="btn-borda min-h-10 px-3 py-1.5">
-            + Nova
-          </Link>
-        )}
-      </div>
+      <h2 className="titulo mb-4 text-2xl text-pergaminho">
+        {recente && outras.length > 0 ? "Outras campanhas" : "Campanhas"}{" "}
+        {outras.length > 1 && <span className="text-base text-muted">({outras.length})</span>}
+      </h2>
 
       {campanhas.length === 0 ? (
         <>
@@ -417,58 +499,37 @@ export default async function Inicio(props: PageProps<"/">) {
           .
         </p>
       ) : (
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {outras.map((c) => (
-            <li key={c.id} data-tema={temaDoSistema(c.sistema.id)} className={`cartao cartao-tema cartao-matiz flex flex-col p-5 ${matizDaCampanha(c.id, c.sistema.id)}`}>
-              <Etiquetas c={c} />
-              <Link href={`/mesa/${c.id}`} className="group mt-2 rounded-sm">
-                <h3 className="titulo text-xl text-pergaminho group-hover:text-ambar">{c.nome}</h3>
+        <>
+          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {outras.slice(0, aVista).map((c) => (
+              <CartaoCampanha key={c.id} c={c} />
+            ))}
+            <li className="flex">
+              <Link
+                href="/nova"
+                className="cartao-clicavel flex min-h-24 flex-1 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border p-5 text-center text-muted hover:text-ambar"
+              >
+                <Icone nome="plus" className="text-2xl" />
+                <span className="titulo text-lg">Abrir outra mesa</span>
+                <span className="text-xs">Tem banco sobrando.</span>
               </Link>
-              {c.cenario && <p className="mt-1 line-clamp-2 text-sm text-muted">{c.cenario}</p>}
-
-              <div className="mt-3 flex-1">
-                {c.personagens.length ? (
-                  <ul className="space-y-2" aria-label="Personagens">
-                    {c.personagens.map((p) => (
-                      <LinhaPersonagem key={p.id} p={p} nomeClasse={nomeDaClasse(c, p)} />
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm italic text-muted">Ninguém sentou ainda.</p>
-                )}
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Link href={`/mesa/${c.id}`} className="btn-ambar min-h-10 flex-1 px-3 py-2">
-                  Entrar
-                </Link>
-                <Link href={`/mesa/${c.id}/ajustes`} className="btn-borda min-h-10 px-3 py-2">
-                  Ajustes
-                </Link>
-              </div>
-              <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-2 text-xs text-muted">
-                {c.noites.quantas && c.noites.ultima ? (
-                  <span title={`Última jogada: ${dataDoBanco(c.noites.ultima.fim).toLocaleString("pt-BR")}`}>
-                    {c.noites.quantas} {c.noites.quantas === 1 ? "noite" : "noites"} · última jogada {haQuanto(c.noites.ultima.fim)}
-                  </span>
-                ) : (
-                  <span title={dataDoBanco(c.atualizadaEm).toLocaleString("pt-BR")}>Última jogada: {haQuanto(c.atualizadaEm)}</span>
-                )}
-                <Link
-                  href={`/mesa/${c.id}/livro`}
-                  className="ml-auto inline-flex min-h-8 items-center gap-1 rounded-sm hover:text-ambar"
-                  title="Livro da campanha: reler, imprimir ou baixar"
-                >
-                  <Icone nome="scroll" /> Livro
-                </Link>
-                <form action={excluirCampanhaAcao}>
-                  <input type="hidden" name="id" value={c.id} />
-                  <BotaoExcluir nome={c.nome} />
-                </form>
-              </div>
             </li>
-          ))}
-        </ul>
+          </ul>
+          {guardadas > 0 && (
+            <details className="group mt-4">
+              <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-1 rounded-sm text-sm text-ambar underline-offset-4 hover:underline [&::-webkit-details-marker]:hidden">
+                <span className="group-open:hidden">Ver as outras {guardadas} campanhas</span>
+                <span className="hidden group-open:inline">Recolher as outras {guardadas} campanhas</span>
+                <Icone nome="chevronDown" className="transition-transform group-open:rotate-180" />
+              </summary>
+              <ul className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {outras.slice(aVista).map((c) => (
+                  <CartaoCampanha key={c.id} c={c} />
+                ))}
+              </ul>
+            </details>
+          )}
+        </>
       )}
 
       {recente ? (

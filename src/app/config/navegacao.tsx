@@ -3,17 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Icone } from "@/components/icones";
+import { Icone, type NomeIcone } from "@/components/icones";
 
 // Navegação do cabeçalho (usada por src/app/layout.tsx). Mora aqui junto das configurações por ser
 // "coisa da casa", não de uma mesa. No celular vira um menu que fecha sozinho ao trocar de página.
 
-const LINKS = [
-  { href: "/", rotulo: "Campanhas", ativo: (p: string) => p === "/" },
-  { href: "/nova", rotulo: "Nova campanha", ativo: (p: string) => p.startsWith("/nova") },
-  { href: "/aventuras", rotulo: "Aventuras", ativo: (p: string) => p.startsWith("/aventuras") },
-  { href: "/sistemas", rotulo: "Sistemas", ativo: (p: string) => p.startsWith("/sistemas") },
-  { href: "/config", rotulo: "Configurações", ativo: (p: string) => p.startsWith("/config") },
+// o ícone só aparece no menu do celular (no desktop a barra fica só com os rótulos)
+const LINKS: { href: string; rotulo: string; icone: NomeIcone; ativo: (p: string) => boolean }[] = [
+  { href: "/", rotulo: "Campanhas", icone: "book", ativo: (p) => p === "/" },
+  { href: "/nova", rotulo: "Nova campanha", icone: "plus", ativo: (p) => p.startsWith("/nova") },
+  { href: "/aventuras", rotulo: "Aventuras", icone: "scroll", ativo: (p) => p.startsWith("/aventuras") },
+  { href: "/sistemas", rotulo: "Sistemas", icone: "dice", ativo: (p) => p.startsWith("/sistemas") },
+  { href: "/config", rotulo: "Configurações", icone: "gear", ativo: (p) => p.startsWith("/config") },
 ];
 
 export function Navegacao() {
@@ -43,12 +44,13 @@ export function Navegacao() {
     return () => window.removeEventListener("keydown", aoTeclar);
   }, [aberto]);
 
-  const itens = (classe: (ativo: boolean) => string) =>
+  const itens = (classe: (ativo: boolean) => string, comIcone = false) =>
     LINKS.map((l) => {
       const ativo = l.ativo(caminho);
       return (
         // fechar no clique cobre o link da página atual, que não muda o caminho
         <Link key={l.href} href={l.href} className={classe(ativo)} aria-current={ativo ? "page" : undefined} onClick={() => setAberto(false)}>
+          {comIcone && <Icone nome={l.icone} className="shrink-0 text-lg" />}
           {l.rotulo}
         </Link>
       );
@@ -57,13 +59,14 @@ export function Navegacao() {
   return (
     <>
       <nav aria-label="Principal" className="hidden items-center gap-1 md:flex">
-        {itens((ativo) => `rounded-md px-2 py-1.5 text-sm whitespace-nowrap lg:px-3 ${ativo ? "bg-surface-2 text-ambar shadow-[inset_0_-2px_0_var(--ambar)]" : "text-muted hover:text-ambar"}`)}
+        {itens((ativo) => `inline-flex min-h-10 items-center rounded-full px-3 text-sm whitespace-nowrap transition-colors ${ativo ? "bg-ambar/10 text-ambar" : "text-muted hover:text-ambar"}`)}
       </nav>
 
       <button
         ref={botaoRef}
         type="button"
-        className="btn-borda size-10 shrink-0 p-0 text-lg md:hidden"
+        // acima do véu (z-30): com o menu aberto o X continua aceso e clicável
+        className="btn-borda relative z-40 size-10 shrink-0 p-0 text-lg md:hidden"
         aria-expanded={aberto}
         aria-controls="menu-celular"
         onClick={() => setAberto((a) => !a)}
@@ -74,15 +77,16 @@ export function Navegacao() {
 
       {aberto && (
         <>
-          {/* clique fora fecha */}
-          <div className="fixed inset-0 z-30 md:hidden" aria-hidden onClick={() => setAberto(false)} />
+          {/* clique fora fecha. Altura explícita em vez de inset-0: o cabeçalho tem backdrop-blur e vira o bloco de referência
+              deste fixed, então inset-0 cobriria só a faixa do cabeçalho */}
+          <div className="fixed inset-x-0 top-0 z-30 h-dvh bg-background/60 backdrop-blur-sm md:hidden" aria-hidden onClick={() => setAberto(false)} />
           <nav
             ref={menuRef}
             id="menu-celular"
             aria-label="Principal"
             className="cartao surgir absolute inset-x-4 top-full z-40 mt-2 flex flex-col bg-surface! p-2 md:hidden"
           >
-            {itens((ativo) => `rounded-md px-3 py-3 ${ativo ? "bg-surface-2 text-ambar shadow-[inset_2px_0_0_var(--ambar)]" : "text-foreground hover:text-ambar"}`)}
+            {itens((ativo) => `flex min-h-11 items-center gap-3 rounded-md px-3 py-3 ${ativo ? "bg-surface-2 text-ambar shadow-[inset_2px_0_0_var(--ambar)]" : "text-foreground hover:text-ambar"}`, true)}
           </nav>
         </>
       )}

@@ -8,12 +8,13 @@ import { montarDiagnostico } from "@/lib/diagnostico";
 import { portaAtual } from "@/lib/rede/enderecos";
 import { ehDestaMaquina } from "@/lib/rede/local";
 import { CabecalhoPagina } from "@/components/cabecalho-pagina";
+import { Icone } from "@/components/icones";
 import { PainelPreferencias } from "@/components/config/painel-preferencias";
 import { FormularioConfig, SecaoDiagnostico, type PadroesEnv } from "./formulario";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Configurações · Taverna do Velho Mestre" };
+export const metadata: Metadata = { title: "Configurações" };
 
 /** De onde veio a ANTHROPIC_API_KEY: o .env.local da taverna ou o ambiente do sistema (só para mostrar, nunca a chave). */
 function origemDaChave(): "env-local" | "ambiente" {
@@ -53,13 +54,13 @@ export default async function PaginaConfig() {
   };
   // provedorAtual() nunca lança (sem chave ele devolve um mestre "parado"); a frase do problema vem de mestreIndisponivel()
   const problema = mestreIndisponivel();
-  const mestrando = problema ? "ninguém (o mestre configurado não consegue começar)" : provedorAtual().nome;
+  const mestrando = problema ? "Ninguém (o mestre configurado não consegue começar)" : provedorAtual().nome;
   // seção Diagnóstico: a porta é a do endereço que a pessoa abriu (3300 no atalho)
   const portaDoHost = Number(/\]?:(\d+)$/.exec(h.get("host") ?? "")?.[1] ?? 0);
   const diagnostico = await montarDiagnostico(portaDoHost || portaAtual(), { esperarFirewallMs: 0 });
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8 sm:py-10">
+    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:py-10">
       <CabecalhoPagina
         titulo="Configurações"
         subtitulo={
@@ -69,13 +70,36 @@ export default async function PaginaConfig() {
           </>
         }
       />
-      <p className="text-sm text-muted">
-        Mestrando agora: <span className="text-ambar">{mestrando}</span>
-      </p>
-      {problema && <p className="mt-2 text-sm text-sangue">{problema}</p>}
-      <PainelPreferencias />
-      <FormularioConfig ajustes={ajustes} padroes={padroes} />
-      <SecaoDiagnostico inicial={diagnostico} />
+      <div className="max-w-4xl">
+        {/* estado do mestre: ícone, nome e etiqueta dizem a mesma coisa que a cor */}
+        <div className={`cartao cartao-matiz ${problema ? "matiz-4" : "matiz-2"} p-4`} role="status">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <Icone nome={problema ? "close" : "candle"} className="texto-matiz shrink-0 text-xl" />
+            <p className="min-w-0 flex-1 text-sm text-muted">
+              <span className="block text-xs uppercase tracking-wider">Mestrando agora</span>
+              <span className="block text-base text-pergaminho">{mestrando}</span>
+            </p>
+            <span className="etiqueta-matiz">{problema ? "parado" : "no ar"}</span>
+          </div>
+          {problema && <p className="mt-3 text-sm text-foreground">{problema}</p>}
+        </div>
+
+        <nav aria-label="Seções das configurações" className="mt-4 flex flex-wrap gap-2">
+          {[
+            { href: "#mestre", rotulo: "Mestre" },
+            { href: "#preferencias", rotulo: "Preferências" },
+            { href: "#diagnostico", rotulo: "Diagnóstico" },
+          ].map((a) => (
+            <a key={a.href} href={a.href} className="etiqueta-matiz min-h-10 px-4 text-sm hover:border-[var(--ambar)]">
+              {a.rotulo}
+            </a>
+          ))}
+        </nav>
+
+        <FormularioConfig ajustes={ajustes} padroes={padroes} />
+        <PainelPreferencias />
+        <SecaoDiagnostico inicial={diagnostico} />
+      </div>
     </main>
   );
 }

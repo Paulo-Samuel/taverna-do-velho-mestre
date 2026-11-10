@@ -37,6 +37,7 @@ function periciasQueCompletam(e: Escolhas, fixas: Set<string>, faltam: number): 
     .map((id) => nomePericia(id));
 }
 import { gruposDasOpcoes, NOMES_GRUPOS, opcoesDoGrupo, opcoesValidas, personagemPronto, problemaOpcoes, sortearOpcoes as sortearExtras, type GrupoOpcao } from "./sugestoes";
+import { FaixaAviso } from "@/components/faixa-aviso";
 import { Icone } from "@/components/icones";
 
 // Assistente de criação de personagem, guiado só pelos dados públicos do sistema (SistemaPublico).
@@ -627,6 +628,9 @@ export function FormularioPersonagem({
   // depois do primeiro passo o título da página encolhe para uma linha junto da barra de passos
   const compacto = indice > 0;
   const primeiroDeRegra = passos.find((p) => p !== "sistema");
+  // legenda da barra de passos: quantos são da ficha e quantos são da mesa (campanha e resumo), para as colunas baterem
+  const nMesa = modo === "campanha" ? passos.filter((p) => p === "campanha" || p === "resumo").length : 0;
+  const nFicha = Math.max(1, passos.length - nMesa);
   const mostrarPronto = Boolean(sistema?.pronto) && !copia && (atual === "sistema" || (atual === primeiroDeRegra && atual !== "identidade"));
 
   return (
@@ -715,11 +719,21 @@ export function FormularioPersonagem({
                 );
               })}
             </ol>
-            {/* os dez passos em dois blocos: oito de ficha, dois de mesa */}
-            <div className="mt-1 hidden grid-cols-[8fr_2fr] gap-2 text-[11px] uppercase tracking-[0.14em] text-muted md:grid" aria-hidden>
-              <span>Ficha do personagem</span>
-              <span>Mesa</span>
-            </div>
+            {/* os passos em dois blocos, na proporção real: os de ficha e os de mesa (que só existem numa campanha nova) */}
+            {modo === "campanha" && nMesa > 0 ? (
+              <div
+                className="mt-1 hidden gap-1 text-[11px] uppercase tracking-[0.14em] text-muted md:grid"
+                style={{ gridTemplateColumns: `${nFicha}fr ${nMesa}fr` }}
+                aria-hidden
+              >
+                <span className="truncate">Ficha do personagem</span>
+                <span className="truncate">Mesa</span>
+              </div>
+            ) : (
+              <p className="mt-1 hidden text-[11px] uppercase tracking-[0.14em] text-muted md:block" aria-hidden>
+                Ficha do personagem
+              </p>
+            )}
           </nav>
 
           {mostrarPronto && sistema && (
@@ -850,7 +864,7 @@ export function FormularioPersonagem({
           </div>
 
           {/* navegação grudada no rodapé (celular e desktop): listas longas não escondem o Avançar, nem o aviso de pendência */}
-          <div className="sticky bottom-0 z-20 -mx-4 border-t border-border bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:mx-0 sm:rounded-t-xl sm:border-x sm:bg-surface/95">
+          <div className="sticky bottom-0 z-20 -mx-4 border-t border-border bg-background/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border sm:bg-surface/95">
             {/* celular: a prévia é uma linha no rodapé ("Sem nome · Gato de Beco · —") que abre o painel por cima */}
             {sistema && mostrarPrevia && (
               <div className="lg:hidden">
@@ -864,27 +878,26 @@ export function FormularioPersonagem({
                   aria-expanded={previaAberta}
                   aria-controls="previa-celular"
                   onClick={() => setPreviaAberta((v) => !v)}
-                  className="-mt-1 mb-2 flex min-h-9 w-full items-center gap-2 rounded text-left text-xs"
+                  className="-mt-1 mb-2 flex min-h-10 w-full items-center gap-2 rounded text-left text-xs"
                 >
                   <span className="shrink-0 text-[11px] uppercase tracking-widest text-ambar-forte">Prévia</span>
                   <span className="min-w-0 flex-1 truncate text-foreground/90">{resumoCurto}</span>
                   <span className={`shrink-0 text-muted transition-transform ${previaAberta ? "rotate-180" : ""}`} aria-hidden>
-                    ▾
+                    <Icone nome="chevronDown" aria-hidden />
                   </span>
                 </button>
               </div>
             )}
             {(aviso || (ultimo && estado.erro)) && (
-              <p role="alert" className="mb-3 flex items-start gap-2 rounded-md border border-sangue/60 bg-sangue/15 px-3 py-2 text-sm">
-                <span className="text-sangue" aria-hidden>
-                  ✕
-                </span>
-                <span>{aviso ?? estado.erro}</span>
-              </p>
+              <FaixaAviso tom="erro" className="mb-3">
+                {aviso ?? estado.erro}
+              </FaixaAviso>
             )}
             <div className="flex items-center justify-between gap-3">
-              <button type="button" className="btn-borda px-4" onClick={voltar} disabled={indice === 0 || enviando}>
-                ← Voltar
+              {/* no primeiro passo o Voltar some sem tirar o lugar: o Avançar não pula de posição */}
+              <button type="button" className={`btn-borda min-h-11 px-4 ${indice === 0 ? "invisible" : ""}`} onClick={voltar} disabled={indice === 0 || enviando}>
+                <Icone nome="arrowLeft" aria-hidden />
+                Voltar
               </button>
               <span className="hidden min-w-0 truncate text-center text-xs text-muted sm:block">
                 {ultimo ? "Depois daqui, só o mestre e os dados mexem na ficha." : proximo ? `Próximo: ${nomePasso(proximo)}` : ""}
@@ -892,12 +905,13 @@ export function FormularioPersonagem({
               {/* keys diferentes: sem elas o React reaproveita o mesmo <button> e só troca o type para "submit" durante o clique
                   do Avançar, e o navegador envia o formulário no mesmo clique (criava a campanha ao chegar no resumo) */}
               {ultimo ? (
-                <button key="enviar" type="submit" className="btn-ambar" disabled={enviando}>
+                <button key="enviar" type="submit" className="btn-palco" disabled={enviando} aria-busy={enviando}>
                   {enviando ? "Abrindo a porta…" : (textoBotao ?? "Criar")}
                 </button>
               ) : (
-                <button key="avancar" type="button" className="btn-ambar" onClick={avancar} disabled={!sistema?.pronto}>
-                  {proximo === "resumo" ? "Revisar →" : "Avançar →"}
+                <button key="avancar" type="button" className="btn-ambar min-h-11" onClick={avancar} disabled={!sistema?.pronto}>
+                  {proximo === "resumo" ? "Revisar" : "Avançar"}
+                  <Icone nome="arrowRight" aria-hidden />
                 </button>
               )}
             </div>

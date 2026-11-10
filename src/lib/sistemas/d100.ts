@@ -432,7 +432,7 @@ export const d100: Sistema = {
   nome: "Horror Investigativo (d100)",
   nomeCurto: "Horror d100",
   descricao: "Perícias em porcentagem, sanidade que escorre e investigadores comuns diante do horror cósmico.",
-  licenca: "Basic Roleplaying — ORC License (Chaosium); textos próprios da taverna",
+  licenca: "Basic Roleplaying: ORC License (Chaosium); textos próprios da taverna",
   dadoPrincipal: "d100",
   pronto: true,
   rotulos: { ancestralidade: "Era", classe: "Ocupação", nivel: "Fase", defesa: "Armadura", dinheiro: "dinheiro", pv: "PV" },

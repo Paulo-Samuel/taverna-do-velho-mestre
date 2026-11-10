@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { DIFICULDADES, FOCOS, MAX_FOCO_LIVRE, MAX_INSTRUCOES, separarFoco, TAMANHOS, type Dificuldade, type TamanhoNarracao } from "@/lib/mestre/estilo";
+import { FaixaAviso } from "@/components/faixa-aviso";
+import { Icone } from "@/components/icones";
 import type { EstadoAjustes } from "./acoes";
 
 // Formulários da página de ajustes: dados da campanha, PIN da rede e a porta dos fundos (excluir).
@@ -37,18 +39,8 @@ const DADOS = [
 ] as const;
 
 function Aviso({ estado }: { estado: EstadoAjustes }) {
-  if (estado.erro)
-    return (
-      <p role="alert" className="text-sm text-sangue">
-        {estado.erro}
-      </p>
-    );
-  if (estado.ok)
-    return (
-      <p role="status" className="text-sm text-musgo">
-        ✓ {estado.ok}
-      </p>
-    );
+  if (estado.erro) return <FaixaAviso tom="erro">{estado.erro}</FaixaAviso>;
+  if (estado.ok) return <FaixaAviso tom="sucesso">{estado.ok}</FaixaAviso>;
   return null;
 }
 
@@ -314,22 +306,37 @@ export function FormularioPin({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm">
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        {tem ? (
+          <span className="etiqueta-matiz matiz-2">
+            <Icone nome="lock" /> Com tranca
+          </span>
+        ) : (
+          <span className="etiqueta-matiz matiz-7">
+            <Icone nome="door" /> Porta aberta
+          </span>
+        )}
         {pin ? (
-          <>
+          <span>
             PIN atual:{" "}
-            <button type="button" onClick={() => setVer((v) => !v)} className="-my-1 rounded px-1.5 py-1 font-mono text-ambar hover:bg-ambar/10 hover:underline" title={ver ? "Esconder" : "Mostrar"}>
+            <button
+              type="button"
+              onClick={() => setVer((v) => !v)}
+              className="-my-2 inline-flex min-h-10 items-center rounded px-1.5 font-mono text-ambar hover:bg-ambar/10 hover:underline"
+              title={ver ? "Esconder" : "Mostrar"}
+              aria-label={ver ? "Esconder o PIN" : "Mostrar o PIN"}
+            >
               {ver ? pin : "•".repeat(pin.length)}
             </button>
-          </>
+          </span>
         ) : tem ? (
-          <span className="text-muted">Esta mesa tem PIN (o número só aparece na máquina da taverna).</span>
+          <span className="text-muted">O número só aparece na máquina da taverna.</span>
         ) : (
-          <span className="text-muted">Sem PIN: qualquer aparelho na sua rede que souber o endereço entra na mesa.</span>
+          <span className="text-muted">Qualquer aparelho na sua rede que souber o endereço entra na mesa.</span>
         )}
       </p>
       <form
-        className="flex flex-wrap gap-2"
+        className="flex flex-wrap items-center gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           if (novo.trim()) void salvar(novo.trim());
@@ -343,14 +350,14 @@ export function FormularioPin({
           aria-label="Novo PIN"
           autoComplete="off"
           disabled={bloqueado}
-          className="campo min-w-0 flex-1"
+          className="campo min-w-0 max-w-xs flex-1"
         />
         <button className="btn-borda" disabled={bloqueado || enviando || !novo.trim()}>
           {tem ? "Trocar" : "Definir"}
         </button>
         {tem && (
-          <button type="button" className="btn-borda hover:border-sangue hover:text-sangue" disabled={bloqueado || enviando} onClick={() => void salvar(null)}>
-            Remover
+          <button type="button" className="btn-perigo" disabled={bloqueado || enviando} onClick={() => void salvar(null)}>
+            Remover PIN
           </button>
         )}
       </form>
@@ -370,7 +377,7 @@ export function FormularioAventura({ acao, bloqueado }: { acao: Acao; bloqueado:
         <>
           <p className="text-sm">O mestre esquece o roteiro (NPCs, pistas, finais) e segue só com o que já aconteceu. Não dá para religar depois.</p>
           <div className="flex flex-wrap gap-2">
-            <button className="btn-borda hover:border-sangue hover:text-sangue" disabled={enviando || bloqueado}>
+            <button className="btn-perigo" disabled={enviando || bloqueado}>
               {enviando ? "Rasgando o roteiro…" : "Desligar o roteiro"}
             </button>
             <button type="button" className="btn-borda" onClick={() => setCerteza(false)}>
@@ -429,7 +436,7 @@ export function FormularioExcluir({ acao, nome, bloqueado }: { acao: Acao; nome:
   const [texto, setTexto] = useState("");
   if (!aberto) {
     return (
-      <button type="button" className="btn-borda hover:border-sangue hover:text-sangue" disabled={bloqueado} onClick={() => setAberto(true)}>
+      <button type="button" className="btn-perigo" disabled={bloqueado} onClick={() => setAberto(true)}>
         Excluir campanha
       </button>
     );
@@ -444,7 +451,7 @@ export function FormularioExcluir({ acao, nome, bloqueado }: { acao: Acao; nome:
       <Aviso estado={estado} />
       <div className="flex flex-wrap gap-2">
         <button
-          className="btn bg-sangue text-foreground hover:bg-sangue/80"
+          className="btn-perigo-cheio"
           disabled={enviando || texto.trim().toLowerCase() !== nome.trim().toLowerCase()}
         >
           {enviando ? "Apagando…" : "Excluir campanha"}

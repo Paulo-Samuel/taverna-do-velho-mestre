@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Alegreya, IM_Fell_English_SC } from "next/font/google";
 import { headers } from "next/headers";
 import Link from "next/link";
+import { DESCRICAO_CASA, NOME_CASA } from "@/lib/descricao-casa";
 import { ehDestaMaquina } from "@/lib/rede/local";
 import { Navegacao } from "./config/navegacao";
 import { classesFontesTemas } from "./fontes-temas";
@@ -13,12 +14,38 @@ const corpo = Alegreya({ subsets: ["latin"], variable: "--font-corpo" });
 // a fonte de título da casa vira --fonte-fell; o --font-titulo de verdade é escolhido pelo tema no globals.css
 const titulo = IM_Fell_English_SC({ subsets: ["latin"], weight: "400", variable: "--fonte-fell" });
 
-export const metadata: Metadata = {
-  title: "Taverna do Velho Mestre",
-  description: "RPG de mesa com um mestre de IA, rodando na sua máquina. Sozinho, com a turma no sofá ou pela rede de casa.",
-  applicationName: "Taverna do Velho Mestre",
-  manifest: "/manifest.webmanifest",
-};
+// Cada página dá só a parte própria do título ("Sistemas"); o template completa com o nome da casa.
+// O host vem do pedido (localhost na máquina, IP da rede no celular) para o Open Graph apontar para onde a pessoa está.
+export async function generateMetadata(): Promise<Metadata> {
+  const pedido = (await headers()).get("host") ?? "";
+  const host = /^[\w.\-\[\]:]+$/.test(pedido) ? pedido : "localhost:3300";
+  let base: URL;
+  try {
+    base = new URL(`http://${host}`);
+  } catch {
+    base = new URL("http://localhost:3300");
+  }
+  return {
+    title: { default: NOME_CASA, template: "%s · Taverna do Velho Mestre" },
+    description: DESCRICAO_CASA,
+    applicationName: NOME_CASA,
+    manifest: "/manifest.webmanifest",
+    metadataBase: base,
+    openGraph: {
+      type: "website",
+      locale: "pt_BR",
+      siteName: NOME_CASA,
+      title: NOME_CASA,
+      description: DESCRICAO_CASA,
+      images: ["/icone-512.png"],
+    },
+    twitter: { card: "summary" },
+    appleWebApp: { capable: true, title: "Taverna", statusBarStyle: "black-translucent" },
+    formatDetection: { telephone: false },
+    // a taverna é local: se alguém expuser a porta por engano, não é para buscador nenhum indexar
+    robots: { index: false, follow: false },
+  };
+}
 
 export const viewport: Viewport = { themeColor: "#120d0a", colorScheme: "dark" };
 
@@ -30,7 +57,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="pt-BR" className={`${corpo.variable} ${titulo.variable} ${classesFontesTemas}`}>
       <body className="flex min-h-dvh flex-col font-sans text-[17px] antialiased">
-        <header className="relative z-20 border-t-2 border-t-ambar border-b border-b-border bg-background/80 backdrop-blur">
+        <header className="relative z-20 border-t-2 border-t-ambar border-b border-b-border bg-background/95">
           <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4">
             {daMaquina ? (
               <Link href="/" className="titulo titulo-brilho flex min-w-0 items-center gap-2 text-xl text-ambar">

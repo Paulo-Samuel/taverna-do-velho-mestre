@@ -6,6 +6,44 @@ turma passando o teclado ou com cada um no próprio celular pela rede de casa.
 O modelo narra e decide **quando** rolar; o código (`crypto.randomInt`) decide **o número** e aplica na ficha. O mestre não
 inventa resultado de dado, nem que queira.
 
+<p align="center"><img src="docs/prints/readme-01-inicio.png" width="900" alt="Tela inicial da taverna: Puxe um banco. O mestre já está bêbado."></p>
+
+[Como é](#como-é) · [Novidades](#novidades) · [Instalação](#instalação) · [Quem é o mestre](#quem-é-o-mestre-provedores) ·
+[Sistemas](#sistemas-incluídos) · [Rede local](#rede-local-cada-um-no-seu-aparelho)
+
+## Como é
+
+<table>
+  <tr>
+    <td><img src="docs/prints/readme-02-mesa-historia.png" alt="Mesa do modo história: a narração em formato de livro, com uma rolagem de Acrobacia e os selos da ação"></td>
+    <td><img src="docs/prints/readme-03-aventuras.png" alt="Página de aventuras prontas, cada uma com capa, duração e sistema"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/prints/readme-05-mesa-vampiro.png" alt="Mesa de Vampiro V5 no tema noturno, com Fome e Humanidade na ficha"></td>
+  </tr>
+</table>
+
+<p align="center"><img src="docs/prints/readme-06-sistemas.png" width="900" alt="Página de sistemas: os oito sistemas de regras, cada um com a sua cor"></p>
+
+<p align="center">
+  <img src="docs/prints/readme-07-celular-mesa.png" width="260" alt="A mesa do modo história aberta no celular">
+  &nbsp;
+  <img src="docs/prints/readme-08-celular-inicio.png" width="260" alt="A tela inicial da taverna no celular">
+</p>
+
+## Novidades
+
+**Novembro de 2026**
+
+- **Aventuras prontas, com capa.** Escolha pela cara em `/aventuras` e sente à mesa; o mestre já sabe o roteiro.
+- **Jogar agora.** Um clique no início e você entra com um herói pronto, sem preencher nada.
+- **Tutorial de 10 minutos.** "A Lanterna da Ponte Velha" ensina a primeira noite sem parecer aula.
+- **Visual novo, uma cor por sistema.** Cada jogo tem o seu matiz nos cartões, nas etiquetas e na mesa.
+- **Selos na ação.** A perícia usada aparece na rolagem, e o 1 e o 20 naturais ganham o destaque (ou a vergonha) que merecem.
+- **Cópias e lixeira.** Campanha apagada vai para a lixeira antes de sumir, e a casa guarda cópias sozinha.
+- **Seis acabamentos para o d20.** Para quem acha que o dado é que estava com azar.
+- **Retratos prontos e preferências.** Rosto para o personagem sem desenhar nada, e a casa lembra do seu jeito de jogar.
+
 ## Dois jeitos de jogar
 
 - **Modo história (padrão, em "Nova história")**: criação em 4 passos (nome, rosto, ofício, de onde você vem), sem regras à
@@ -15,6 +53,15 @@ inventa resultado de dado, nem que queira.
   (com pistas), pessoas e lugares. Regras em `src/lib/sistemas/historia.ts`.
 - **Modo avançado (`/nova/avancada`)**: escolha do sistema de regras (D&D 5e, Pathfinder 2e/1e, OSR, d100, Fate, Dungeon
   World, Vampiro V5), ficha completa e mesa com painéis.
+- **Sem paciência? Aventuras prontas e Jogar agora**: em `/aventuras` há histórias com começo, meio e fim já preparadas, e
+  o botão **Jogar agora** do início abre uma mesa com herói pronto. O tutorial "A Lanterna da Ponte Velha" leva uns 10
+  minutos e serve de primeira noite.
+
+## Suas campanhas estão seguras
+
+A taverna faz cópias automáticas do banco e apagar uma campanha manda para a lixeira, de onde dá para trazer de volta. Em
+**Cópias e lixeira** (`/backup`) você vê as cópias, restaura e esvazia a lixeira. Cada campanha também pode ser exportada
+em JSON (para levar a outra taverna) e virar livro, em PDF ou Markdown, para guardar a história de lembrança.
 
 ## Instalação
 
@@ -83,8 +130,8 @@ O banco fica em `data/taverna.db` (campanhas, fichas, histórico, diário e ajus
 
 Com a taverna **desligada**, duplo clique em `atualizar-taverna.cmd` (ou
 `powershell -NoProfile -ExecutionPolicy Bypass -File atualizar-taverna.ps1`). Ele puxa a versão nova do GitHub
-(`git fetch` + `git pull --ff-only`), reinstala as dependências se o `package-lock.json` mudou, recompila e termina com
-"Pronto — abra o atalho". Ele se recusa a rodar com a taverna no ar; sem internet, diz isso; se houver arquivo alterado à
+(`git fetch` + `git pull --ff-only`), reinstala as dependências se o `package-lock.json` mudou, recompila e termina
+avisando que é só abrir o atalho. Ele se recusa a rodar com a taverna no ar; sem internet, diz isso; se houver arquivo alterado à
 mão, diz qual é e sugere `git stash`. Suas campanhas (`data\`), configurações (`.env.local`) e músicas (`musica\`) ficam fora
 do git e não são tocadas. Registro em `data\logs\atualizar-<data>.log`.
 
@@ -152,7 +199,7 @@ mora em `src/lib/sistemas/<id>.ts` (com dados em `src/lib/sistemas/<id>/`) e imp
 | `osr` | Old-School (B/X) | d20 e tabelas clássicas, raça como classe | Open Game License 1.0a |
 | `d100` | Horror investigativo (d100) | rolar abaixo da porcentagem | Basic Roleplaying, ORC License |
 | `fate` | Fate Acelerado | 4dF + abordagem na escada | Creative Commons BY 3.0 |
-| `pbta` | Dungeon World (PbtA) | 2d6 + atributo: 10+, 7–9, 6− | Creative Commons BY 3.0 |
+| `pbta` | Dungeon World (PbtA) | 2d6 + atributo: 10+, 7 a 9, 6− | Creative Commons BY 3.0 |
 | `vtm5` | Vampiro: A Máscara 5ª edição | parada de d10, Fome, Humanidade | Fã-conteúdo não oficial (Dark Pack, Paradox) |
 
 Todas as descrições foram escritas pela taverna, em português e com as próprias palavras; nenhum texto de livro foi copiado.
@@ -160,25 +207,25 @@ Nomes de cenário, divindades e outras marcas ("Product Identity") ficam de fora
 
 ### Atribuições
 
-- **Vampiro: A Máscara (Dark Pack)** — fã-conteúdo gratuito e não oficial. Portions of the materials are the copyrights and
+- **Vampiro: A Máscara (Dark Pack)**: fã-conteúdo gratuito e não oficial. Portions of the materials are the copyrights and
   trademarks of Paradox Interactive AB, and are used with permission. All rights reserved. For more information please
   visit worldofdarkness.com. Detalhes em [LICENCAS.md](LICENCAS.md).
 
-- **SRD 5.2** — This work includes material from the System Reference Document 5.2 (“SRD 5.2”) by Wizards of the Coast LLC,
+- **SRD 5.2**: This work includes material from the System Reference Document 5.2 (“SRD 5.2”) by Wizards of the Coast LLC,
   available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0
   International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.
-- **Pathfinder Remaster (ORC)** — regras de Paizo Inc. usadas sob a ORC License (Open RPG Creative License). Não é produto
+- **Pathfinder Remaster (ORC)**: regras de Paizo Inc. usadas sob a ORC License (Open RPG Creative License). Não é produto
   oficial nem endossado pela Paizo.
-- **Pathfinder 1e e Old-School (OGL 1.0a)** — mecânicas declaradas como Open Game Content no Pathfinder Roleplaying Game
+- **Pathfinder 1e e Old-School (OGL 1.0a)**: mecânicas declaradas como Open Game Content no Pathfinder Roleplaying Game
   Reference Document (Paizo) e no System Reference Document (Wizards of the Coast), sob a Open Game License 1.0a. Sem
   Product Identity.
-- **Basic Roleplaying (ORC)** — baseado no Basic Roleplaying: Universal Game Engine, de Chaosium Inc., sob a ORC License.
+- **Basic Roleplaying (ORC)**: baseado no Basic Roleplaying: Universal Game Engine, de Chaosium Inc., sob a ORC License.
   Sem marcas nem cenários da Chaosium.
-- **Fate** — This work is based on Fate Core System and Fate Accelerated Edition (found at http://www.faterpg.com/), products
+- **Fate**: This work is based on Fate Core System and Fate Accelerated Edition (found at http://www.faterpg.com/), products
   of Evil Hat Productions, LLC, developed, authored, and edited by Leonard Balsera, Brian Engard, Jeremy Keller, Ryan
   Macklin, Mike Olson, Clark Valentine, Amanda Valentine, Fred Hicks, and Rob Donoghue, and licensed for our use under the
   Creative Commons Attribution 3.0 Unported license (http://creativecommons.org/licenses/by/3.0/).
-- **Dungeon World** — de Sage LaTorra e Adam Koebel, sob Creative Commons Attribution 3.0 Unported.
+- **Dungeon World**: de Sage LaTorra e Adam Koebel, sob Creative Commons Attribution 3.0 Unported.
 
 ## Rolador de dados
 
@@ -200,8 +247,9 @@ Notação aceita (`src/lib/dados.ts`):
 
 ## Trilha sonora
 
-As duas mesas têm botão de som (e volume no ▾). A trilha é gerada no navegador (Web Audio, sem arquivos) conforme o humor
-que o mestre dá à cena, com um estilo por sistema: fantasia medieval (D&D 5e, Pathfinder 1e, modo história), fantasia épica
+As duas mesas têm o botão **Música** no cabeçalho, que abre o painel **Trilha sonora** (liga e desliga, volume e humor). A
+trilha é gerada no navegador (Web Audio, sem arquivos) conforme o humor que o mestre dá à cena, com um estilo por sistema:
+fantasia medieval (D&D 5e, Pathfinder 1e, modo história), fantasia épica
 com cordas e trompas (Pathfinder 2e), noite gótica com darkwave, órgão e chuva (Vampiro V5), horror com caixinha desafinada,
 teremim e gramofone (d100), dungeon synth de fita cassete (OSR), aventura pulp com metais (Fate) e folk de rabeca (Dungeon
 World). Código em `src/lib/cliente/musica/` (`estilos.ts` tem os estilos).
@@ -251,17 +299,24 @@ para a sala de casa, não para a internet.
 
 ## Estrutura do código
 
-- `src/lib/sistemas/` — contrato (`tipos.ts`), utilitários (`comum.ts`), registro (`index.ts`) e um arquivo por sistema.
-- `src/lib/dados.ts` — motor de dados (notação acima).
-- `src/lib/db.ts` — SQLite: campanhas, personagens, mensagens, fila de ações, diário e ajustes.
-- `src/lib/tempo-real.ts` — eventos por mesa (publicar/assinar) e presença; `src/lib/mesa.ts` monta o estado enviado ao cliente.
-- `src/lib/mestre/` — fila de ações e turnos (`index.ts`), ferramentas do mestre (`ferramentas.ts`), prompts e os provedores
+- `src/lib/sistemas/`: contrato (`tipos.ts`), utilitários (`comum.ts`), registro (`index.ts`) e um arquivo por sistema.
+- `src/lib/dados.ts`: motor de dados (notação acima).
+- `src/lib/db.ts`: SQLite: campanhas, personagens, mensagens, fila de ações, diário e ajustes.
+- `src/lib/tempo-real.ts`: eventos por mesa (publicar/assinar) e presença; `src/lib/mesa.ts` monta o estado enviado ao cliente.
+- `src/lib/mestre/`: fila de ações e turnos (`index.ts`), ferramentas do mestre (`ferramentas.ts`), prompts e os provedores
   `cli`, `api` e `falso`.
-- `src/lib/rede/` — endereços da rede local, estado do firewall do Windows, porteiro e PIN das mesas.
-- `src/lib/log.ts` — log em `data/logs/taverna-<data>.log` (`registrar(nivel, origem, dados)`); `src/lib/diagnostico.ts`
+- `src/lib/rede/`: endereços da rede local, estado do firewall do Windows, porteiro e PIN das mesas.
+- `src/lib/log.ts`: log em `data/logs/taverna-<data>.log` (`registrar(nivel, origem, dados)`); `src/lib/diagnostico.ts`
   monta o relatório de `/config → Diagnóstico` e de `GET /api/diagnostico?baixar=1`; `scripts/doutor.mjs` é o `npm run doutor`.
-- `src/lib/cliente/` — hook `useMesa` (SSE + ações) e identidade do aparelho.
-- `src/app/` — páginas: início, `/nova`, `/sistemas`, `/config`, `/mesa/[id]` (mesa, ajustes, entrar, personagens).
-- `src/app/api/campanhas/[id]/` — `eventos` (SSE), `acao`, `controle`, `presenca`, `rolagem`, `reivindicar`, `pin`, `personagens`.
-- `src/components/` — ficha, grupo, cena, diário, presença/convite, rolador e chat.
-- `mcp/taverna-mcp.mjs` — ponte MCP que leva as ferramentas do mestre ao Claude Code no modo `cli`.
+- `src/lib/cliente/`: hook `useMesa` (SSE + ações) e identidade do aparelho.
+- `src/app/`: páginas: início, `/nova`, `/aventuras`, `/sistemas`, `/backup`, `/config`, `/mesa/[id]` (mesa, ajustes, entrar,
+  personagens).
+- `src/app/api/campanhas/[id]/`: `eventos` (SSE), `acao`, `controle`, `presenca`, `rolagem`, `reivindicar`, `pin`, `personagens`.
+- `src/components/`: ficha, grupo, cena, diário, presença/convite, rolador e chat.
+- `mcp/taverna-mcp.mjs`: ponte MCP que leva as ferramentas do mestre ao Claude Code no modo `cli`.
+
+## Licenças
+
+As regras de jogo incluídas vêm de licenças abertas (ou de política de fã-conteúdo, no caso de Vampiro), cada uma com a sua
+atribuição. O texto completo, sistema por sistema, está em [LICENCAS.md](LICENCAS.md); o resumo fica em
+[Atribuições](#atribuições), logo acima.

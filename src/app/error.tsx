@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { Icone, type NomeIcone } from "@/components/icones";
 
 // Erro inesperado numa página. Os dois casos mais comuns numa taverna local têm explicação própria:
 // a taverna foi atualizada (recompilada) com a página aberta, ou o servidor foi desligado.
@@ -27,6 +28,8 @@ const TEXTOS = {
   },
 };
 
+const ICONES: Record<keyof typeof TEXTOS, NomeIcone> = { atualizada: "candle", desligada: "door", outro: "skull" };
+
 export default function ErroDaPagina({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
   useEffect(() => {
     console.error("[taverna]", error);
@@ -35,28 +38,37 @@ export default function ErroDaPagina({ error, retry }: { error: Error & { digest
   const tipo = tipoDoErro(error);
   const { titulo, texto } = TEXTOS[tipo];
   return (
-    <main className="mx-auto flex min-h-[calc(100dvh-3.5rem)] max-w-xl flex-col items-center justify-center px-4 py-12 text-center" role="alert">
-      <p className="titulo text-6xl text-ambar/80" aria-hidden>
-        ⚠
-      </p>
-      <h1 className="titulo mt-3 text-3xl text-pergaminho">{titulo}</h1>
-      <p className="mt-3 text-muted">{texto}</p>
-      <div className="mt-6 flex flex-wrap justify-center gap-3">
-        <button type="button" className="btn-ambar min-h-11" onClick={() => window.location.reload()}>
-          Recarregar a página
-        </button>
-        {tipo === "outro" && (
-          <button type="button" className="btn-borda min-h-11" onClick={() => retry()}>
-            Tentar de novo
+    <main className="mx-auto flex min-h-[60dvh] max-w-xl flex-col items-center justify-center px-4 py-12 text-center" role="alert">
+      <div className="cartao cartao-matiz flex w-full max-w-xl flex-col items-center p-6 sm:p-10">
+        <span
+          className="grid size-16 place-items-center rounded-full border border-ambar-forte/50 bg-ambar/10 text-3xl text-ambar"
+          aria-hidden
+        >
+          <Icone nome={ICONES[tipo]} />
+        </span>
+        <h1 className="titulo titulo-brilho mt-3 text-balance text-3xl text-pergaminho sm:text-4xl">{titulo}</h1>
+        <p className="mt-3 text-pretty text-muted">{texto}</p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <button type="button" className="btn-ambar min-h-11" onClick={() => window.location.reload()}>
+            Recarregar a página
           </button>
-        )}
+          {tipo === "outro" && (
+            <button type="button" className="btn-borda min-h-11" onClick={() => retry()}>
+              Tentar de novo
+            </button>
+          )}
+        </div>
         {/* navegação completa de propósito: depois de um erro (ou de uma atualização) é melhor recarregar tudo */}
-        {/* eslint-disable-next-line @next/next/no-location-assign-relative-destination */}
-        <button type="button" className="btn-borda min-h-11" onClick={() => window.location.assign("/")}>
+        <button
+          type="button"
+          className="mt-2 inline-flex min-h-10 items-center text-sm text-muted underline-offset-2 hover:text-ambar hover:underline"
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+          onClick={() => window.location.assign("/")}
+        >
           Voltar às campanhas
         </button>
+        {error.digest && <p className="mt-6 text-xs text-muted select-all">código do erro: {error.digest}</p>}
       </div>
-      {error.digest && <p className="mt-6 text-xs text-muted/70">código do erro: {error.digest}</p>}
     </main>
   );
 }

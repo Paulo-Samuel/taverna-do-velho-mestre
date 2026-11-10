@@ -85,9 +85,17 @@ function LinhaDisputa({ r, centro = false }: { r: { oposicao?: unknown; dano?: u
   if (!op && !dano) return null;
   return (
     <p className={`mt-1 text-xs tabular-nums text-muted ${centro ? "mx-auto max-w-md" : ""}`}>
-      {op && <span>⚔ {op}</span>}
+      {op && (
+        <span>
+          <Icone nome="swords" /> {op}
+        </span>
+      )}
       {op && dano && " · "}
-      {dano && <span className="text-foreground/85">🗡 {dano}</span>}
+      {dano && (
+        <span className="text-foreground/85">
+          <Icone nome="swords" /> {dano}
+        </span>
+      )}
     </p>
   );
 }
@@ -183,8 +191,9 @@ function contaParada(p: Parada, r: ResultadoParada, alvoPedido: number | null) {
 
 // ---------- cabeçalho comum (d20 e parada) ----------
 
-function Chip({ children, tom = "border-border/80 text-foreground/85" }: { children: ReactNode; tom?: string }) {
-  return <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border bg-background/30 px-2.5 py-0.5 text-xs ${tom}`}>{children}</span>;
+/** Pílula do cabeçalho do teste: `etiqueta` neutra por padrão; custo e perigo passam `etiqueta-matiz matiz-4`. */
+function Chip({ children, tom = "etiqueta text-foreground/85" }: { children: ReactNode; tom?: string }) {
+  return <span className={`${tom} whitespace-nowrap px-2.5`}>{children}</span>;
 }
 
 /** Pílulas abaixo do título: dificuldade, como rola e o aviso de perigo. */
@@ -192,12 +201,16 @@ function Chips({ d, parada, d20, bonus, alvo }: { d: DadosPedido; parada: Parada
   const chips: ReactNode[] = [];
   const contra = textoContraPedido(d);
   if (d20) {
-    if (contra) chips.push(<Chip key="contra">⚔ {contra}</Chip>);
+    if (contra) chips.push(<Chip key="contra">
+          <Icone nome="swords" /> {contra}
+        </Chip>);
     else if (typeof alvo === "number") chips.push(<Chip key="cd">CD {alvo}</Chip>);
     chips.push(<Chip key="bonus">Bônus {sinal(bonus)}</Chip>);
     if (d.modo === "vantagem" || d.modo === "desvantagem") chips.push(<Chip key="modo">Com {d.modo}</Chip>);
   } else if (parada.sabor === "vtm5") {
-    if (contra) chips.push(<Chip key="contra">⚔ {contra}</Chip>);
+    if (contra) chips.push(<Chip key="contra">
+          <Icone nome="swords" /> {contra}
+        </Chip>);
     else if (typeof alvo === "number") chips.push(<Chip key="dif">Dificuldade {alvo}</Chip>);
     chips.push(
       <Chip key="parada">
@@ -229,15 +242,15 @@ function Chips({ d, parada, d20, bonus, alvo }: { d: DadosPedido; parada: Parada
   }
   for (const [i, c] of (Array.isArray(d.custos) ? d.custos : []).entries()) {
     chips.push(
-      <Chip key={`custo${i}`} tom="border-sangue/50 text-sangue">
+      <Chip key={`custo${i}`} tom="etiqueta-matiz matiz-4">
         <Icone nome={/^surto/i.test(c) ? "bolt" : "drop"} /> {c}
       </Chip>,
     );
   }
   if (d.perigoso) {
     chips.push(
-      <Chip key="perigo" tom="border-sangue/60 bg-sangue/10! font-semibold text-sangue">
-        ⚠ Teste perigoso
+      <Chip key="perigo" tom="etiqueta-matiz matiz-4 font-semibold">
+        <Icone nome="warning" /> Teste perigoso
       </Chip>,
     );
   }
@@ -266,14 +279,14 @@ function SangueDoResultado({ r, centro = false, novo = false }: { r: ResultadoPa
 
 // ---------- rerrolar com Força de Vontade (Vampiro) ----------
 
-/** Linha do que a rerrolagem custou: "↻ Força de Vontade 7 → 6 (superficial) · rerrolou 2→8, 4→6". */
+/** Linha do que a rerrolagem custou: "Força de Vontade 7 → 6 (superficial) · rerrolou 2→8, 4→6". */
 function LinhaVontade({ r, centro = false }: { r: ResultadoParada; centro?: boolean }) {
   const x = r.rerrolado;
   if (!x?.vontade) return null;
   return (
     <p className={`mt-1.5 text-xs text-ambar ${centro ? "text-center" : ""}`}>
       <span className="font-semibold">
-        ↻ Força de Vontade {x.vontade.antes} → {x.vontade.depois}
+        <Icone nome="redo" /> Força de Vontade {x.vontade.antes} → {x.vontade.depois}
       </span>{" "}
       <span className="text-muted">(superficial)</span>
       {x.dados?.length ? <> · rerrolou {x.dados.map((t) => `${t.antes}→${t.depois}`).join(", ")}</> : null}
@@ -290,7 +303,7 @@ function recursoDaOpcao(personagem: PersonagemVisivel | null, opcaoId: string | 
   return x ? { rotulo: x.rotulo, atual: x.atual, max: x.max } : null;
 }
 
-/** "↻ Ponto de Herói 2 → 1 · d20 4 → 17 · antes: Falha" (PF2e) e "↻ Inspiração heroica…" (5e). */
+/** "Ponto de Herói 2 → 1 · d20 4 → 17 · antes: Falha" (PF2e) e "Inspiração heroica…" (5e), com o ícone de rerrolar na frente. */
 function LinhaRecursoD20({ r }: { r: Record<string, unknown> }) {
   const heroi = r.heroi as { antes: number; depois: number; naturalAntes: number; naturalDepois: number; grauAntes?: string } | undefined;
   const insp = r.inspiracao as { naturalAntes: number; naturalDepois: number; grauAntes?: string } | undefined;
@@ -298,7 +311,8 @@ function LinhaRecursoD20({ r }: { r: Record<string, unknown> }) {
   if (!x) return null;
   return (
     <p className="mt-1 text-xs text-ambar" data-recurso-gasto>
-      <span className="font-semibold">↻ {heroi ? `Ponto de Herói ${heroi.antes} → ${heroi.depois}` : "Inspiração heroica gasta"}</span> · d20 {x.naturalAntes} → {x.naturalDepois}
+      <span className="font-semibold">
+        <Icone nome="redo" /> {heroi ? `Ponto de Herói ${heroi.antes} → ${heroi.depois}` : "Inspiração heroica gasta"}</span> · d20 {x.naturalAntes} → {x.naturalDepois}
       {x.grauAntes && <span className="text-muted"> · antes: {x.grauAntes}</span>}
     </p>
   );
@@ -553,7 +567,7 @@ export function PedidoTeste({
         </p>
       )}
       {!rolagem && d.status === "pendente" && opcaoSurto && podeRolar && (
-        <label className="mx-auto mt-2.5 flex w-fit cursor-pointer items-center gap-2 rounded-full border border-sangue/50 bg-sangue/5 px-3 py-1 text-xs text-sangue" data-pd-surto>
+        <label className="etiqueta-matiz matiz-4 mx-auto mt-2.5 flex min-h-10 w-fit cursor-pointer gap-2 px-3 py-1 sm:min-h-0" data-pd-surto>
           <input type="checkbox" checked={surto} onChange={(e) => setSurto(e.target.checked)} className="accent-[var(--sangue)]" /><Icone nome="bolt" />  {opcaoSurto.rotulo}
           {opcaoSurto.efeito ? ` (${opcaoSurto.efeito})` : ""}{" "}
           <span className="text-muted">· rola um Despertar antes</span>
@@ -621,7 +635,7 @@ export function PedidoTeste({
           <button
             type="button"
             data-rolar
-            className="btn-ambar mt-5 min-h-12 w-full max-w-xs px-8 text-base focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ambar sm:w-auto"
+            className="btn-palco mt-5 w-full max-w-xs focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ambar sm:w-auto"
             onClick={() => void clicar()}
           ><Icone nome="dice" />  {d20 ? "Rolar o dado" : "Rolar os dados"}
             {opcaoSurto && surto ? " com Surto" : ""}
@@ -631,7 +645,7 @@ export function PedidoTeste({
               <button
                 type="button"
                 data-pd-perguntar
-                className="text-xs text-muted underline decoration-dotted underline-offset-2 hover:text-foreground"
+                className="inline-flex min-h-10 items-center text-xs text-muted underline decoration-dotted underline-offset-2 hover:text-foreground"
                 onClick={() => perguntar(`(( Sobre o teste de ${tituloDoTeste(teste)}: não é essa parada? Qual atributo e perícia valem aqui? ))`)}
               >
                 não é essa parada? pergunte ao mestre

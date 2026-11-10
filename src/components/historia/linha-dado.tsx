@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { CartaoDado, listaDespertares, MedidorFome } from "@/components/chat/cartao-dado";
 import type { Mensagem } from "@/lib/db";
 import { COR_GRAU, corDoNome } from "./cores";
-import { TextoComIcones } from "@/components/icones";
+import { Icone, type NomeIcone } from "@/components/icones";
 
 // Acontecimentos mecânicos no fluxo do livro (dano, XP, descanso, missão, reputação, rolagem do mestre...):
 // linhas discretas e centradas, como notas de rodapé no meio do capítulo. Tipos sem desenho próprio usam o CartaoDado.
@@ -24,15 +24,15 @@ function Nome({ nome }: { nome: unknown }) {
   );
 }
 
-/** Linha centrada com fios dos dois lados: "— Garran perdeu 4 de Vida (8/12) —". */
-function Linha({ children, icone, tom = "text-muted", titulo }: { children: ReactNode; icone?: string; tom?: string; titulo?: string }) {
+/** Linha centrada com um fio de cada lado ("Garran perdeu 4 de Vida (8/12)"). `cor`: cor do grau vinda de COR_GRAU (vai em style, por cima do tom). */
+function Linha({ children, icone, tom = "text-muted", titulo, cor }: { children: ReactNode; icone?: NomeIcone; tom?: string; titulo?: string; cor?: string }) {
   return (
-    <div className={`surgir my-4 flex items-center gap-3 text-sm ${tom}`} title={titulo}>
+    <div className={`surgir my-4 flex items-center gap-3 text-sm ${tom}`} style={cor ? { color: cor } : undefined} title={titulo}>
       <span className="h-px flex-1 bg-linear-to-r from-transparent to-border" aria-hidden />
       <p className="max-w-[85%] text-center italic leading-snug">
         {icone && (
           <span className="mr-1.5 not-italic" aria-hidden>
-            <TextoComIcones texto={icone} />
+            <Icone nome={icone} />
           </span>
         )}
         {children}
@@ -55,14 +55,14 @@ function LinhaFicha({ r, m }: { r: Dados; m: Mensagem }) {
   if (delta < 0)
     partes.push(
       <span key="pv">
-        <Nome nome={r.personagem} /> perdeu <span className="not-italic font-semibold text-[color:var(--grau-falha,#f28b82)]">{-delta}</span> de Vida
+        <Nome nome={r.personagem} /> perdeu <span className="not-italic font-semibold" style={{ color: COR_GRAU.falha }}>{-delta}</span> de Vida
         {pvMax !== null && ` (${pv}/${pvMax})`}
       </span>,
     );
   else if (delta > 0)
     partes.push(
       <span key="pv">
-        <Nome nome={r.personagem} /> recuperou <span className="not-italic font-semibold text-[color:var(--grau-sucesso,#9ad4a0)]">{delta}</span> de Vida
+        <Nome nome={r.personagem} /> recuperou <span className="not-italic font-semibold" style={{ color: COR_GRAU.sucesso }}>{delta}</span> de Vida
         {pvMax !== null && ` (${pv}/${pvMax})`}
       </span>,
     );
@@ -101,7 +101,7 @@ function LinhaFicha({ r, m }: { r: Dados; m: Mensagem }) {
       </span>,
     );
   return (
-    <Linha icone={delta < 0 ? "🩸" : delta > 0 ? "✚" : "✎"} titulo={m.texto}>
+    <Linha icone={delta < 0 ? "drop" : delta > 0 ? "plus" : "pencil"} titulo={m.texto}>
       {juntar(partes)}
     </Linha>
   );
@@ -111,7 +111,7 @@ function LinhaXp({ r }: { r: Dados }) {
   const subiu = num(r.subiuPara);
   const ganho = num(r.ganho);
   return (
-    <Linha icone="✦" tom={subiu ? "text-ambar" : "text-muted"} titulo={r.resumo}>
+    <Linha icone="sparkle" tom={subiu ? "text-ambar" : "text-muted"} titulo={r.resumo}>
       {ganho !== null && (
         <>
           <Nome nome={r.personagem} /> ganhou {ganho} de experiência
@@ -136,7 +136,7 @@ function LinhaXp({ r }: { r: Dados }) {
 function LinhaDescanso({ r }: { r: Dados }) {
   const tipo = String(r.descanso ?? r.tipoDescanso ?? "");
   return (
-    <Linha icone="☾" titulo={r.resumo}>
+    <Linha icone="moon" titulo={r.resumo}>
       <Nome nome={r.personagem} /> descansou{tipo === "curto" ? " um pouco" : tipo === "longo" ? " a noite toda" : ""}
       {r.resumo && <span className="block text-xs text-muted/80">{r.resumo}</span>}
     </Linha>
@@ -146,9 +146,10 @@ function LinhaDescanso({ r }: { r: Dados }) {
 function LinhaDiario({ r, m }: { r: Dados; m: Mensagem }) {
   const titulo = r.entrada?.titulo;
   const rot = String(r.rotulo ?? "");
-  const tom = /conclu/i.test(rot) ? "text-[color:var(--grau-sucesso,#9ad4a0)]" : /fracass|falhou/i.test(rot) ? "text-[color:var(--grau-falha,#f28b82)]" : "text-ambar";
+  // missão concluída ou fracassada pega a cor do grau; o resto fica no âmbar do tema
+  const cor = /conclu/i.test(rot) ? COR_GRAU.sucesso : /fracass|falhou/i.test(rot) ? COR_GRAU.falha : undefined;
   return (
-    <Linha icone="❡" tom={tom}>
+    <Linha icone="scroll" tom="text-ambar" cor={cor}>
       {titulo ? (
         <>
           <span className="not-italic text-[11px] font-semibold uppercase tracking-[0.2em]">{rot || "Diário"}</span>
@@ -166,10 +167,10 @@ function LinhaReputacao({ r }: { r: Dados }) {
   const v = num(r.variacao) ?? 0;
   const eixo = String(r.eixo ?? "Reputação");
   return (
-    <Linha icone={v >= 0 ? "▲" : "▼"} titulo={r.motivo}>
+    <Linha icone={v >= 0 ? "arrowUp" : "arrowDown"} titulo={r.motivo}>
       <Nome nome={r.personagem} />: {eixo.charAt(0).toUpperCase() + eixo.slice(1)}{" "}
-      <span className={`not-italic font-semibold ${v >= 0 ? "text-[color:var(--grau-sucesso,#9ad4a0)]" : "text-[color:var(--grau-falha,#f28b82)]"}`}>{v >= 0 ? `+${v}` : `−${Math.abs(v)}`}</span>
-      {r.motivo && <span className="text-muted/80"> — {r.motivo}</span>}
+      <span className="not-italic font-semibold" style={{ color: v >= 0 ? COR_GRAU.sucesso : COR_GRAU.falha }}>{v >= 0 ? `+${v}` : `−${Math.abs(v)}`}</span>
+      {r.motivo && <span className="text-muted/80"> · {r.motivo}</span>}
     </Linha>
   );
 }
@@ -179,12 +180,12 @@ function LinhaRolagem({ r, m }: { r: Dados; m: Mensagem }) {
   const quem = doMestre ? "O mestre" : (r.personagem ?? m.autor ?? "Alguém");
   if (r.secreta)
     return (
-      <Linha icone="🎲">
+      <Linha icone="dice">
         {quem} rolou em segredo{r.motivo ? ` · ${r.motivo}` : ""}
       </Linha>
     );
   return (
-    <Linha icone="🎲" titulo={m.texto}>
+    <Linha icone="dice" titulo={m.texto}>
       {doMestre ? quem : <Nome nome={quem} />} rolou {r.expressao ?? "os dados"}
       {num(r.total) !== null && (
         <>
@@ -203,7 +204,19 @@ function LinhaSangue({ r, m, novo }: { r: Dados; m: Mensagem; novo: boolean }) {
   const surto = r.vtm === "surto";
   const ganho = num(r.surtoGanho) ?? 0;
   const pesou = x.falhas > 0 || Boolean(x.estourou);
-  const faces = x.rolagens.map((f) => (f.length > 1 ? `${f[0]}↻${f[1]}` : String(f[0]))).join(", ");
+  // dado rolado de novo: a face antiga, o ícone de rerrolar e a nova
+  const faces = x.rolagens.map((f, i) => (
+    <span key={i}>
+      {i > 0 && ", "}
+      {f[0]}
+      {f.length > 1 && (
+        <>
+          <Icone nome="redo" className="mx-px" />
+          {f[1]}
+        </>
+      )}
+    </span>
+  ));
   const fome = x.estourou
     ? x.fomeAntes < 5
       ? `Fome ${x.fomeAntes} → 5, e a Besta cobra`
@@ -212,7 +225,7 @@ function LinhaSangue({ r, m, novo }: { r: Dados; m: Mensagem; novo: boolean }) {
       ? `Fome ${x.fomeAntes} → ${x.fomeDepois}`
       : `Fome segue ${x.fomeAntes}`;
   return (
-    <Linha icone={surto ? "⚡" : "🩸"} tom={pesou ? "text-foreground/85" : "text-muted"} titulo={m.texto}>
+    <Linha icone={surto ? "bolt" : "drop"} tom={pesou ? "text-foreground/85" : "text-muted"} titulo={m.texto}>
       <Nome nome={r.personagem} /> · {surto ? "Surto de Sangue" : `Despertar${x.vezes > 1 ? ` ×${x.vezes}` : ""}${x.motivo ? ` · ${x.motivo}` : ""}`}:{" "}
       <span className="not-italic tabular-nums text-foreground/85">{faces}</span>
       {" → "}
@@ -245,7 +258,7 @@ function LinhaTeste({ r }: { r: Dados }) {
   const contra = o && typeof o.nome === "string" && typeof o.total === "number" ? `contra ${o.nome} (${String(o.expressao ?? "")} → ${o.total})` : null;
   const dano = r.dano as { texto?: unknown; valor?: unknown } | undefined;
   return (
-    <Linha icone="🎲" titulo={r.motivo}>
+    <Linha icone="dice" titulo={r.motivo}>
       <Nome nome={r.personagem} /> · {r.teste}: <span className="not-italic tabular-nums text-foreground/85">{conta}</span>
       {contra ? (
         <span className="not-italic tabular-nums text-foreground/85"> {contra}</span>
@@ -292,12 +305,12 @@ export function LinhaDado({ mensagem, novo }: { mensagem: Mensagem; novo: boolea
       return <LinhaTeste r={r} />;
     case "combate":
       return (
-        <Linha icone="⚔" tom="text-[color:var(--grau-falha,#f28b82)]">
+        <Linha icone="swords" cor={COR_GRAU.falha}>
           {String(r.resumo ?? mensagem.texto)}
         </Linha>
       );
     case "cena":
-      return <Linha icone="◈">{String(r.texto ?? mensagem.texto)}</Linha>;
+      return <Linha icone="place">{String(r.texto ?? mensagem.texto)}</Linha>;
     case "iniciativa":
     default:
       return (

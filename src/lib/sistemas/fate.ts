@@ -248,7 +248,7 @@ export const fate: Sistema = {
   nome: "Fate Acelerado (FAE)",
   nomeCurto: "Fate Acelerado",
   descricao: "Narrativo e veloz: seis abordagens, aspectos que se invocam com pontos de destino e 4dF na escada. Qualquer gênero.",
-  licenca: "Fate Core/Fate Acelerado/Fate Condensado — Creative Commons BY 3.0 (Evil Hat Productions)",
+  licenca: "Fate Core/Fate Acelerado/Fate Condensado: Creative Commons BY 3.0 (Evil Hat Productions)",
   dadoPrincipal: "4dF",
   pronto: true,
   rotulos: { ancestralidade: "Gênero", classe: "Arquétipo", nivel: "Marco", defesa: "Defesa", dinheiro: "moedas", pv: "Estresse" },

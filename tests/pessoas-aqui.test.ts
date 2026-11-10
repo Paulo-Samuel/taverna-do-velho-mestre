@@ -3,10 +3,10 @@ import path from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-// G02: quem está na cena (presença pelo texto da narração) e contraste das etiquetas de humor.
+// G02: quem está na cena (presença pelo texto da narração) e o matiz das etiquetas de humor.
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const { pessoasPresentes, textoDaCenaAtual, COR_ATITUDE, contraste } = await import(
+const { pessoasPresentes, textoDaCenaAtual, MATIZ_ATITUDE } = await import(
   pathToFileURL(path.join(RAIZ, "src/components/historia/pessoas-presentes.ts")).href
 );
 
@@ -60,9 +60,15 @@ describe("textoDaCenaAtual", () => {
   });
 });
 
-describe("COR_ATITUDE", () => {
-  it("texto sobre fundo da etiqueta tem contraste de pelo menos 4,5:1", () => {
-    for (const [a, c] of Object.entries(COR_ATITUDE) as [string, { fundo: string; texto: string }][])
-      assert.ok(contraste(c.fundo, c.texto) >= 4.5, `${a}: ${contraste(c.fundo, c.texto).toFixed(2)}`);
+describe("MATIZ_ATITUDE", () => {
+  it("toda atitude tem entrada em MATIZ_ATITUDE e as classes são matiz-1..8 ou vazio", () => {
+    const atitudes = ["amistoso", "curioso", "desconfiado", "hostil", "devoto", "medo", "apaixonado", "neutro"];
+    assert.deepEqual(Object.keys(MATIZ_ATITUDE).sort(), [...atitudes].sort());
+    for (const a of atitudes) assert.match(MATIZ_ATITUDE[a], /^(matiz-[1-8])?$/, a);
+  });
+  it("só o neutro fica sem matiz e nenhum matiz se repete", () => {
+    const comMatiz = Object.entries(MATIZ_ATITUDE as Record<string, string>).filter(([, m]) => m);
+    assert.deepEqual(Object.entries(MATIZ_ATITUDE as Record<string, string>).filter(([, m]) => !m).map(([a]) => a), ["neutro"]);
+    assert.equal(new Set(comMatiz.map(([, m]) => m)).size, comMatiz.length);
   });
 });
